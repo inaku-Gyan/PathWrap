@@ -1,9 +1,53 @@
 use crate::app::PathWarpApp;
-use egui::Context;
+use egui::{Context, Key};
 
-pub fn render(ctx: &Context, _app: &mut PathWarpApp) {
+pub fn render(ctx: &Context, app: &mut PathWarpApp) {
     egui::CentralPanel::default().show(ctx, |ui| {
-        ui.heading("PathWarp");
-        ui.label("这里将显示探测到的资源管理器路径列表。");
+        // Search bar
+        let search_response = ui.text_edit_singleline(&mut app.search_query);
+        search_response.request_focus(); // Always focused
+        if search_response.lost_focus() && ctx.input(|i| i.key_pressed(Key::Enter)) {
+            search_response.request_focus();
+        }
+
+        // Filter items
+        let query_lower = app.search_query.to_lowercase();
+        let filtered_paths: Vec<&String> = app.paths.iter()
+            .filter(|p| p.to_lowercase().contains(&query_lower))
+            .collect();
+            
+        // Ensure selected index is within bounds
+        if !filtered_paths.is_empty() {
+            app.selected_index = app.selected_index.min(filtered_paths.len().saturating_sub(1));
+        }
+
+        // Keyboard navigation
+        if ctx.input(|i| i.key_pressed(Key::ArrowUp)) {
+            app.selected_index = app.selected_index.saturating_sub(1);
+        }
+        if ctx.input(|i| i.key_pressed(Key::ArrowDown)) {
+            app.selected_index = (app.selected_index + 1).min(filtered_paths.len().saturating_sub(1));
+        }
+        if ctx.input(|i| i.key_pressed(Key::Enter)) {
+            if let Some(selected) = filtered_paths.get(app.selected_index) {
+                println!("Selected path: {}", selected); // Task 2.2 asks to print for now
+            }
+        }
+
+        ui.separator();
+
+        // List View
+        egui::ScrollArea::vertical().show(ui, |ui| {
+            for (idx, path) in filtered_paths.iter().enumerate() {
+                let is_selected = idx == app.selected_index;
+                let label_text = path.as_str();
+                
+                let label = egui::SelectableLabel::new(is_selected, label_text);
+                if ui.add(label).clicked() {
+                    app.selected_index = idx;
+                    println!("Selected path: {}", path);
+                }
+            }
+        });
     });
 }
