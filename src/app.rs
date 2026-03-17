@@ -1,12 +1,18 @@
 // 应用程序状态与生命周期管理
 
 pub struct PathWarpApp {
-    // 这里将存放 UI 状态、监听到的路径列表等
+    pub paths: Vec<String>,
+    pub search_query: String,
+    pub selected_index: usize,
 }
 
 impl PathWarpApp {
     pub fn new(_cc: &eframe::CreationContext<'_>) -> Self {
-        Self {}
+        Self {
+            paths: crate::os::explorer::get_open_windows(),
+            search_query: String::new(),
+            selected_index: 0,
+        }
     }
 }
 

@@ -52,11 +52,11 @@
 
 **目标**：通过 Windows COM 接口获取所有当前打开的资源管理器窗口的路径。
 
-- **Task 1.1**: 在 `src/os/explorer.rs` 中，编写对 `IShellWindows` COM 接口的调用逻辑。
+- [x] **Task 1.1**: 在 `src/os/explorer.rs` 中，编写对 `IShellWindows` COM 接口的调用逻辑。
   - _要求_：需调用 `CoInitializeEx` 进行 COM 环境初始化。遍历当前正在运行的 Explorer 实例。
   - _检查点_：将获取到的 `BSTR` / `IShellItem` 等转换为 Rust 的 `String` 数组。
-- **Task 1.2**: 完善错误处理与资源释放，并在 `main.rs` 或单独的文件中写一个临时测试用例/函数，`cargo run` 打印输出确保证明能正确拿到你的桌面上正打开的文件夹路径。
-- **[阶段一自检工作流]**: fmt -> clippy -> check -> test -> commit (若有修正)
+- [x] **Task 1.2**: 完善错误处理与资源释放，并在 `main.rs` 或单独的文件中写一个临时测试用例/函数，`cargo run` 打印输出确保证明能正确拿到你的桌面上正打开的文件夹路径。
+- [x] **[阶段一自检工作流]**: fmt -> clippy -> check -> test -> commit (若有修正)
 
 ### 阶段二：UI 层 - 界面搭建与交互
 
