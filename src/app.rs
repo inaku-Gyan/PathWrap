@@ -4,6 +4,8 @@ use std::time::{Duration, Instant};
 
 const HIDE_GRACE_MS: u64 = 120;
 const UI_TICK_MS: u64 = 30;
+const OVERLAY_HEIGHT: f32 = 140.0;
+const OVERLAY_GAP: f32 = 8.0;
 
 pub struct PathWarpApp {
     pub dialog_rx: Receiver<Option<DialogInfo>>,
@@ -82,9 +84,9 @@ impl PathWarpApp {
             return;
         }
 
-        let ui_height = 200.0;
+        let ui_height = OVERLAY_HEIGHT;
         let pos_x = dialog.x as f32 / pixels_per_point;
-        let pos_y = (dialog.y + dialog.height - 200) as f32 / pixels_per_point;
+        let pos_y = (dialog.y + dialog.height) as f32 / pixels_per_point + OVERLAY_GAP;
         let width = dialog.width as f32 / pixels_per_point;
 
         let new_pos = egui::pos2(pos_x, pos_y);
