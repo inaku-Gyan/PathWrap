@@ -65,7 +65,9 @@
 - [x] **Task 2.1**: 完善 `src/app.rs` 的应用状态模型，包含一个 `Vec<String>` 用于存放路径，以及一个过滤用的搜索字符串（`search_query`）。
 - [x] **Task 2.2**: 在 `src/ui/window.rs` 中使用 `egui` 构建列表视图（List View）和顶部的输入搜索框。要求支持方向键上下选择和回车确认（目前确认仅先在控制台打印选择的路径）。
 - [x] **Task 2.3**: 在 `src/ui/theme.rs` 添加极简的黑色半透明主题配置或系统跟随主题，去除边框（已在 main 里设定 `with_decorations(false)`），支持拖拽与按 ESC 关闭/隐藏 UI。
-- [x] **[阶段二自检工作流]**: fmt -> clippy -> check -> test -> commit (若有修正)
+- [ ] **Task 2.4**: 恢复 GUI 为业务内容（替换当前调试占位文案），重新展示路径列表、搜索框、键盘选择与回车确认等核心交互。
+- [ ] **Task 2.5**: 将业务 UI 与调试 UI 解耦：新增可切换的 `ui mode`（`business` / `debug`），默认启动为 `business`，避免调试界面覆盖正式体验。
+- [ ] **[阶段二自检工作流]**: fmt -> clippy -> check -> test -> commit (若有修正)
 
 ### 阶段三：OS 操作层 - 系统文件对话框检测与 UI 粘合
 
@@ -77,7 +79,9 @@
 - [x] **Task 3.4**: 完成悬浮层显隐稳定性封装（`set_overlay_visible` / `hide_overlay`），确保 file dialog 关闭后 GUI 自动隐藏，重新打开后可再次显示。
 - [x] **Task 3.5**: 完成后台服务形态窗口配置：窗口始终不出现在 Windows 任务栏（`with_taskbar(false)`），并清理 monitor 层 unsafe 警告。
 - [x] **Task 3.6**: 完成低延迟轮询优化：监控频率提升至 30ms，丢失确认与隐藏收敛超时下调，降低体感延迟。
-- [x] **[阶段三自检工作流]**: fmt -> clippy -> check -> test -> commit (若有修正)
+- [ ] **Task 3.7**: 修复 ESC 与监听刷新冲突：当 file dialog 仍在时按 ESC，GUI 应保持用户隐藏态，不允许被下一次监听刷新立即重新拉起（需设计 session 级抑制标记与释放时机）。
+- [ ] **Task 3.8**: 完善显隐状态机：区分“用户主动隐藏”和“系统检测丢失隐藏”，并补充状态转换日志，防止闪现（先消失一瞬又出现）。
+- [ ] **[阶段三自检工作流]**: fmt -> clippy -> check -> test -> commit (若有修正)
 
 ### 阶段四：OS 操作层 - 路径注入与切换 (核心魔法)
 
@@ -94,6 +98,10 @@
 - **Task 5.1**: 调整应用生命周期逻辑——如果当前没有活跃的文件对话框，`eframe` 停止重绘或直接最小化/隐藏；仅在检测到对话框时唤醒。
 - **Task 5.2**: 移除一切临时调试用的控制台输出，整理并规范通过 `log` 和 `env_logger` 输出的信息。
 - **Task 5.3**: 评估并实现事件回调化检测方案（`SetWinEventHook`），替换/补充轮询模式；保留轮询作为 fallback，目标是进一步降低显隐延迟与 CPU 占用。
+- **Task 5.4**: 实现可开关的 debug 级别日志开关（默认静默）：
+  - 默认仅输出 `error`；
+  - 支持通过环境变量或配置文件打开 `debug/trace`；
+  - 将 monitor / app 的调试输出统一迁移到 `log` 宏，移除 `println!`。
 - **[阶段五自检工作流]**: fmt -> clippy -> check -> test -> commit (若有修正)
 
 ---
