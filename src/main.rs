@@ -22,7 +22,7 @@ fn main() -> eframe::Result<()> {
         viewport: egui::ViewportBuilder::default()
             .with_inner_size([400.0, 300.0])
             .with_always_on_top()
-            .with_visible(false) // 默认隐藏，直到检测到对话框
+            // .with_visible(false) // 先暂时去掉，看看窗口能不能初始正常存在
             .with_decorations(false), // 移除原生边框，后续自定义为漂浮窗口
         ..Default::default()
     };
