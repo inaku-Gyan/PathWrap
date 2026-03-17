@@ -2,9 +2,10 @@ use std::sync::mpsc::Sender;
 use std::time::Duration;
 use windows::Win32::Foundation::{BOOL, HWND, LPARAM, RECT};
 use windows::Win32::UI::WindowsAndMessaging::{
-    EnumWindows, GetClassNameW, GetForegroundWindow, GetWindowRect, GetWindowTextW, IsWindow,
-    IsWindowVisible,
+    EnumWindows, FindWindowExW, GetClassNameW, GetForegroundWindow, GetWindowRect, GetWindowTextW,
+    IsWindow, IsWindowVisible,
 };
+use windows::core::w;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct DialogInfo {
@@ -39,13 +40,15 @@ pub fn start_monitor(sender: Sender<Option<DialogInfo>>, ctx: egui::Context) {
             let _ = sender.send(Some(info));
             ctx.request_repaint();
         } else if last_hwnd != 0 {
-            // Keep following the last matched dialog when foreground focus temporarily changes.
+            // Keep following only the previously-accepted dialog to survive short focus jumps
+            // without re-opening detection on unrelated top-level windows.
             if let Some(info) = get_dialog_info_by_hwnd(last_hwnd) {
                 lost_ticks = 0;
                 let _ = sender.send(Some(info));
                 ctx.request_repaint();
             } else {
-                // If hwnd was recreated, try a global probe before declaring it lost.
+                // Handle common dialog-handle recreation during open/save transitions.
+                // This fallback only runs while we already have a trusted last_hwnd.
                 if let Some(info) = find_any_file_dialog() {
                     if last_hwnd != info.hwnd {
                         println!("[monitor] dialog switched: {} -> {}", last_hwnd, info.hwnd);
@@ -82,8 +85,9 @@ pub fn get_active_file_dialog() -> Option<DialogInfo> {
         return Some(info);
     }
 
-    // Fallback: foreground may not be the dialog itself. Probe all top-level windows.
-    find_any_file_dialog()
+    // Intentionally no global scan here: new detection must come from foreground to reduce
+    // false positives from generic #32770 system dialogs (e.g. warning/message boxes).
+    None
 }
 
 fn get_dialog_info_if_match(hwnd: HWND) -> Option<DialogInfo> {
@@ -92,14 +96,13 @@ fn get_dialog_info_if_match(hwnd: HWND) -> Option<DialogInfo> {
     }
 
     let class_string = get_class_name(hwnd);
-    if class_string.is_empty() {
+    if class_string != "#32770" {
         return None;
     }
 
     let title = get_window_text(hwnd);
     let title_lower = title.to_lowercase();
 
-    let is_known_dialog_class = class_string == "#32770";
     let title_looks_like_file_dialog = title.contains("打开")
         || title.contains("保存")
         || title.contains("另存为")
@@ -108,11 +111,31 @@ fn get_dialog_info_if_match(hwnd: HWND) -> Option<DialogInfo> {
         || title_lower.contains("save")
         || title_lower.contains("select");
 
-    if is_known_dialog_class || title_looks_like_file_dialog {
+    // File dialogs and generic alert dialogs both use #32770. To distinguish them, require
+    // structure that looks like a file browser surface, not just a matching title.
+    let has_combo = has_child_class(hwnd, w!("ComboBoxEx32"));
+    let has_directui = has_child_class(hwnd, w!("DirectUIHWND"));
+    let has_shell_view = has_child_class(hwnd, w!("SHELLDLL_DefView"));
+    let has_dui_view = has_child_class(hwnd, w!("DUIViewWndClassName"));
+
+    // Require stronger structural evidence to avoid matching generic #32770 alerts.
+    let has_strong_structure = (has_combo && (has_directui || has_shell_view || has_dui_view))
+        || (has_directui && has_shell_view)
+        || (has_directui && has_dui_view);
+
+    let has_file_dialog_signature = has_strong_structure
+        || (title_looks_like_file_dialog
+            && (has_combo || has_directui || has_shell_view || has_dui_view));
+
+    if has_file_dialog_signature {
         get_dialog_info(hwnd)
     } else {
         None
     }
+}
+
+fn has_child_class(parent: HWND, class_name: windows::core::PCWSTR) -> bool {
+    unsafe { FindWindowExW(parent, HWND(0), class_name, windows::core::PCWSTR::null()).0 != 0 }
 }
 
 fn find_any_file_dialog() -> Option<DialogInfo> {
