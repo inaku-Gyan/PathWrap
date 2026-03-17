@@ -2,7 +2,13 @@ use crate::app::PathWarpApp;
 use egui::{Context, Key};
 
 pub fn render(ctx: &Context, app: &mut PathWarpApp) {
-    egui::CentralPanel::default().show(ctx, |ui| {
+    if ctx.input(|i| i.key_pressed(Key::Escape)) {
+        ctx.send_viewport_cmd(egui::ViewportCommand::Close); // 按照任务要求隐藏/关闭
+    }
+
+    let response = egui::CentralPanel::default()
+        .frame(egui::Frame::none().fill(egui::Color32::from_rgba_premultiplied(20, 20, 20, 240)).inner_margin(10.0))
+        .show(ctx, |ui| {
         // Search bar
         let search_response = ui.text_edit_singleline(&mut app.search_query);
         search_response.request_focus(); // Always focused
@@ -50,4 +56,8 @@ pub fn render(ctx: &Context, app: &mut PathWarpApp) {
             }
         });
     });
+
+    if response.response.interact(egui::Sense::drag()).dragged() {
+        ctx.send_viewport_cmd(egui::ViewportCommand::StartDrag);
+    }
 }

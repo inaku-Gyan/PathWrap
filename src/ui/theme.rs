@@ -1,3 +1,8 @@
-pub fn setup_theme(_ctx: &egui::Context) {
-    // 稍后在这里实现自定义主题，比如跟随系统深色/浅色模式
+use egui::{Color32, Visuals};
+
+pub fn setup_theme(ctx: &egui::Context) {
+    let mut visuals = Visuals::dark();
+    // 极简黑色半透明
+    visuals.window_fill = Color32::from_rgba_premultiplied(10, 10, 10, 240);
+    ctx.set_visuals(visuals);
 }
