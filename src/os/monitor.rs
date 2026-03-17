@@ -16,13 +16,15 @@ pub struct DialogInfo {
 }
 
 pub fn start_monitor(sender: Sender<Option<DialogInfo>>, ctx: egui::Context) {
+    const POLL_INTERVAL_MS: u64 = 30;
+    const LOST_CONFIRM_TICKS: u8 = 3;
+
     let mut last_hwnd: isize = 0;
     let mut last_foreground_signature: Option<String> = None;
     let mut lost_ticks: u8 = 0;
-    const LOST_CONFIRM_TICKS: u8 = 8;
 
     loop {
-        std::thread::sleep(Duration::from_millis(100));
+        std::thread::sleep(Duration::from_millis(POLL_INTERVAL_MS));
         let current_dialog = get_active_file_dialog();
 
         if let Some(info) = current_dialog {
@@ -63,21 +65,21 @@ pub fn start_monitor(sender: Sender<Option<DialogInfo>>, ctx: egui::Context) {
                     }
                 }
             }
-        } else if let Some(sig) = get_foreground_signature() {
-            if last_foreground_signature.as_deref() != Some(sig.as_str()) {
-                println!("[monitor] foreground: {}", sig);
-                last_foreground_signature = Some(sig);
-            }
+        } else if let Some(sig) = get_foreground_signature()
+            && last_foreground_signature.as_deref() != Some(sig.as_str())
+        {
+            println!("[monitor] foreground: {}", sig);
+            last_foreground_signature = Some(sig);
         }
     }
 }
 
 pub fn get_active_file_dialog() -> Option<DialogInfo> {
     let hwnd = unsafe { GetForegroundWindow() };
-    if hwnd.0 != 0 {
-        if let Some(info) = get_dialog_info_if_match(hwnd) {
-            return Some(info);
-        }
+    if hwnd.0 != 0
+        && let Some(info) = get_dialog_info_if_match(hwnd)
+    {
+        return Some(info);
     }
 
     // Fallback: foreground may not be the dialog itself. Probe all top-level windows.

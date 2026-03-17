@@ -74,6 +74,9 @@
 - [x] **Task 3.1**: 在 `src/os/monitor.rs` 实现对 Windows 对话框的监测（可考虑 `SetWindowsHookEx` 侦听 `WH_CBT` 钩子，或者轮询/`UIAutomation` 寻找特定类名 `\#32770` 或 `DirectUIHWND`）。
 - [x] **Task 3.2**: 获取到对话框句柄 `HWND` 后，解析该对话框的物理屏幕坐标与大小。
 - [x] **Task 3.3**: 将目标对话框的坐标通过某种机制（如 `std::sync::mpsc` 通道或 `Arc<Mutex<...>>`）通知 `PathWarpApp`。在应用 `update` 时，调用 `eframe` 给出的 Window API，修改我们自己 egui 窗口的 Size 和 Position，使其紧贴目标对话框的底部。
+- [x] **Task 3.4**: 完成悬浮层显隐稳定性封装（`set_overlay_visible` / `hide_overlay`），确保 file dialog 关闭后 GUI 自动隐藏，重新打开后可再次显示。
+- [x] **Task 3.5**: 完成后台服务形态窗口配置：窗口始终不出现在 Windows 任务栏（`with_taskbar(false)`），并清理 monitor 层 unsafe 警告。
+- [x] **Task 3.6**: 完成低延迟轮询优化：监控频率提升至 30ms，丢失确认与隐藏收敛超时下调，降低体感延迟。
 - [x] **[阶段三自检工作流]**: fmt -> clippy -> check -> test -> commit (若有修正)
 
 ### 阶段四：OS 操作层 - 路径注入与切换 (核心魔法)
@@ -90,6 +93,7 @@
 
 - **Task 5.1**: 调整应用生命周期逻辑——如果当前没有活跃的文件对话框，`eframe` 停止重绘或直接最小化/隐藏；仅在检测到对话框时唤醒。
 - **Task 5.2**: 移除一切临时调试用的控制台输出，整理并规范通过 `log` 和 `env_logger` 输出的信息。
+- **Task 5.3**: 评估并实现事件回调化检测方案（`SetWinEventHook`），替换/补充轮询模式；保留轮询作为 fallback，目标是进一步降低显隐延迟与 CPU 占用。
 - **[阶段五自检工作流]**: fmt -> clippy -> check -> test -> commit (若有修正)
 
 ---

@@ -24,6 +24,6 @@ pub fn render(ctx: &Context, app: &mut PathWarpApp) {
 
     // Handle background drag to move window without blocking clicks on children
     if ctx.input(|i| i.pointer.primary_down()) && !ctx.wants_pointer_input() {
-            ctx.send_viewport_cmd(egui::ViewportCommand::StartDrag);
-        }
+        ctx.send_viewport_cmd(egui::ViewportCommand::StartDrag);
+    }
 }

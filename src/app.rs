@@ -2,6 +2,9 @@ use crate::os::monitor::DialogInfo;
 use std::sync::mpsc::Receiver;
 use std::time::{Duration, Instant};
 
+const HIDE_GRACE_MS: u64 = 120;
+const UI_TICK_MS: u64 = 30;
+
 pub struct PathWarpApp {
     pub dialog_rx: Receiver<Option<DialogInfo>>,
     pub target_dialog: Option<DialogInfo>,
@@ -37,10 +40,14 @@ impl PathWarpApp {
         self.last_applied_visible = Some(visible);
 
         if visible {
-            ctx.send_viewport_cmd(egui::ViewportCommand::WindowLevel(egui::WindowLevel::AlwaysOnTop));
+            ctx.send_viewport_cmd(egui::ViewportCommand::WindowLevel(
+                egui::WindowLevel::AlwaysOnTop,
+            ));
         } else {
             ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(egui::vec2(1.0, 1.0)));
-            ctx.send_viewport_cmd(egui::ViewportCommand::OuterPosition(egui::pos2(-10000.0, -10000.0)));
+            ctx.send_viewport_cmd(egui::ViewportCommand::OuterPosition(egui::pos2(
+                -10000.0, -10000.0,
+            )));
             self.last_applied_dialog = None;
             self.last_applied_scale = None;
         }
@@ -106,21 +113,30 @@ impl PathWarpApp {
             match self.pending_none_since {
                 None => {
                     self.pending_none_since = Some(Instant::now());
-                    ctx.request_repaint_after(Duration::from_millis(100));
+                    ctx.request_repaint_after(Duration::from_millis(UI_TICK_MS));
                 }
                 Some(since) => {
-                    if Instant::now().duration_since(since) >= Duration::from_millis(500) {
+                    if Instant::now().duration_since(since) >= Duration::from_millis(HIDE_GRACE_MS)
+                    {
                         self.target_dialog = None;
                         self.pending_none_since = None;
                     } else {
-                        ctx.request_repaint_after(Duration::from_millis(100));
+                        ctx.request_repaint_after(Duration::from_millis(UI_TICK_MS));
                     }
                 }
             }
         }
 
         if self.target_dialog.is_some() && self.pending_none_since.is_some() {
-            ctx.request_repaint_after(Duration::from_millis(100));
+            ctx.request_repaint_after(Duration::from_millis(UI_TICK_MS));
+        }
+
+        // Finalize hide even when `None` is only sent once.
+        if let Some(since) = self.pending_none_since
+            && Instant::now().duration_since(since) >= Duration::from_millis(HIDE_GRACE_MS)
+        {
+            self.target_dialog = None;
+            self.pending_none_since = None;
         }
     }
 }
@@ -137,6 +153,6 @@ impl eframe::App for PathWarpApp {
             egui::CentralPanel::default().show(ctx, |_| {});
         }
 
-        ctx.request_repaint_after(Duration::from_millis(100));
+        ctx.request_repaint_after(Duration::from_millis(UI_TICK_MS));
     }
 }
