@@ -2,5 +2,24 @@
 name = "PathWarp"
 version = "0.1.0"
 edition = "2024"
+description = "Windows 文件对话框路径切换工具"
 
 [dependencies]
+eframe = "0.27"
+egui = "0.27"
+
+lazy_static = "1.4"
+parking_lot = "0.12"
+log = "0.4"
+env_logger = "0.11"
+
+[dependencies.windows]
+version = "0.54"
+features = [
+    "Win32_Foundation",
+    "Win32_System_Com",
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_UI_Controls",
+    "Win32_UI_Shell",
+    "Win32_System_Ole",
+]
