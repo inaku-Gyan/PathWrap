@@ -52,23 +52,19 @@ pub fn render(ctx: &Context, app: &mut PathWarpApp) {
 
             // List View
             egui::ScrollArea::vertical().show(ui, |ui| {
-                for (idx, path) in filtered_paths.iter().enumerate() {
-                    let is_selected = idx == app.selected_index;
-                    let label_text = path.as_str();
-
-                    // Make the selectable label fill the available width
-                    let mut rect = ui.available_rect_before_wrap();
-                    // We need a proper height for the label, so let's use standard interact size
-                    rect.max.y = rect.min.y + ui.spacing().interact_size.y;
-                    
-                    let label = egui::SelectableLabel::new(is_selected, label_text);
-                    let response = ui.add_sized([ui.available_width(), ui.spacing().interact_size.y], label);
-                    
-                    if response.clicked() {
-                        app.selected_index = idx;
-                        println!("Selected path: {}", path);
+                ui.with_layout(egui::Layout::top_down_justified(egui::Align::Min), |ui| {
+                    for (idx, path) in filtered_paths.iter().enumerate() {
+                        let is_selected = idx == app.selected_index;
+                        
+                        // SelectableLabel wrapped in top_down_justified will automatically
+                        // fill the width and align text to the left.
+                        let label = egui::SelectableLabel::new(is_selected, path.as_str());
+                        if ui.add(label).clicked() {
+                            app.selected_index = idx;
+                            println!("Selected path: {}", path);
+                        }
                     }
-                }
+                });
             });
         });
 
