@@ -44,9 +44,10 @@ pub fn render(ctx: &Context, app: &mut PathWarpApp) {
                     (app.selected_index + 1).min(filtered_paths.len().saturating_sub(1));
             }
             if ctx.input(|i| i.key_pressed(Key::Enter))
-                && let Some(selected) = filtered_paths.get(app.selected_index) {
-                    println!("Selected path: {}", selected); // Task 2.2 asks to print for now
-                }
+                && let Some(selected) = filtered_paths.get(app.selected_index)
+            {
+                println!("Selected path: {}", selected); // Task 2.2 asks to print for now
+            }
 
             ui.separator();
 
@@ -55,7 +56,7 @@ pub fn render(ctx: &Context, app: &mut PathWarpApp) {
                 ui.with_layout(egui::Layout::top_down_justified(egui::Align::Min), |ui| {
                     for (idx, path) in filtered_paths.iter().enumerate() {
                         let is_selected = idx == app.selected_index;
-                        
+
                         // SelectableLabel wrapped in top_down_justified will automatically
                         // fill the width and align text to the left.
                         let label = egui::SelectableLabel::new(is_selected, path.as_str());
@@ -69,9 +70,8 @@ pub fn render(ctx: &Context, app: &mut PathWarpApp) {
         });
 
     // Handle background drag to move window without blocking clicks on children
-    if ctx.input(|i| i.pointer.primary_down()) {
-        if !ctx.wants_pointer_input() {
+    if ctx.input(|i| i.pointer.primary_down())
+        && !ctx.wants_pointer_input() {
             ctx.send_viewport_cmd(egui::ViewportCommand::StartDrag);
         }
-    }
 }

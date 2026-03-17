@@ -62,10 +62,10 @@
 
 **目标**：使用 `eframe` / `egui` 渲染一个悬浮窗，展示资源管理器路径，并支持键盘鼠标交互。
 
-- **Task 2.1**: 完善 `src/app.rs` 的应用状态模型，包含一个 `Vec<String>` 用于存放路径，以及一个过滤用的搜索字符串（`search_query`）。
-- **Task 2.2**: 在 `src/ui/window.rs` 中使用 `egui` 构建列表视图（List View）和顶部的输入搜索框。要求支持方向键上下选择和回车确认（目前确认仅先在控制台打印选择的路径）。
-- **Task 2.3**: 在 `src/ui/theme.rs` 添加极简的黑色半透明主题配置或系统跟随主题，去除边框（已在 main 里设定 `with_decorations(false)`），支持拖拽与按 ESC 关闭/隐藏 UI。
-- **[阶段二自检工作流]**: fmt -> clippy -> check -> test -> commit (若有修正)
+- [x] **Task 2.1**: 完善 `src/app.rs` 的应用状态模型，包含一个 `Vec<String>` 用于存放路径，以及一个过滤用的搜索字符串（`search_query`）。
+- [x] **Task 2.2**: 在 `src/ui/window.rs` 中使用 `egui` 构建列表视图（List View）和顶部的输入搜索框。要求支持方向键上下选择和回车确认（目前确认仅先在控制台打印选择的路径）。
+- [x] **Task 2.3**: 在 `src/ui/theme.rs` 添加极简的黑色半透明主题配置或系统跟随主题，去除边框（已在 main 里设定 `with_decorations(false)`），支持拖拽与按 ESC 关闭/隐藏 UI。
+- [x] **[阶段二自检工作流]**: fmt -> clippy -> check -> test -> commit (若有修正)
 
 ### 阶段三：OS 操作层 - 系统文件对话框检测与 UI 粘合
 
