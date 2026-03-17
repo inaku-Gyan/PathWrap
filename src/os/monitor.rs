@@ -1,8 +1,9 @@
 use std::sync::mpsc::Sender;
 use std::time::Duration;
-use windows::Win32::Foundation::{HWND, RECT};
+use windows::Win32::Foundation::{BOOL, HWND, LPARAM, RECT};
 use windows::Win32::UI::WindowsAndMessaging::{
-    GetClassNameW, GetForegroundWindow, GetWindowRect, IsWindow, IsWindowVisible,
+    EnumWindows, GetClassNameW, GetForegroundWindow, GetWindowRect, GetWindowTextW, IsWindow,
+    IsWindowVisible,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -16,39 +17,42 @@ pub struct DialogInfo {
 
 pub fn start_monitor(sender: Sender<Option<DialogInfo>>, ctx: egui::Context) {
     let mut last_hwnd: isize = 0;
+    let mut last_foreground_signature: Option<String> = None;
+    let mut lost_ticks: u8 = 0;
+    const LOST_CONFIRM_TICKS: u8 = 4;
 
     loop {
         std::thread::sleep(Duration::from_millis(100));
-
         let current_dialog = get_active_file_dialog();
 
         if let Some(info) = current_dialog {
+            lost_ticks = 0;
             if last_hwnd != info.hwnd {
+                println!("[monitor] dialog detected: hwnd={} rect=({}, {}) {}x{}", info.hwnd, info.x, info.y, info.width, info.height);
                 last_hwnd = info.hwnd;
-                // Found a new dialog, tell the app to wake up and position itself
+            }
+            let _ = sender.send(Some(info));
+            ctx.request_repaint();
+        } else if last_hwnd != 0 {
+            // Keep following the last matched dialog when foreground focus temporarily changes.
+            if let Some(info) = get_dialog_info_by_hwnd(last_hwnd) {
+                lost_ticks = 0;
                 let _ = sender.send(Some(info));
                 ctx.request_repaint();
             } else {
-                // If it's the same dialog, maybe its position changed, update it too
-                // (optional: can compare x,y,w,h to avoid spam)
-                let _ = sender.send(Some(info));
-                ctx.request_repaint();
-            }
-        } else {
-            // Check if the previously locked dialog is closed or user clicked away
-            if last_hwnd != 0 {
-                // If the foreground window isn't a dialog, but our tracked dialog is still open,
-                // we might want to keep our UI or hide it.
-                // For a highly integrated feel, let's keep tracking the locked dialog if it's still alive.
-                if let Some(info) = get_dialog_info_by_hwnd(last_hwnd) {
-                    let _ = sender.send(Some(info));
-                    ctx.request_repaint();
-                } else {
-                    // Dialog actually closed
+                lost_ticks = lost_ticks.saturating_add(1);
+                if lost_ticks >= LOST_CONFIRM_TICKS {
+                    println!("[monitor] dialog lost: hwnd={}", last_hwnd);
                     last_hwnd = 0;
+                    lost_ticks = 0;
                     let _ = sender.send(None);
                     ctx.request_repaint();
                 }
+            }
+        } else if let Some(sig) = get_foreground_signature() {
+            if last_foreground_signature.as_deref() != Some(sig.as_str()) {
+                println!("[monitor] foreground: {}", sig);
+                last_foreground_signature = Some(sig);
             }
         }
     }
@@ -57,41 +61,105 @@ pub fn start_monitor(sender: Sender<Option<DialogInfo>>, ctx: egui::Context) {
 pub fn get_active_file_dialog() -> Option<DialogInfo> {
     unsafe {
         let hwnd = GetForegroundWindow();
-        if hwnd.0 == 0 {
-            return None;
+        if hwnd.0 != 0 {
+            if let Some(info) = get_dialog_info_if_match(hwnd) {
+                return Some(info);
+            }
         }
 
+        // Fallback: foreground may not be the dialog itself. Probe all top-level windows.
+        find_any_file_dialog()
+    }
+}
+
+unsafe fn get_dialog_info_if_match(hwnd: HWND) -> Option<DialogInfo> {
+    if !IsWindowVisible(hwnd).as_bool() {
+        return None;
+    }
+
+    let class_string = get_class_name(hwnd);
+    if class_string.is_empty() {
+        return None;
+    }
+
+    let title = get_window_text(hwnd);
+    let title_lower = title.to_lowercase();
+
+    let is_known_dialog_class = class_string == "#32770";
+    let title_looks_like_file_dialog = title.contains("打开")
+        || title.contains("保存")
+        || title.contains("另存为")
+        || title.contains("选择")
+        || title_lower.contains("open")
+        || title_lower.contains("save")
+        || title_lower.contains("select");
+
+    if is_known_dialog_class || title_looks_like_file_dialog {
+        get_dialog_info(hwnd)
+    } else {
+        None
+    }
+}
+
+unsafe fn find_any_file_dialog() -> Option<DialogInfo> {
+    let mut hwnds: Vec<isize> = Vec::new();
+
+    unsafe extern "system" fn enum_proc(hwnd: HWND, lparam: LPARAM) -> BOOL {
+        let hwnds = &mut *(lparam.0 as *mut Vec<isize>);
+        hwnds.push(hwnd.0);
+        BOOL(1)
+    }
+
+    let lparam = LPARAM((&mut hwnds as *mut Vec<isize>) as isize);
+    let _ = EnumWindows(Some(enum_proc), lparam);
+
+    for hwnd_raw in hwnds {
+        let hwnd = HWND(hwnd_raw as _);
+        if let Some(info) = get_dialog_info_if_match(hwnd) {
+            return Some(info);
+        }
+    }
+
+    None
+}
+
+fn get_class_name(hwnd: HWND) -> String {
+    unsafe {
         let mut class_name = [0u16; 256];
         let len = GetClassNameW(hwnd, &mut class_name);
-        if len == 0 {
-            return None;
-        }
-
-        let class_string = String::from_utf16_lossy(&class_name[..len as usize]);
-
-        let title = get_window_text(hwnd);
-        let is_dialog = class_string == "#32770" || title.contains("打开") || title.contains("保存") || title.contains("Open") || title.contains("Save");
-
-// Temporarily turn off print spam for Notepad etc to keep output clean, but let's keep logging true dialogs
-        // println!("Active Window: Class='{}', Title='{}', HWND={:?}", class_string, title, hwnd);
-
-        if is_dialog && !title.is_empty() {
-            // println!("Found Dialog! Sending wake-up call...");
-            get_dialog_info(hwnd)
+        if len > 0 {
+            String::from_utf16_lossy(&class_name[..len as usize])
         } else {
-            None
+            String::new()
         }
     }
 }
 
-unsafe fn get_window_text(hwnd: HWND) -> String {
-    use windows::Win32::UI::WindowsAndMessaging::GetWindowTextW;
-    let mut text = [0u16; 512];
-    let len = unsafe { GetWindowTextW(hwnd, &mut text) };
-    if len > 0 {
-        String::from_utf16_lossy(&text[..len as usize])
-    } else {
-        String::new()
+fn get_window_text(hwnd: HWND) -> String {
+    unsafe {
+        let mut text = [0u16; 512];
+        let len = GetWindowTextW(hwnd, &mut text);
+        if len > 0 {
+            String::from_utf16_lossy(&text[..len as usize])
+        } else {
+            String::new()
+        }
+    }
+}
+
+fn get_foreground_signature() -> Option<String> {
+    unsafe {
+        let hwnd = GetForegroundWindow();
+        if hwnd.0 == 0 {
+            return None;
+        }
+
+        let class_name = get_class_name(hwnd);
+        let title = get_window_text(hwnd);
+        Some(format!(
+            "hwnd={} class='{}' title='{}'",
+            hwnd.0, class_name, title
+        ))
     }
 }
 
@@ -108,7 +176,7 @@ pub fn get_dialog_info_by_hwnd(hwnd_isize: isize) -> Option<DialogInfo> {
 
 unsafe fn get_dialog_info(hwnd: HWND) -> Option<DialogInfo> {
     let mut rect = RECT::default();
-    if unsafe { GetWindowRect(hwnd, &mut rect) }.is_ok() {
+    if GetWindowRect(hwnd, &mut rect).is_ok() {
         Some(DialogInfo {
             hwnd: hwnd.0,
             x: rect.left,

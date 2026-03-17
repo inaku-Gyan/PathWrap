@@ -26,7 +26,7 @@ impl PathWarpApp {
             target_dialog: None,
             last_applied_dialog: None,
             last_applied_scale: None,
-            is_currently_visible: true,
+            is_currently_visible: false,
         }
     }
 }
