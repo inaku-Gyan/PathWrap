@@ -12,6 +12,7 @@ dependencies = [
  "lazy_static",
  "log",
  "parking_lot",
+ "url",
  "windows 0.54.0",
 ]
 

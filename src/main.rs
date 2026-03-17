@@ -8,6 +8,14 @@ pub mod utils;
 fn main() -> eframe::Result<()> {
     env_logger::init();
 
+    // 临时测试：打印打开的资源管理器路径 (Task 1.2)
+    let paths = os::explorer::get_open_windows();
+    println!("=== [测试] 当前打开的资源管理器路径 ===");
+    for (i, p) in paths.iter().enumerate() {
+        println!("{}. {}", i + 1, p);
+    }
+    println!("===========================================");
+
     // 初始化后台监控
     std::thread::spawn(|| {
         os::monitor::start_monitor();
