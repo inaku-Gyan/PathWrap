@@ -7,15 +7,6 @@ pub mod utils;
 fn main() -> eframe::Result<()> {
     env_logger::init();
 
-    // 临时测试：打印打开的资源管理器路径 (Task 1.2)
-    let paths = os::explorer::get_open_windows();
-    println!("=== [测试] 当前打开的资源管理器路径 ===");
-    for (i, p) in paths.iter().enumerate() {
-        println!("{}. {}", i + 1, p);
-    }
-    println!("===========================================");
-
-    // 初始化后台监控频道
     let (tx, rx) = std::sync::mpsc::channel();
 
     let options = eframe::NativeOptions {
@@ -23,6 +14,7 @@ fn main() -> eframe::Result<()> {
             .with_inner_size([400.0, 300.0])
             .with_always_on_top()
             .with_transparent(true)
+            .with_taskbar(false)
             .with_decorations(false), // 移除原生边框，后续自定义为漂浮窗口
         ..Default::default()
     };
@@ -33,7 +25,6 @@ fn main() -> eframe::Result<()> {
         Box::new(move |cc| {
             ui::theme::setup_theme(&cc.egui_ctx);
 
-            // 启动监控线程
             let ctx_clone = cc.egui_ctx.clone();
             std::thread::spawn(move || {
                 os::monitor::start_monitor(tx, ctx_clone);

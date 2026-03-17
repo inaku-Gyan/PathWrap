@@ -19,7 +19,7 @@ pub fn start_monitor(sender: Sender<Option<DialogInfo>>, ctx: egui::Context) {
     let mut last_hwnd: isize = 0;
     let mut last_foreground_signature: Option<String> = None;
     let mut lost_ticks: u8 = 0;
-    const LOST_CONFIRM_TICKS: u8 = 4;
+    const LOST_CONFIRM_TICKS: u8 = 8;
 
     loop {
         std::thread::sleep(Duration::from_millis(100));
@@ -28,7 +28,10 @@ pub fn start_monitor(sender: Sender<Option<DialogInfo>>, ctx: egui::Context) {
         if let Some(info) = current_dialog {
             lost_ticks = 0;
             if last_hwnd != info.hwnd {
-                println!("[monitor] dialog detected: hwnd={} rect=({}, {}) {}x{}", info.hwnd, info.x, info.y, info.width, info.height);
+                println!(
+                    "[monitor] dialog detected: hwnd={} rect=({}, {}) {}x{}",
+                    info.hwnd, info.x, info.y, info.width, info.height
+                );
                 last_hwnd = info.hwnd;
             }
             let _ = sender.send(Some(info));
@@ -40,13 +43,24 @@ pub fn start_monitor(sender: Sender<Option<DialogInfo>>, ctx: egui::Context) {
                 let _ = sender.send(Some(info));
                 ctx.request_repaint();
             } else {
-                lost_ticks = lost_ticks.saturating_add(1);
-                if lost_ticks >= LOST_CONFIRM_TICKS {
-                    println!("[monitor] dialog lost: hwnd={}", last_hwnd);
-                    last_hwnd = 0;
+                // If hwnd was recreated, try a global probe before declaring it lost.
+                if let Some(info) = find_any_file_dialog() {
+                    if last_hwnd != info.hwnd {
+                        println!("[monitor] dialog switched: {} -> {}", last_hwnd, info.hwnd);
+                        last_hwnd = info.hwnd;
+                    }
                     lost_ticks = 0;
-                    let _ = sender.send(None);
+                    let _ = sender.send(Some(info));
                     ctx.request_repaint();
+                } else {
+                    lost_ticks = lost_ticks.saturating_add(1);
+                    if lost_ticks >= LOST_CONFIRM_TICKS {
+                        println!("[monitor] dialog lost: hwnd={}", last_hwnd);
+                        last_hwnd = 0;
+                        lost_ticks = 0;
+                        let _ = sender.send(None);
+                        ctx.request_repaint();
+                    }
                 }
             }
         } else if let Some(sig) = get_foreground_signature() {
@@ -59,21 +73,19 @@ pub fn start_monitor(sender: Sender<Option<DialogInfo>>, ctx: egui::Context) {
 }
 
 pub fn get_active_file_dialog() -> Option<DialogInfo> {
-    unsafe {
-        let hwnd = GetForegroundWindow();
-        if hwnd.0 != 0 {
-            if let Some(info) = get_dialog_info_if_match(hwnd) {
-                return Some(info);
-            }
+    let hwnd = unsafe { GetForegroundWindow() };
+    if hwnd.0 != 0 {
+        if let Some(info) = get_dialog_info_if_match(hwnd) {
+            return Some(info);
         }
-
-        // Fallback: foreground may not be the dialog itself. Probe all top-level windows.
-        find_any_file_dialog()
     }
+
+    // Fallback: foreground may not be the dialog itself. Probe all top-level windows.
+    find_any_file_dialog()
 }
 
-unsafe fn get_dialog_info_if_match(hwnd: HWND) -> Option<DialogInfo> {
-    if !IsWindowVisible(hwnd).as_bool() {
+fn get_dialog_info_if_match(hwnd: HWND) -> Option<DialogInfo> {
+    if unsafe { !IsWindowVisible(hwnd).as_bool() } {
         return None;
     }
 
@@ -101,17 +113,17 @@ unsafe fn get_dialog_info_if_match(hwnd: HWND) -> Option<DialogInfo> {
     }
 }
 
-unsafe fn find_any_file_dialog() -> Option<DialogInfo> {
+fn find_any_file_dialog() -> Option<DialogInfo> {
     let mut hwnds: Vec<isize> = Vec::new();
 
     unsafe extern "system" fn enum_proc(hwnd: HWND, lparam: LPARAM) -> BOOL {
-        let hwnds = &mut *(lparam.0 as *mut Vec<isize>);
+        let hwnds = unsafe { &mut *(lparam.0 as *mut Vec<isize>) };
         hwnds.push(hwnd.0);
         BOOL(1)
     }
 
     let lparam = LPARAM((&mut hwnds as *mut Vec<isize>) as isize);
-    let _ = EnumWindows(Some(enum_proc), lparam);
+    let _ = unsafe { EnumWindows(Some(enum_proc), lparam) };
 
     for hwnd_raw in hwnds {
         let hwnd = HWND(hwnd_raw as _);
@@ -164,19 +176,17 @@ fn get_foreground_signature() -> Option<String> {
 }
 
 pub fn get_dialog_info_by_hwnd(hwnd_isize: isize) -> Option<DialogInfo> {
-    unsafe {
-        let hwnd = HWND(hwnd_isize as _);
-        if IsWindow(hwnd).as_bool() && IsWindowVisible(hwnd).as_bool() {
-            get_dialog_info(hwnd)
-        } else {
-            None
-        }
+    let hwnd = HWND(hwnd_isize as _);
+    if unsafe { IsWindow(hwnd).as_bool() && IsWindowVisible(hwnd).as_bool() } {
+        get_dialog_info(hwnd)
+    } else {
+        None
     }
 }
 
-unsafe fn get_dialog_info(hwnd: HWND) -> Option<DialogInfo> {
+fn get_dialog_info(hwnd: HWND) -> Option<DialogInfo> {
     let mut rect = RECT::default();
-    if GetWindowRect(hwnd, &mut rect).is_ok() {
+    if unsafe { GetWindowRect(hwnd, &mut rect) }.is_ok() {
         Some(DialogInfo {
             hwnd: hwnd.0,
             x: rect.left,

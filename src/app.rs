@@ -1,117 +1,142 @@
 use crate::os::monitor::DialogInfo;
 use std::sync::mpsc::Receiver;
-
-// 应用程序状态与生命周期管理
+use std::time::{Duration, Instant};
 
 pub struct PathWarpApp {
-    pub paths: Vec<String>,
-    pub search_query: String,
-    pub selected_index: usize,
-    pub dialog_rx: Option<Receiver<Option<DialogInfo>>>,
+    pub dialog_rx: Receiver<Option<DialogInfo>>,
     pub target_dialog: Option<DialogInfo>,
+    pub pending_none_since: Option<Instant>,
 
-    // 用于防抖 (Debounce)
+    pub overlay_visible: bool,
+    pub last_applied_visible: Option<bool>,
     pub last_applied_dialog: Option<DialogInfo>,
     pub last_applied_scale: Option<f32>,
-    pub is_currently_visible: bool,
 }
 
 impl PathWarpApp {
     pub fn new(_cc: &eframe::CreationContext<'_>, dialog_rx: Receiver<Option<DialogInfo>>) -> Self {
         Self {
-            paths: crate::os::explorer::get_open_windows(),
-            search_query: String::new(),
-            selected_index: 0,
-            dialog_rx: Some(dialog_rx),
+            dialog_rx,
             target_dialog: None,
+            pending_none_since: None,
+
+            overlay_visible: false,
+            last_applied_visible: None,
             last_applied_dialog: None,
             last_applied_scale: None,
-            is_currently_visible: false,
+        }
+    }
+
+    pub fn set_overlay_visible(&mut self, ctx: &eframe::egui::Context, visible: bool) {
+        self.overlay_visible = visible;
+
+        if self.last_applied_visible == Some(visible) {
+            return;
+        }
+
+        self.last_applied_visible = Some(visible);
+
+        if visible {
+            ctx.send_viewport_cmd(egui::ViewportCommand::WindowLevel(egui::WindowLevel::AlwaysOnTop));
+        } else {
+            ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(egui::vec2(1.0, 1.0)));
+            ctx.send_viewport_cmd(egui::ViewportCommand::OuterPosition(egui::pos2(-10000.0, -10000.0)));
+            self.last_applied_dialog = None;
+            self.last_applied_scale = None;
+        }
+    }
+
+    pub fn hide_overlay(&mut self, ctx: &eframe::egui::Context) {
+        self.target_dialog = None;
+        self.pending_none_since = None;
+        self.set_overlay_visible(ctx, false);
+    }
+
+    fn place_overlay_for_dialog(&mut self, ctx: &eframe::egui::Context, dialog: DialogInfo) {
+        let pixels_per_point = ctx.pixels_per_point();
+        let needs_update = self.last_applied_dialog != Some(dialog)
+            || self
+                .last_applied_scale
+                .map(|s| (s - pixels_per_point).abs() > 0.01)
+                .unwrap_or(true)
+            || !self.overlay_visible;
+
+        if !needs_update {
+            return;
+        }
+
+        let ui_height = 200.0;
+        let pos_x = dialog.x as f32 / pixels_per_point;
+        let pos_y = (dialog.y + dialog.height - 200) as f32 / pixels_per_point;
+        let width = dialog.width as f32 / pixels_per_point;
+
+        let new_pos = egui::pos2(pos_x, pos_y);
+        let new_size = egui::vec2(width, ui_height);
+
+        println!(
+            "=> Waking Up App! Move to: logic_pos={:?}, logic_size={:?} (Scale: {})",
+            new_pos, new_size, pixels_per_point
+        );
+        ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(new_size));
+        ctx.send_viewport_cmd(egui::ViewportCommand::OuterPosition(new_pos));
+
+        self.last_applied_dialog = Some(dialog);
+        self.last_applied_scale = Some(pixels_per_point);
+        self.set_overlay_visible(ctx, true);
+    }
+
+    fn sync_dialog_state_from_channel(&mut self, ctx: &eframe::egui::Context) {
+        let mut newest_some: Option<DialogInfo> = None;
+        let mut saw_none = false;
+
+        for msg in self.dialog_rx.try_iter() {
+            match msg {
+                Some(info) => newest_some = Some(info),
+                None => saw_none = true,
+            }
+        }
+
+        if let Some(info) = newest_some {
+            self.target_dialog = Some(info);
+            self.pending_none_since = None;
+            return;
+        }
+
+        if saw_none {
+            match self.pending_none_since {
+                None => {
+                    self.pending_none_since = Some(Instant::now());
+                    ctx.request_repaint_after(Duration::from_millis(100));
+                }
+                Some(since) => {
+                    if Instant::now().duration_since(since) >= Duration::from_millis(500) {
+                        self.target_dialog = None;
+                        self.pending_none_since = None;
+                    } else {
+                        ctx.request_repaint_after(Duration::from_millis(100));
+                    }
+                }
+            }
+        }
+
+        if self.target_dialog.is_some() && self.pending_none_since.is_some() {
+            ctx.request_repaint_after(Duration::from_millis(100));
         }
     }
 }
 
 impl eframe::App for PathWarpApp {
     fn update(&mut self, ctx: &eframe::egui::Context, _frame: &mut eframe::Frame) {
-        // Read incoming dialog updates
-        if let Some(rx) = &self.dialog_rx {
-            for msg in rx.try_iter() {
-                self.target_dialog = msg;
+        self.sync_dialog_state_from_channel(ctx);
 
-                // When a dialog is active, force-fetch the latest paths to keep it fresh
-                if msg.is_some() {
-                    self.paths = crate::os::explorer::get_open_windows();
-                }
-            }
-        }
-
-        // Only render the UI if we have a target dialog
-        if let Some(dialog) = &self.target_dialog {
-            let mut should_update_viewport = false;
-            let pixels_per_point = ctx.pixels_per_point();
-
-            if let Some(last) = &self.last_applied_dialog {
-                if last != dialog {
-                    should_update_viewport = true;
-                }
-            } else {
-                should_update_viewport = true;
-            }
-            
-            if let Some(last_scale) = self.last_applied_scale {
-                if (last_scale - pixels_per_point).abs() > 0.01 {
-                    should_update_viewport = true;
-                }
-            }
-
-            if !self.is_currently_visible {
-                should_update_viewport = true;
-            }
-
-            if should_update_viewport {
-                self.last_applied_dialog = Some(*dialog);
-                self.last_applied_scale = Some(pixels_per_point);
-                self.is_currently_visible = true;
-
-                // Give our UI a fixed height for now
-                let ui_height = 200.0;
-
-                let pos_x = dialog.x as f32 / pixels_per_point;
-                // Place it inside the bottom of the dialog instead of completely below it, just to guarantee it's on screen
-                let pos_y = (dialog.y + dialog.height - 200) as f32 / pixels_per_point;
-                let width = dialog.width as f32 / pixels_per_point;
-
-                let new_pos = egui::pos2(pos_x, pos_y);
-                let new_size = egui::vec2(width, ui_height);
-
-                println!("=> Waking Up App! Move to: logic_pos={:?}, logic_size={:?} (Scale: {})", new_pos, new_size, pixels_per_point);
-                ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(new_size));
-                ctx.send_viewport_cmd(egui::ViewportCommand::OuterPosition(new_pos));
-                ctx.send_viewport_cmd(egui::ViewportCommand::Visible(true));
-                ctx.send_viewport_cmd(egui::ViewportCommand::WindowLevel(egui::WindowLevel::AlwaysOnTop));
-                // We'll remove Force Focus for a moment since that might bug out the real file dialog
-                // ctx.send_viewport_cmd(egui::ViewportCommand::Focus); 
-            }
-
+        if let Some(dialog) = self.target_dialog {
+            self.place_overlay_for_dialog(ctx, dialog);
             crate::ui::window::render(ctx, self);
         } else {
-            // Optimization: if no target dialog, completely hide viewport
-            if self.is_currently_visible {
-                println!("=> Target lost. Hiding window.");
-                ctx.send_viewport_cmd(egui::ViewportCommand::Visible(false));
-                self.is_currently_visible = false;
-                self.last_applied_dialog = None;
-                self.last_applied_scale = None;
-            }
-
-            // Reset state
-            self.search_query.clear();
-            self.selected_index = 0;
-            
-            // Render an empty panel anyway just to keep eframe happy 
-            egui::CentralPanel::default()
-                .frame(egui::Frame::none().fill(egui::Color32::TRANSPARENT))
-                .show(ctx, |_| {});
+            self.set_overlay_visible(ctx, false);
+            egui::CentralPanel::default().show(ctx, |_| {});
         }
+
+        ctx.request_repaint_after(Duration::from_millis(100));
     }
 }
