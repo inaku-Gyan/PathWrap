@@ -15,21 +15,24 @@ pub fn get_open_windows() -> Vec<String> {
 
         if let Ok(shell_windows) =
             CoCreateInstance::<_, IShellWindows>(&ShellWindows, None, CLSCTX_ALL)
-            && let Ok(count) = shell_windows.Count() {
-                for i in 0..count {
-                    if let Ok(item) = shell_windows.Item(&windows::core::VARIANT::from(i))
-                        && let Ok(app) = item.cast::<IWebBrowserApp>()
-                            && let Ok(url_bstr) = app.LocationURL() {
-                                let url_string = url_bstr.to_string();
-                                if url_string.starts_with("file:///")
-                                    && let Ok(path) = url::Url::parse(&url_string)
-                                        && let Ok(file_path) = path.to_file_path()
-                                            && let Some(path_str) = file_path.to_str() {
-                                                paths.push(path_str.to_string());
-                                            }
-                            }
+            && let Ok(count) = shell_windows.Count()
+        {
+            for i in 0..count {
+                if let Ok(item) = shell_windows.Item(&windows::core::VARIANT::from(i))
+                    && let Ok(app) = item.cast::<IWebBrowserApp>()
+                    && let Ok(url_bstr) = app.LocationURL()
+                {
+                    let url_string = url_bstr.to_string();
+                    if url_string.starts_with("file:///")
+                        && let Ok(path) = url::Url::parse(&url_string)
+                        && let Ok(file_path) = path.to_file_path()
+                        && let Some(path_str) = file_path.to_str()
+                    {
+                        paths.push(path_str.to_string());
+                    }
                 }
             }
+        }
 
         if com_initialized {
             CoUninitialize();
