@@ -2,7 +2,7 @@
 name = "PathWarp"
 version = "0.1.0"
 edition = "2024"
-description = "Windows 文件对话框路径切换工具"
+description = "Windows file dialog path switching tool"
 
 [dependencies]
 eframe = "0.27"
@@ -16,4 +16,14 @@ url = "2.5.8"
 
 [dependencies.windows]
 version = "0.54"
-features = ["Win32_Foundation", "Win32_System_Com", "Win32_UI_WindowsAndMessaging", "Win32_UI_Controls", "Win32_UI_Shell", "Win32_System_Ole", "Win32_System_Variant", "Win32_Web_InternetExplorer", "Win32_System_Com_StructuredStorage"]
+features = [
+    "Win32_Foundation",
+    "Win32_System_Com",
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_UI_Controls",
+    "Win32_UI_Shell",
+    "Win32_System_Ole",
+    "Win32_System_Variant",
+    "Win32_Web_InternetExplorer",
+    "Win32_System_Com_StructuredStorage",
+]
