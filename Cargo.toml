@@ -12,7 +12,8 @@ lazy_static = "1.4"
 parking_lot = "0.12"
 log = "0.4"
 env_logger = "0.11"
+url = "2.5.8"
 
 [dependencies.windows]
 version = "0.54"
-features = ["Win32_Foundation", "Win32_System_Com", "Win32_UI_WindowsAndMessaging", "Win32_UI_Controls", "Win32_UI_Shell", "Win32_System_Ole", "Win32_System_Variant", "Win32_Web_InternetExplorer"]
+features = ["Win32_Foundation", "Win32_System_Com", "Win32_UI_WindowsAndMessaging", "Win32_UI_Controls", "Win32_UI_Shell", "Win32_System_Ole", "Win32_System_Variant", "Win32_Web_InternetExplorer", "Win32_System_Com_StructuredStorage"]
