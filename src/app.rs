@@ -10,6 +10,10 @@ pub struct PathWarpApp {
     pub target_dialog: Option<DialogInfo>,
     pub pending_none_since: Option<Instant>,
 
+    pub paths: Vec<String>,
+    pub search_query: String,
+    pub selected_index: usize,
+
     pub overlay_visible: bool,
     pub last_applied_visible: Option<bool>,
     pub last_applied_dialog: Option<DialogInfo>,
@@ -22,6 +26,10 @@ impl PathWarpApp {
             dialog_rx,
             target_dialog: None,
             pending_none_since: None,
+
+            paths: crate::os::explorer::get_open_windows(),
+            search_query: String::new(),
+            selected_index: 0,
 
             overlay_visible: false,
             last_applied_visible: None,
@@ -56,6 +64,8 @@ impl PathWarpApp {
     pub fn hide_overlay(&mut self, ctx: &eframe::egui::Context) {
         self.target_dialog = None;
         self.pending_none_since = None;
+        self.search_query.clear();
+        self.selected_index = 0;
         self.set_overlay_visible(ctx, false);
     }
 
@@ -106,6 +116,7 @@ impl PathWarpApp {
         if let Some(info) = newest_some {
             self.target_dialog = Some(info);
             self.pending_none_since = None;
+            self.paths = crate::os::explorer::get_open_windows();
             return;
         }
 
