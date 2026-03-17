@@ -39,21 +39,23 @@ impl eframe::App for PathWarpApp {
 
         // Only render the UI if we have a target dialog
         if let Some(dialog) = &self.target_dialog {
-            // Reposition our window to the bottom of the dialog
-            // X matches the dialog X, Y matches dialog Y + dialog height, Width matches dialog Width
-            ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(
-                egui::vec2(dialog.width as f32, 200.0), // Give our UI a fixed height for now
-            ));
-            ctx.send_viewport_cmd(egui::ViewportCommand::OuterPosition(egui::pos2(
-                dialog.x as f32,
-                (dialog.y + dialog.height) as f32,
-            )));
-            // Ensure we're visible and on top
+            // Give our UI a fixed height for now
+            let ui_height = 200.0;
+            let new_pos = egui::pos2(dialog.x as f32, (dialog.y + dialog.height) as f32);
+            let new_size = egui::vec2(dialog.width as f32, ui_height);
+
+            // Using Window level to ensure we draw the floating UI as top level of our invisible eframe context,
+            // or alternatively adjusting the viewport commands.
+            ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(new_size));
+            ctx.send_viewport_cmd(egui::ViewportCommand::OuterPosition(new_pos));
+            
+            // To fix eframe visibility issue on Windows, continually ensure visible & focused
             ctx.send_viewport_cmd(egui::ViewportCommand::Visible(true));
+            // ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
 
             crate::ui::window::render(ctx, self);
         } else {
-            // Hide the window when there is no target dialog
+            // Optimization: if no target dialog, completely hide viewport
             ctx.send_viewport_cmd(egui::ViewportCommand::Visible(false));
             // Reset state
             self.search_query.clear();

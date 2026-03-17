@@ -69,12 +69,29 @@ pub fn get_active_file_dialog() -> Option<DialogInfo> {
 
         let class_string = String::from_utf16_lossy(&class_name[..len as usize]);
 
-        // #32770 is the standard dialog class name
-        if class_string == "#32770" {
+        let title = get_window_text(hwnd);
+        let is_dialog = class_string == "#32770" || title.contains("打开") || title.contains("保存") || title.contains("Open") || title.contains("Save");
+
+// Temporarily turn off print spam for Notepad etc to keep output clean, but let's keep logging true dialogs
+        // println!("Active Window: Class='{}', Title='{}', HWND={:?}", class_string, title, hwnd);
+
+        if is_dialog && !title.is_empty() {
+            // println!("Found Dialog! Sending wake-up call...");
             get_dialog_info(hwnd)
         } else {
             None
         }
+    }
+}
+
+unsafe fn get_window_text(hwnd: HWND) -> String {
+    use windows::Win32::UI::WindowsAndMessaging::GetWindowTextW;
+    let mut text = [0u16; 512];
+    let len = unsafe { GetWindowTextW(hwnd, &mut text) };
+    if len > 0 {
+        String::from_utf16_lossy(&text[..len as usize])
+    } else {
+        String::new()
     }
 }
 

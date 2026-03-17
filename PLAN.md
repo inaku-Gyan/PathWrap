@@ -71,10 +71,10 @@
 
 **目标**：检测到“打开”/“保存”对话框出现时，弹出我们自定义的 UI，并将其吸附在对话框下方。
 
-- **Task 3.1**: 在 `src/os/monitor.rs` 实现对 Windows 对话框的监测（可考虑 `SetWindowsHookEx` 侦听 `WH_CBT` 钩子，或者轮询/`UIAutomation` 寻找特定类名 `\#32770` 或 `DirectUIHWND`）。
-- **Task 3.2**: 获取到对话框句柄 `HWND` 后，解析该对话框的物理屏幕坐标与大小。
-- **Task 3.3**: 将目标对话框的坐标通过某种机制（如 `std::sync::mpsc` 通道或 `Arc<Mutex<...>>`）通知 `PathWarpApp`。在应用 `update` 时，调用 `eframe` 给出的 Window API，修改我们自己 egui 窗口的 Size 和 Position，使其紧贴目标对话框的底部。
-- **[阶段三自检工作流]**: fmt -> clippy -> check -> test -> commit (若有修正)
+- [x] **Task 3.1**: 在 `src/os/monitor.rs` 实现对 Windows 对话框的监测（可考虑 `SetWindowsHookEx` 侦听 `WH_CBT` 钩子，或者轮询/`UIAutomation` 寻找特定类名 `\#32770` 或 `DirectUIHWND`）。
+- [x] **Task 3.2**: 获取到对话框句柄 `HWND` 后，解析该对话框的物理屏幕坐标与大小。
+- [x] **Task 3.3**: 将目标对话框的坐标通过某种机制（如 `std::sync::mpsc` 通道或 `Arc<Mutex<...>>`）通知 `PathWarpApp`。在应用 `update` 时，调用 `eframe` 给出的 Window API，修改我们自己 egui 窗口的 Size 和 Position，使其紧贴目标对话框的底部。
+- [x] **[阶段三自检工作流]**: fmt -> clippy -> check -> test -> commit (若有修正)
 
 ### 阶段四：OS 操作层 - 路径注入与切换 (核心魔法)
 
