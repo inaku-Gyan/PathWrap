@@ -6,7 +6,7 @@ pub fn render(ctx: &Context, app: &mut PathWarpApp) {
         ctx.send_viewport_cmd(egui::ViewportCommand::Close); // 按照任务要求隐藏/关闭
     }
 
-    let response = egui::CentralPanel::default()
+    egui::CentralPanel::default()
         .frame(
             egui::Frame::none()
                 .fill(egui::Color32::from_rgba_premultiplied(20, 20, 20, 240))
@@ -56,8 +56,15 @@ pub fn render(ctx: &Context, app: &mut PathWarpApp) {
                     let is_selected = idx == app.selected_index;
                     let label_text = path.as_str();
 
+                    // Make the selectable label fill the available width
+                    let mut rect = ui.available_rect_before_wrap();
+                    // We need a proper height for the label, so let's use standard interact size
+                    rect.max.y = rect.min.y + ui.spacing().interact_size.y;
+                    
                     let label = egui::SelectableLabel::new(is_selected, label_text);
-                    if ui.add(label).clicked() {
+                    let response = ui.add_sized([ui.available_width(), ui.spacing().interact_size.y], label);
+                    
+                    if response.clicked() {
                         app.selected_index = idx;
                         println!("Selected path: {}", path);
                     }
@@ -65,7 +72,10 @@ pub fn render(ctx: &Context, app: &mut PathWarpApp) {
             });
         });
 
-    if response.response.interact(egui::Sense::drag()).dragged() {
-        ctx.send_viewport_cmd(egui::ViewportCommand::StartDrag);
+    // Handle background drag to move window without blocking clicks on children
+    if ctx.input(|i| i.pointer.primary_down()) {
+        if !ctx.wants_pointer_input() {
+            ctx.send_viewport_cmd(egui::ViewportCommand::StartDrag);
+        }
     }
 }
