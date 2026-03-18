@@ -47,17 +47,16 @@ pub fn render(ctx: &Context, app: &mut PathWarpApp) {
 
             if ctx.input(|i| i.key_pressed(Key::Enter))
                 && let Some(selected) = filtered_paths.get(app.selected_index)
+                && let Some(dialog) = app.target_dialog
             {
-                if let Some(dialog) = app.target_dialog {
-                    match crate::os::dialog::inject_folder_path(dialog.hwnd, selected.as_str()) {
-                        Ok(action) => {
-                            debug!("path injected by {:?}: {}", action, selected);
-                            app.hide_overlay(ctx);
-                            return;
-                        }
-                        Err(err) => {
-                            warn!("path inject failed: {}", err);
-                        }
+                match crate::os::dialog::inject_folder_path(dialog.hwnd, selected.as_str()) {
+                    Ok(action) => {
+                        debug!("path injected by {:?}: {}", action, selected);
+                        app.hide_overlay(ctx);
+                        return;
+                    }
+                    Err(err) => {
+                        warn!("path inject failed: {}", err);
                     }
                 }
             }
@@ -77,7 +76,8 @@ pub fn render(ctx: &Context, app: &mut PathWarpApp) {
                         if response.double_clicked()
                             && let Some(dialog) = app.target_dialog
                         {
-                            match crate::os::dialog::inject_folder_path(dialog.hwnd, path.as_str()) {
+                            match crate::os::dialog::inject_folder_path(dialog.hwnd, path.as_str())
+                            {
                                 Ok(action) => {
                                     debug!("path injected by {:?}: {}", action, path);
                                     app.hide_overlay(ctx);

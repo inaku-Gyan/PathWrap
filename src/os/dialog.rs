@@ -1,8 +1,8 @@
-use windows::core::{PCWSTR, w};
 use windows::Win32::Foundation::{HWND, LPARAM, WPARAM};
 use windows::Win32::UI::WindowsAndMessaging::{
     FindWindowExW, SendMessageW, SetForegroundWindow, WM_KEYDOWN, WM_KEYUP, WM_SETTEXT,
 };
+use windows::core::{PCWSTR, w};
 
 const WM_USER: u32 = 0x0400;
 const CDM_FIRST: u32 = WM_USER + 100;
@@ -16,7 +16,10 @@ pub enum SendMessageAction {
     EditSetTextAndEnter,
 }
 
-pub fn inject_folder_path(dialog_hwnd: isize, target_path: &str) -> Result<SendMessageAction, String> {
+pub fn inject_folder_path(
+    dialog_hwnd: isize,
+    target_path: &str,
+) -> Result<SendMessageAction, String> {
     if dialog_hwnd == 0 {
         return Err("invalid dialog hwnd".to_string());
     }
@@ -61,12 +64,7 @@ fn try_edit_settext_enter(dialog: HWND, target_path: &str) -> bool {
     let text = to_wide_null(target_path);
 
     unsafe {
-        let _ = SendMessageW(
-            edit,
-            WM_SETTEXT,
-            WPARAM(0),
-            LPARAM(text.as_ptr() as isize),
-        );
+        let _ = SendMessageW(edit, WM_SETTEXT, WPARAM(0), LPARAM(text.as_ptr() as isize));
     }
 
     send_enter(edit)
@@ -96,18 +94,8 @@ fn find_filename_edit(dialog: HWND) -> Option<HWND> {
 
 fn send_enter(target: HWND) -> bool {
     unsafe {
-        let _ = SendMessageW(
-            target,
-            WM_KEYDOWN,
-            WPARAM(VK_RETURN_WPARAM),
-            LPARAM(0),
-        );
-        let _ = SendMessageW(
-            target,
-            WM_KEYUP,
-            WPARAM(VK_RETURN_WPARAM),
-            LPARAM(0),
-        );
+        let _ = SendMessageW(target, WM_KEYDOWN, WPARAM(VK_RETURN_WPARAM), LPARAM(0));
+        let _ = SendMessageW(target, WM_KEYUP, WPARAM(VK_RETURN_WPARAM), LPARAM(0));
     }
 
     true
