@@ -1,5 +1,6 @@
 use crate::app::PathWarpApp;
 use egui::{Context, Key};
+use log::{debug, warn};
 
 pub fn render(ctx: &Context, app: &mut PathWarpApp) {
     if ctx.input(|i| i.key_pressed(Key::Escape)) {
@@ -21,10 +22,11 @@ pub fn render(ctx: &Context, app: &mut PathWarpApp) {
             }
 
             let query_lower = app.search_query.to_lowercase();
-            let filtered_paths: Vec<&String> = app
+            let filtered_paths: Vec<String> = app
                 .paths
                 .iter()
                 .filter(|p| p.to_lowercase().contains(&query_lower))
+                .cloned()
                 .collect();
 
             if !filtered_paths.is_empty() {
@@ -46,7 +48,18 @@ pub fn render(ctx: &Context, app: &mut PathWarpApp) {
             if ctx.input(|i| i.key_pressed(Key::Enter))
                 && let Some(selected) = filtered_paths.get(app.selected_index)
             {
-                println!("Selected path: {}", selected);
+                if let Some(dialog) = app.target_dialog {
+                    match crate::os::dialog::inject_folder_path(dialog.hwnd, selected.as_str()) {
+                        Ok(action) => {
+                            debug!("path injected by {:?}: {}", action, selected);
+                            app.hide_overlay(ctx);
+                            return;
+                        }
+                        Err(err) => {
+                            warn!("path inject failed: {}", err);
+                        }
+                    }
+                }
             }
 
             ui.separator();
@@ -56,9 +69,24 @@ pub fn render(ctx: &Context, app: &mut PathWarpApp) {
                     for (idx, path) in filtered_paths.iter().enumerate() {
                         let is_selected = idx == app.selected_index;
                         let label = egui::SelectableLabel::new(is_selected, path.as_str());
-                        if ui.add(label).clicked() {
+                        let response = ui.add(label);
+                        if response.clicked() {
                             app.selected_index = idx;
-                            println!("Selected path: {}", path);
+                        }
+
+                        if response.double_clicked()
+                            && let Some(dialog) = app.target_dialog
+                        {
+                            match crate::os::dialog::inject_folder_path(dialog.hwnd, path.as_str()) {
+                                Ok(action) => {
+                                    debug!("path injected by {:?}: {}", action, path);
+                                    app.hide_overlay(ctx);
+                                    return;
+                                }
+                                Err(err) => {
+                                    warn!("path inject failed: {}", err);
+                                }
+                            }
                         }
                     }
                 });
