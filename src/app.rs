@@ -181,9 +181,7 @@ impl PathWarpApp {
         if let Some(info) = newest_some {
             if self.user_hidden_dialog_hwnd == Some(info.hwnd) {
                 self.pending_none_since = None;
-                if self.target_dialog.is_some() {
-                    self.target_dialog = None;
-                }
+                self.target_dialog = None;
                 return;
             }
 
@@ -244,8 +242,18 @@ impl eframe::App for PathWarpApp {
         self.sync_dialog_state_from_channel(ctx);
 
         if let Some(dialog) = self.target_dialog {
-            self.place_overlay_for_dialog(ctx, dialog);
-            crate::ui::window::render(ctx, self);
+            if crate::os::monitor::is_foreground_hwnd(dialog.hwnd) {
+                self.place_overlay_for_dialog(ctx, dialog);
+                crate::ui::window::render(ctx, self);
+            } else {
+                self.last_dialog_focused = false;
+                self.transition_overlay_state(
+                    OverlayState::HiddenBySystem,
+                    "dialog exists but not focused; hide overlay until focus returns",
+                );
+                self.set_overlay_visible(ctx, false);
+                egui::CentralPanel::default().show(ctx, |_| {});
+            }
         } else {
             self.set_overlay_visible(ctx, false);
             egui::CentralPanel::default().show(ctx, |_| {});
