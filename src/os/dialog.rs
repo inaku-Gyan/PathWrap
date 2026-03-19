@@ -16,6 +16,9 @@ const CDM_SETCONTROLTEXT: u32 = CDM_FIRST + 0x0004;
 const EDT1: usize = 0x0480;
 const IDOK_WPARAM: usize = 1;
 const VK_ALT: u16 = 0x12;
+const VK_BACK: u16 = 0x08;
+const VK_CONTROL: u16 = 0x11;
+const VK_A: u16 = 0x41;
 const VK_D: u16 = 0x44;
 const VK_RETURN_WPARAM: usize = 0x0D;
 
@@ -178,6 +181,20 @@ fn try_keyboard_navigate(dialog: HWND, target_path: &str) -> bool {
     }
 
     std::thread::sleep(Duration::from_millis(20));
+
+    // Address bar selection is occasionally lost during rapid repeated injections.
+    // Force replacement semantics so new path never gets prepended to stale text.
+    if !send_key_combo(VK_CONTROL, VK_A) {
+        return false;
+    }
+
+    std::thread::sleep(Duration::from_millis(10));
+
+    if !send_vk(VK_BACK) {
+        return false;
+    }
+
+    std::thread::sleep(Duration::from_millis(10));
 
     if !send_unicode_text(target_path) {
         return false;
