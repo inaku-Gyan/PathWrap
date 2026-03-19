@@ -1,33 +1,34 @@
 set windows-shell := ["pwsh.exe", "-NoLogo", "-Command"]
 
+# Show help message by default
 default:
     @just help
 
-check mode='':
+# Run non-fixing fmt/clippy/check
+[arg("mode", pattern="--ci|--local")]
+check mode="--local":
     cargo fmt --all -- --check
     {{ if mode == "--ci" { "cargo clippy --all-targets --all-features -- -D warnings" } else { "cargo clippy --all-targets --all-features" } }}
     cargo check
 
+# Run auto-fix for fmt, clippy, and rustc suggestions
 fix:
     cargo fmt --all
-    cargo clippy --fix --all-targets --all-features --allow-dirty --allow-staged
-    cargo fix --all-targets --all-features --allow-dirty --allow-staged
+    cargo clippy --fix --all-targets --all-features --allow-dirty
+    cargo fix --all-targets --all-features --allow-dirty
 
+# Run the application
 run:
     cargo run
 
+# Build all targets
 build:
     cargo build --all-targets --verbose
 
+# Clean build artifacts
 clean:
     cargo clean
 
+# Show this help message
 help:
-    @echo "PathWarp development commands"
-    @echo "  just check         # run non-fixing fmt/clippy/check"
-    @echo "  just check --ci    # run CI-style checks"
-    @echo "  just fix           # run auto-fix for fmt, clippy, and rustc suggestions"
-    @echo "  just run           # run the application"
-    @echo "  just build         # build all targets"
-    @echo "  just clean         # clean build artifacts"
-    @echo "  just help          # show this help"
+    @just --list
