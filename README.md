@@ -29,7 +29,7 @@ The app listens to file dialog state and shows a lightweight overlay with paths 
 
 The project root provides a `Justfile` with the following base commands:
 
-- `just check`: runs `cargo fmt --all`, `cargo clippy --all-targets --all-features`, and `cargo check`
+- `just check`: runs non-fixing checks (`cargo fmt --all -- --check`, `cargo clippy --all-targets --all-features`, and `cargo check`)
 - `just check --ci`: runs CI-style checks (`cargo fmt --all -- --check`, `cargo clippy --all-targets --all-features -- -D warnings`, and `cargo check`)
 - `just fix`: runs auto-fix flow for formatting and lint/compiler suggestions (`cargo fmt --all`, `cargo clippy --fix ...`, and `cargo fix ...`)
 - `just run`: runs `cargo run`
