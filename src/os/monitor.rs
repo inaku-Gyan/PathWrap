@@ -1,5 +1,5 @@
 use std::sync::mpsc::Sender;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use windows::Win32::Foundation::{BOOL, HWND, LPARAM, RECT};
 use windows::Win32::UI::WindowsAndMessaging::{
     EnumWindows, FindWindowExW, GetClassNameW, GetForegroundWindow, GetWindowRect, GetWindowTextW,
@@ -17,15 +17,17 @@ pub struct DialogInfo {
 }
 
 pub fn start_monitor(sender: Sender<Option<DialogInfo>>, ctx: egui::Context) {
+    const INVALID_HWND: isize = 0;
     const IDLE_POLL_INTERVAL_MS: u64 = 30;
     const TRACKING_POLL_INTERVAL_MS: u64 = 8;
     const LOST_CONFIRM_TICKS: u8 = 3;
 
-    let mut last_hwnd: isize = 0;
+    let mut last_hwnd: isize = INVALID_HWND;
     let mut last_foreground_signature: Option<String> = None;
     let mut lost_ticks: u8 = 0;
 
     loop {
+        let loop_started = Instant::now();
         let current_dialog = get_active_file_dialog();
 
         if let Some(info) = current_dialog {
@@ -39,7 +41,7 @@ pub fn start_monitor(sender: Sender<Option<DialogInfo>>, ctx: egui::Context) {
             }
             let _ = sender.send(Some(info));
             ctx.request_repaint();
-        } else if last_hwnd != 0 {
+        } else if last_hwnd != INVALID_HWND {
             // Keep following only the previously-accepted dialog to survive short focus jumps
             // without re-opening detection on unrelated top-level windows.
             if let Some(info) = get_dialog_info_by_hwnd(last_hwnd) {
@@ -61,7 +63,7 @@ pub fn start_monitor(sender: Sender<Option<DialogInfo>>, ctx: egui::Context) {
                     lost_ticks = lost_ticks.saturating_add(1);
                     if lost_ticks >= LOST_CONFIRM_TICKS {
                         println!("[monitor] dialog lost: hwnd={}", last_hwnd);
-                        last_hwnd = 0;
+                        last_hwnd = INVALID_HWND;
                         lost_ticks = 0;
                         let _ = sender.send(None);
                         ctx.request_repaint();
@@ -75,12 +77,16 @@ pub fn start_monitor(sender: Sender<Option<DialogInfo>>, ctx: egui::Context) {
             last_foreground_signature = Some(sig);
         }
 
-        let poll_interval = if last_hwnd != 0 {
+        let poll_interval = if last_hwnd != INVALID_HWND {
             TRACKING_POLL_INTERVAL_MS
         } else {
             IDLE_POLL_INTERVAL_MS
         };
-        std::thread::sleep(Duration::from_millis(poll_interval));
+        let target_interval = Duration::from_millis(poll_interval);
+        let elapsed = loop_started.elapsed();
+        if elapsed < target_interval {
+            std::thread::sleep(target_interval - elapsed);
+        }
     }
 }
 
