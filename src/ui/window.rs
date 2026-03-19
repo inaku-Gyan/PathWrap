@@ -3,7 +3,7 @@ use egui::{Context, Key};
 
 pub fn render(ctx: &Context, app: &mut PathWarpApp) {
     if ctx.input(|i| i.key_pressed(Key::Escape)) {
-        app.hide_overlay(ctx);
+        app.hide_overlay_by_user(ctx);
         return;
     }
 

@@ -103,6 +103,10 @@ pub fn get_active_file_dialog() -> Option<DialogInfo> {
     None
 }
 
+pub fn is_foreground_hwnd(hwnd: isize) -> bool {
+    unsafe { GetForegroundWindow().0 == hwnd }
+}
+
 fn get_dialog_info_if_match(hwnd: HWND) -> Option<DialogInfo> {
     if unsafe { !IsWindowVisible(hwnd).as_bool() } {
         return None;

@@ -7,6 +7,13 @@ const UI_TICK_MS: u64 = 30;
 const OVERLAY_HEIGHT: f32 = 140.0;
 const OVERLAY_GAP: f32 = 0.0;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum OverlayState {
+    Visible,
+    HiddenByUser,
+    HiddenBySystem,
+}
+
 pub struct PathWarpApp {
     pub dialog_rx: Receiver<Option<DialogInfo>>,
     pub target_dialog: Option<DialogInfo>,
@@ -16,7 +23,9 @@ pub struct PathWarpApp {
     pub search_query: String,
     pub selected_index: usize,
 
-    pub overlay_visible: bool,
+    overlay_state: OverlayState,
+    user_hidden_dialog_hwnd: Option<isize>,
+    last_dialog_focused: bool,
     pub last_applied_visible: Option<bool>,
     pub last_applied_dialog: Option<DialogInfo>,
     pub last_applied_scale: Option<f32>,
@@ -33,15 +42,34 @@ impl PathWarpApp {
             search_query: String::new(),
             selected_index: 0,
 
-            overlay_visible: false,
+            overlay_state: OverlayState::HiddenBySystem,
+            user_hidden_dialog_hwnd: None,
+            last_dialog_focused: false,
             last_applied_visible: None,
             last_applied_dialog: None,
             last_applied_scale: None,
         }
     }
 
+    fn transition_overlay_state(&mut self, next: OverlayState, reason: &str) {
+        if self.overlay_state != next {
+            println!(
+                "[overlay] state transition: {:?} -> {:?} ({})",
+                self.overlay_state, next, reason
+            );
+            self.overlay_state = next;
+        }
+    }
+
     pub fn set_overlay_visible(&mut self, ctx: &eframe::egui::Context, visible: bool) {
-        self.overlay_visible = visible;
+        if visible {
+            self.transition_overlay_state(OverlayState::Visible, "overlay requested visible");
+        } else if self.overlay_state == OverlayState::Visible {
+            self.transition_overlay_state(
+                OverlayState::HiddenBySystem,
+                "overlay requested hidden while visible",
+            );
+        }
 
         if self.last_applied_visible == Some(visible) {
             return;
@@ -49,11 +77,10 @@ impl PathWarpApp {
 
         self.last_applied_visible = Some(visible);
 
-        if visible {
+        if !visible {
             ctx.send_viewport_cmd(egui::ViewportCommand::WindowLevel(
-                egui::WindowLevel::AlwaysOnTop,
+                egui::WindowLevel::Normal,
             ));
-        } else {
             ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(egui::vec2(1.0, 1.0)));
             ctx.send_viewport_cmd(egui::ViewportCommand::OuterPosition(egui::pos2(
                 -10000.0, -10000.0,
@@ -63,22 +90,65 @@ impl PathWarpApp {
         }
     }
 
-    pub fn hide_overlay(&mut self, ctx: &eframe::egui::Context) {
+    pub fn hide_overlay_by_user(&mut self, ctx: &eframe::egui::Context) {
+        self.user_hidden_dialog_hwnd = self.target_dialog.map(|d| d.hwnd);
+        self.transition_overlay_state(
+            OverlayState::HiddenByUser,
+            "user pressed ESC, suppress current dialog session",
+        );
         self.target_dialog = None;
         self.pending_none_since = None;
+        self.last_dialog_focused = false;
         self.search_query.clear();
         self.selected_index = 0;
         self.set_overlay_visible(ctx, false);
     }
 
-    fn place_overlay_for_dialog(&mut self, ctx: &eframe::egui::Context, dialog: DialogInfo) {
+    fn hide_overlay_by_system(&mut self, ctx: &eframe::egui::Context) {
+        self.transition_overlay_state(
+            OverlayState::HiddenBySystem,
+            "dialog lost from monitor detection",
+        );
+        self.target_dialog = None;
+        self.pending_none_since = None;
+        self.last_dialog_focused = false;
+        self.set_overlay_visible(ctx, false);
+    }
+
+    fn place_overlay_for_dialog(
+        &mut self,
+        ctx: &eframe::egui::Context,
+        dialog: DialogInfo,
+        dialog_focused: bool,
+    ) {
+        let was_dialog_focused = self.last_dialog_focused;
+        let focus_returned = dialog_focused && !was_dialog_focused;
+        let focus_lost = !dialog_focused && was_dialog_focused;
+        self.last_dialog_focused = dialog_focused;
+
+        if focus_returned {
+            println!(
+                "[overlay] focus returned to dialog {}, apply one-shot topmost and resync",
+                dialog.hwnd
+            );
+            ctx.send_viewport_cmd(egui::ViewportCommand::WindowLevel(
+                egui::WindowLevel::AlwaysOnTop,
+            ));
+            self.last_applied_dialog = None;
+        } else if focus_lost {
+            ctx.send_viewport_cmd(egui::ViewportCommand::WindowLevel(
+                egui::WindowLevel::Normal,
+            ));
+        }
+
         let pixels_per_point = ctx.pixels_per_point();
         let needs_update = self.last_applied_dialog != Some(dialog)
             || self
                 .last_applied_scale
                 .map(|s| (s - pixels_per_point).abs() > 0.01)
                 .unwrap_or(true)
-            || !self.overlay_visible;
+            || self.last_applied_visible != Some(true)
+            || focus_returned;
 
         if !needs_update {
             return;
@@ -92,10 +162,7 @@ impl PathWarpApp {
         let new_pos = egui::pos2(pos_x, pos_y);
         let new_size = egui::vec2(width, ui_height);
 
-        println!(
-            "=> Waking Up App! Move to: logic_pos={:?}, logic_size={:?} (Scale: {})",
-            new_pos, new_size, pixels_per_point
-        );
+        println!("[overlay] sync position={:?}, size={:?}", new_pos, new_size);
         ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(new_size));
         ctx.send_viewport_cmd(egui::ViewportCommand::OuterPosition(new_pos));
 
@@ -116,6 +183,20 @@ impl PathWarpApp {
         }
 
         if let Some(info) = newest_some {
+            if self.user_hidden_dialog_hwnd == Some(info.hwnd) {
+                self.pending_none_since = None;
+                self.target_dialog = None;
+                return;
+            }
+
+            if self.user_hidden_dialog_hwnd.is_some() {
+                println!(
+                    "[overlay] release user suppression due to dialog switch: {:?} -> {}",
+                    self.user_hidden_dialog_hwnd, info.hwnd
+                );
+                self.user_hidden_dialog_hwnd = None;
+            }
+
             self.target_dialog = Some(info);
             self.pending_none_since = None;
             self.paths = crate::os::explorer::get_open_windows();
@@ -131,8 +212,12 @@ impl PathWarpApp {
                 Some(since) => {
                     if Instant::now().duration_since(since) >= Duration::from_millis(HIDE_GRACE_MS)
                     {
-                        self.target_dialog = None;
-                        self.pending_none_since = None;
+                        if self.user_hidden_dialog_hwnd.take().is_some() {
+                            println!(
+                                "[overlay] release user suppression after dialog session ended"
+                            );
+                        }
+                        self.hide_overlay_by_system(ctx);
                     } else {
                         ctx.request_repaint_after(Duration::from_millis(UI_TICK_MS));
                     }
@@ -148,8 +233,10 @@ impl PathWarpApp {
         if let Some(since) = self.pending_none_since
             && Instant::now().duration_since(since) >= Duration::from_millis(HIDE_GRACE_MS)
         {
-            self.target_dialog = None;
-            self.pending_none_since = None;
+            if self.user_hidden_dialog_hwnd.take().is_some() {
+                println!("[overlay] release user suppression after grace timeout");
+            }
+            self.hide_overlay_by_system(ctx);
         }
     }
 }
@@ -159,8 +246,20 @@ impl eframe::App for PathWarpApp {
         self.sync_dialog_state_from_channel(ctx);
 
         if let Some(dialog) = self.target_dialog {
-            self.place_overlay_for_dialog(ctx, dialog);
-            crate::ui::window::render(ctx, self);
+            let dialog_focused = crate::os::monitor::is_foreground_hwnd(dialog.hwnd);
+            let gui_focused = ctx.input(|i| i.focused);
+            if dialog_focused || gui_focused {
+                self.place_overlay_for_dialog(ctx, dialog, dialog_focused);
+                crate::ui::window::render(ctx, self);
+            } else {
+                self.last_dialog_focused = false;
+                self.transition_overlay_state(
+                    OverlayState::HiddenBySystem,
+                    "dialog and GUI both unfocused; hide overlay until focus returns",
+                );
+                self.set_overlay_visible(ctx, false);
+                egui::CentralPanel::default().show(ctx, |_| {});
+            }
         } else {
             self.set_overlay_visible(ctx, false);
             egui::CentralPanel::default().show(ctx, |_| {});
