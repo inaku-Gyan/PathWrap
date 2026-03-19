@@ -5,7 +5,7 @@ use std::time::{Duration, Instant};
 const HIDE_GRACE_MS: u64 = 120;
 const UI_TICK_MS: u64 = 30;
 const OVERLAY_HEIGHT: f32 = 140.0;
-const OVERLAY_GAP: f32 = 8.0;
+const OVERLAY_GAP: f32 = 0.0;
 
 pub struct PathWarpApp {
     pub dialog_rx: Receiver<Option<DialogInfo>>,
