@@ -2,15 +2,9 @@ default:
     @just help
 
 check mode='':
-    if [ "{{mode}}" = "--ci" ]; then \
-        cargo fmt --all -- --check; \
-        cargo clippy --all-targets --all-features -- -D warnings; \
-        cargo check; \
-    else \
-        cargo fmt --all; \
-        cargo clippy --all-targets --all-features; \
-        cargo check; \
-    fi
+    {{ if mode == "--ci" { "cargo fmt --all -- --check" } else { "cargo fmt --all" } }}
+    {{ if mode == "--ci" { "cargo clippy --all-targets --all-features -- -D warnings" } else { "cargo clippy --all-targets --all-features" } }}
+    cargo check
 
 fix:
     cargo fmt --all
