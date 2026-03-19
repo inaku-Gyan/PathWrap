@@ -15,6 +15,9 @@ lint mode='':
         cargo clippy --all-targets --all-features; \
     fi
 
+check:
+    cargo check
+
 build:
     cargo build --all-targets --verbose
 
@@ -27,6 +30,7 @@ help:
     @echo "  just fmt --check   # check formatting"
     @echo "  just lint          # run clippy"
     @echo "  just lint --check  # run clippy with -D warnings"
+    @echo "  just check         # run cargo check"
     @echo "  just build         # build all targets"
     @echo "  just clean         # clean build artifacts"
     @echo "  just help          # show this help"

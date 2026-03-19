@@ -1,40 +1,45 @@
 # PathWarp
 
-PathWarp 是一个 Windows 桌面应用，用于在系统“打开/保存”文件对话框出现时，快速切换目标目录。
+PathWarp is a Windows desktop application for quickly switching target folders when a system Open/Save file dialog appears.
 
-应用通过监听文件对话框状态并展示轻量悬浮层，结合当前已打开的资源管理器路径，帮助你减少手动逐级点选目录的操作成本。
+The app listens to file dialog state and shows a lightweight overlay with paths from currently opened Explorer windows, reducing manual folder navigation.
 
-## 功能简介
+## Features
 
-- 监听系统文件对话框并在合适时机显示悬浮面板
-- 读取当前 Explorer 窗口路径并展示为可选列表
-- 支持搜索过滤、键盘上下选择与回车确认
-- 使用 Rust + egui/eframe + windows-rs 实现
+- Detects system Open/Save file dialogs and shows an overlay panel when appropriate
+- Reads active Explorer window paths and displays them as selectable items
+- Supports search filtering, keyboard up/down selection, and Enter confirmation
+- Built with Rust + egui/eframe + windows-rs
 
-## 开发环境
+## Development Environment
 
-- Rust stable（建议通过 `rustup` 安装）
-- Cargo（随 Rust 安装）
-- Windows 10/11（项目依赖 Win32 API，完整构建与运行需在 Windows 上进行）
-- 可选：[`just`](https://github.com/casey/just)（用于执行仓库内 `Justfile` 命令）
+- Rust stable (recommended via `rustup`)
+- Cargo (installed with Rust)
+- Windows 10/11 (the project depends on Win32 APIs; full build and runtime verification should be done on Windows)
+- Optional: [`just`](https://github.com/casey/just) (for running commands from the repository `Justfile`)
 
-## 开发流程
+## Development Workflow
 
-1. 安装依赖工具（Rust、Cargo、可选 just）
-2. 克隆仓库并进入目录
-3. 按需执行格式化、Lint、构建等命令
-4. 在 Windows 环境中运行并验证功能
+1. Install required tools (Rust, Cargo, optional just)
+2. Clone the repository and enter the project directory
+3. Run formatting, linting, and build-related commands as needed
+4. Run and verify behavior in a Windows environment
 
-## 脚本命令（Justfile）
+## Script Commands (Justfile)
 
-项目根目录提供了 `Justfile`，包含以下基础命令：
+The project root provides a `Justfile` with the following base commands:
 
-- `just fmt`：执行 `cargo fmt --all`
-- `just fmt --check`：执行 `cargo fmt --all -- --check`
-- `just lint`：执行 `cargo clippy --all-targets --all-features`
-- `just lint --check`：执行 `cargo clippy --all-targets --all-features -- -D warnings`
-- `just build`：执行 `cargo build --all-targets --verbose`
-- `just clean`：执行 `cargo clean`
-- `just help`：显示命令帮助
+- `just fmt`: runs `cargo fmt --all`
+- `just fmt --check`: runs `cargo fmt --all -- --check`
+- `just lint`: runs `cargo clippy --all-targets --all-features`
+- `just lint --check`: runs `cargo clippy --all-targets --all-features -- -D warnings`
+- `just check`: runs `cargo check`
+- `just build`: runs `cargo build --all-targets --verbose`
+- `just clean`: runs `cargo clean`
+- `just help`: shows command help
 
-> 说明：在非 Windows 环境中，`build` 可能因 Win32 符号链接限制失败；建议在 Windows 环境完成最终构建验证。
+> Note: In non-Windows environments, `build` may fail due to Win32 symbol linking constraints; perform final build verification on Windows.
+
+## License
+
+This project is licensed under the MIT License. See the `LICENSE` file for details.
