@@ -2,7 +2,7 @@ default:
     @just help
 
 check mode='':
-    {{ if mode == "--ci" { "cargo fmt --all -- --check" } else { "cargo fmt --all" } }}
+    cargo fmt --all -- --check
     {{ if mode == "--ci" { "cargo clippy --all-targets --all-features -- -D warnings" } else { "cargo clippy --all-targets --all-features" } }}
     cargo check
 
@@ -22,7 +22,7 @@ clean:
 
 help:
     @echo "PathWarp development commands"
-    @echo "  just check         # run fmt + clippy + cargo check"
+    @echo "  just check         # run non-fixing fmt/clippy/check"
     @echo "  just check --ci    # run CI-style checks"
     @echo "  just fix           # run auto-fix for fmt, clippy, and rustc suggestions"
     @echo "  just run           # run the application"
