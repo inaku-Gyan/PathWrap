@@ -11,21 +11,23 @@ The app listens to file dialog state and shows a lightweight overlay with paths 
 - Supports search filtering, keyboard up/down selection, and Enter confirmation
 - Built with Rust + egui/eframe + windows-rs
 
-## Development Environment
+## Development
+
+### Environment
 
 - Rust stable (recommended via `rustup`)
 - Cargo (installed with Rust)
 - Windows 10/11 (the project depends on Win32 APIs; full build and runtime verification should be done on Windows)
 - Optional: [`just`](https://github.com/casey/just) (for running commands from the repository `Justfile`)
 
-## Development Workflow
+### Workflow
 
 1. Install required tools (Rust, Cargo, optional just)
 2. Clone the repository and enter the project directory
 3. Run formatting, linting, and build-related commands as needed
 4. Run and verify behavior in a Windows environment
 
-## Script Commands (Justfile)
+### Script Commands (Justfile)
 
 The project root provides a `Justfile` with the following base commands:
 
