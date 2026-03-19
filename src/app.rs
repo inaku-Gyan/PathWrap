@@ -115,9 +115,13 @@ impl PathWarpApp {
         self.set_overlay_visible(ctx, false);
     }
 
-    fn place_overlay_for_dialog(&mut self, ctx: &eframe::egui::Context, dialog: DialogInfo) {
+    fn place_overlay_for_dialog(
+        &mut self,
+        ctx: &eframe::egui::Context,
+        dialog: DialogInfo,
+        dialog_focused: bool,
+    ) {
         let was_dialog_focused = self.last_dialog_focused;
-        let dialog_focused = crate::os::monitor::is_foreground_hwnd(dialog.hwnd);
         let focus_returned = dialog_focused && !was_dialog_focused;
         let focus_lost = !dialog_focused && was_dialog_focused;
         self.last_dialog_focused = dialog_focused;
@@ -242,14 +246,16 @@ impl eframe::App for PathWarpApp {
         self.sync_dialog_state_from_channel(ctx);
 
         if let Some(dialog) = self.target_dialog {
-            if crate::os::monitor::is_foreground_hwnd(dialog.hwnd) {
-                self.place_overlay_for_dialog(ctx, dialog);
+            let dialog_focused = crate::os::monitor::is_foreground_hwnd(dialog.hwnd);
+            let gui_focused = ctx.input(|i| i.focused);
+            if dialog_focused || gui_focused {
+                self.place_overlay_for_dialog(ctx, dialog, dialog_focused);
                 crate::ui::window::render(ctx, self);
             } else {
                 self.last_dialog_focused = false;
                 self.transition_overlay_state(
                     OverlayState::HiddenBySystem,
-                    "dialog exists but not focused; hide overlay until focus returns",
+                    "dialog and GUI both unfocused; hide overlay until focus returns",
                 );
                 self.set_overlay_visible(ctx, false);
                 egui::CentralPanel::default().show(ctx, |_| {});
