@@ -36,9 +36,9 @@
 
 当一个“阶段 (例如 阶段一)”内的所有 Task 均已提交后，**必须执行全局质量自检**，以检查整体代码情况：
 
-1. **代码格式化**：调用终端执行 `cargo fmt`。
-2. **Lint 检查与修复**：调用终端执行 `cargo clippy -- -D warnings`，必须修复所有新出现的警告。
-3. **编译与功能检查**：执行 `cargo check` 和 `cargo build`。
+1. **代码质量检查**：调用终端执行 `just check --ci`。
+2. **自动修复（按需）**：如需修复格式、lint 或 rustc 建议，调用终端执行 `just fix`，然后再次执行 `just check --ci`。
+3. **编译与功能检查**：执行 `just build`。
 4. **单元测试（如有）**：执行 `cargo test`。
 5. **阶段性修复提交**：如果有格式化或 Lint 修复，提交一个 `fix: phase x self-check resolved` 的统一 Commit。
 
@@ -56,7 +56,7 @@
   - _要求_：需调用 `CoInitializeEx` 进行 COM 环境初始化。遍历当前正在运行的 Explorer 实例。
   - _检查点_：将获取到的 `BSTR` / `IShellItem` 等转换为 Rust 的 `String` 数组。
 - [x] **Task 1.2**: 完善错误处理与资源释放，并在 `main.rs` 或单独的文件中写一个临时测试用例/函数，`cargo run` 打印输出确保证明能正确拿到你的桌面上正打开的文件夹路径。
-- [x] **[阶段一自检工作流]**: fmt -> clippy -> check -> test -> commit (若有修正)
+- [x] **[阶段一自检工作流]**: just check --ci -> cargo test -> commit (若有修正)
 
 ### 阶段二：UI 层 - 界面搭建与交互
 
@@ -67,7 +67,7 @@
 - [x] **Task 2.3**: 在 `src/ui/theme.rs` 添加极简的黑色半透明主题配置或系统跟随主题，去除边框（已在 main 里设定 `with_decorations(false)`），支持拖拽与按 ESC 关闭/隐藏 UI。
 - [x] **Task 2.4**: 恢复 GUI 为业务内容（替换当前调试占位文案），重新展示路径列表、搜索框、键盘选择与回车确认等核心交互。
 - [ ] **Task 2.5**: 将业务 UI 与调试 UI 解耦：新增可切换的 `ui mode`（`business` / `debug`），默认启动为 `business`，避免调试界面覆盖正式体验。
-- [ ] **[阶段二自检工作流]**: fmt -> clippy -> check -> test -> commit (若有修正)
+- [ ] **[阶段二自检工作流]**: just check --ci -> cargo test -> commit (若有修正)
 
 ### 阶段三：OS 操作层 - 系统文件对话框检测与 UI 粘合
 
@@ -88,7 +88,7 @@
 - [x] **Task 3.13 (新增)**: 补充焦点白名单：当焦点从 file dialog 切到 PathWrap GUI 本身时，GUI 仍需保持显示（避免用户点击搜索框后 GUI 误隐藏）；仅当 file dialog 与 GUI 均失焦时才隐藏。
   - _说明_：3.12 的“仅 file dialog 聚焦显示”在可用性上过严，3.13 将“GUI 自身聚焦”纳入允许显示条件。
 - [ ] **Task 3.11 (提醒项，可滞后)**: 验证并记录“同时存在多个 file dialog”时的行为与期望策略（主跟随窗口选择、切换规则、冲突处理）。
-- [ ] **[阶段三自检工作流]**: fmt -> clippy -> check -> test -> commit (若有修正)
+- [ ] **[阶段三自检工作流]**: just check --ci -> cargo test -> commit (若有修正)
 
 ### 阶段四：OS 操作层 - 路径注入与切换 (核心魔法)
 
@@ -96,7 +96,7 @@
 
 - **Task 4.1**: 在 `src/os/dialog.rs` 实现注入逻辑。方案A：基于消息传递 `SendMessageAction`，向对话框发送 `CDM_SETFOLDERPATH` 消息，或模拟键盘输入绝对路径后回车（方案B，备用）。
 - **Task 4.2**: 在 `src/ui/window.rs` 捕获到用户的“回车确认”或“鼠标双击”动作后，调用 Task 4.1 的注入逻辑，并在成功后隐藏当前 egui UI 窗口。
-- **[阶段四自检工作流]**: fmt -> clippy -> check -> test -> commit (若有修正)
+- **[阶段四自检工作流]**: just check --ci -> cargo test -> commit (若有修正)
 
 ### 阶段五：整体验收与后台常驻优化
 
@@ -113,7 +113,7 @@
 - **Task 5.6 (未来)**: 支持跟随系统浅色/深色模式自动切换 UI 主题，并保留手动覆盖选项。
 - **Task 5.7 (未来)**: 优化多桌面（Virtual Desktop）场景下的显示逻辑，避免跨桌面误显示或焦点错位。
 - **Task 5.8 (未来的未来)**: 新增设置界面，支持常用开关（含开机自启启用/关闭）与基础行为配置。
-- **[阶段五自检工作流]**: fmt -> clippy -> check -> test -> commit (若有修正)
+- **[阶段五自检工作流]**: just check --ci -> cargo test -> commit (若有修正)
 
 ---
 
