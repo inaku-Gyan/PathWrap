@@ -1,3 +1,4 @@
+use log::{error, info, warn};
 use std::time::Duration;
 use windows::Win32::Foundation::{HWND, LPARAM, WPARAM};
 use windows::Win32::UI::Input::KeyboardAndMouse::{
@@ -23,49 +24,73 @@ const VK_D: u16 = 0x44;
 const VK_RETURN_WPARAM: usize = 0x0D;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SendMessageAction {
+enum SendMessageAction {
     CdmSetControlText,
     EditSetTextAndEnter,
     KeyboardNavigate,
 }
 
-pub fn inject_folder_path(
-    dialog_hwnd: isize,
-    target_path: &str,
-) -> Result<SendMessageAction, String> {
+fn _log_inj_result(success: bool, action: SendMessageAction) {
+    if success {
+        info!("Injection strategy succeeded: {:?}.", action);
+    } else {
+        warn!(
+            "Injection strategy failed: {:?}. Trying next strategy...",
+            action
+        );
+    }
+}
+
+pub fn inject_folder_path(dialog_hwnd: isize, target_path: &str) {
     if dialog_hwnd == 0 {
-        return Err("invalid dialog hwnd".to_string());
+        error!("invalid dialog hwnd: 0");
+        return;
     }
     if target_path.trim().is_empty() {
-        return Err("target path is empty".to_string());
+        error!("target path is empty");
+        return;
     }
 
     let dialog = HWND(dialog_hwnd);
 
+    info!(
+        "Injection starts: hwnd={} target='{}'",
+        dialog_hwnd, target_path
+    );
+
     unsafe {
-        let _ = SetForegroundWindow(dialog);
+        SetForegroundWindow(dialog);
     }
 
     if try_cdm_setcontroltext(dialog, target_path) {
-        return Ok(SendMessageAction::CdmSetControlText);
+        _log_inj_result(true, SendMessageAction::CdmSetControlText);
+        return;
     }
+    _log_inj_result(false, SendMessageAction::CdmSetControlText);
 
     if try_edit_settext_enter(dialog, target_path) {
-        return Ok(SendMessageAction::EditSetTextAndEnter);
+        _log_inj_result(true, SendMessageAction::EditSetTextAndEnter);
+        return;
     }
+    _log_inj_result(false, SendMessageAction::EditSetTextAndEnter);
 
     if try_keyboard_navigate(dialog, target_path) {
-        return Ok(SendMessageAction::KeyboardNavigate);
+        _log_inj_result(true, SendMessageAction::KeyboardNavigate);
+        return;
     }
+    _log_inj_result(false, SendMessageAction::KeyboardNavigate);
 
-    Err("failed to inject path into file dialog".to_string())
+    error!(
+        "Injection failed: all strategies exhausted. hwnd={} target='{}'",
+        dialog_hwnd, target_path
+    );
 }
 
 fn try_cdm_setcontroltext(dialog: HWND, target_path: &str) -> bool {
     let text = to_wide_null(target_path);
 
     unsafe {
-        let _ = SendMessageW(
+        SendMessageW(
             dialog,
             CDM_SETCONTROLTEXT,
             WPARAM(EDT1),
