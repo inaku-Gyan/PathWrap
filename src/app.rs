@@ -3,7 +3,7 @@ use std::sync::mpsc::Receiver;
 use std::time::{Duration, Instant};
 
 const HIDE_GRACE_MS: u64 = 120;
-const UI_TICK_MS: u64 = 30;
+const UI_TICK_MS: u64 = 8;
 const OVERLAY_HEIGHT: f32 = 140.0;
 const OVERLAY_GAP: f32 = 0.0;
 
@@ -119,6 +119,7 @@ impl PathWarpApp {
             self.target_dialog = Some(info);
             self.pending_none_since = None;
             self.paths = crate::os::explorer::get_open_windows();
+            ctx.request_repaint();
             return;
         }
 
@@ -166,6 +167,10 @@ impl eframe::App for PathWarpApp {
             egui::CentralPanel::default().show(ctx, |_| {});
         }
 
-        ctx.request_repaint_after(Duration::from_millis(UI_TICK_MS));
+        if self.target_dialog.is_some() {
+            ctx.request_repaint();
+        } else {
+            ctx.request_repaint_after(Duration::from_millis(UI_TICK_MS));
+        }
     }
 }

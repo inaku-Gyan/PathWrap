@@ -17,7 +17,8 @@ pub struct DialogInfo {
 }
 
 pub fn start_monitor(sender: Sender<Option<DialogInfo>>, ctx: egui::Context) {
-    const POLL_INTERVAL_MS: u64 = 30;
+    const IDLE_POLL_INTERVAL_MS: u64 = 30;
+    const TRACKING_POLL_INTERVAL_MS: u64 = 8;
     const LOST_CONFIRM_TICKS: u8 = 3;
 
     let mut last_hwnd: isize = 0;
@@ -25,7 +26,6 @@ pub fn start_monitor(sender: Sender<Option<DialogInfo>>, ctx: egui::Context) {
     let mut lost_ticks: u8 = 0;
 
     loop {
-        std::thread::sleep(Duration::from_millis(POLL_INTERVAL_MS));
         let current_dialog = get_active_file_dialog();
 
         if let Some(info) = current_dialog {
@@ -74,6 +74,13 @@ pub fn start_monitor(sender: Sender<Option<DialogInfo>>, ctx: egui::Context) {
             println!("[monitor] foreground: {}", sig);
             last_foreground_signature = Some(sig);
         }
+
+        let poll_interval = if last_hwnd != 0 {
+            TRACKING_POLL_INTERVAL_MS
+        } else {
+            IDLE_POLL_INTERVAL_MS
+        };
+        std::thread::sleep(Duration::from_millis(poll_interval));
     }
 }
 
