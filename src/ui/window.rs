@@ -78,6 +78,8 @@ pub fn render(ctx: &Context, app: &mut PathWarpApp) {
                         let response = ui.add(label);
                         if response.clicked() {
                             app.selected_index = idx;
+                        }
+                        if response.double_clicked() {
                             if let Some(dialog) = app.target_dialog {
                                 crate::os::dialog::inject_folder_path(dialog.hwnd, path.as_str());
                             }
