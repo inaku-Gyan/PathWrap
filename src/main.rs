@@ -2,7 +2,6 @@
 pub mod app;
 pub mod os;
 pub mod ui;
-pub mod utils;
 
 fn enable_per_monitor_v2_dpi_awareness() {
     use windows::Win32::UI::HiDpi::{
