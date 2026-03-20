@@ -4,12 +4,13 @@ use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, Instant};
 use windows::Win32::Foundation::{BOOL, HWND, LPARAM, RECT};
 use windows::Win32::Graphics::Dwm::{DWMWA_EXTENDED_FRAME_BOUNDS, DwmGetWindowAttribute};
+use windows::Win32::UI::Accessibility::{HWINEVENTHOOK, SetWinEventHook, UnhookWinEvent};
 use windows::Win32::UI::HiDpi::GetDpiForWindow;
 use windows::Win32::UI::WindowsAndMessaging::{
-    DispatchMessageW, EnumWindows, EVENT_OBJECT_FOCUS, EVENT_OBJECT_SHOW, EVENT_SYSTEM_FOREGROUND,
+    DispatchMessageW, EVENT_OBJECT_FOCUS, EVENT_OBJECT_SHOW, EVENT_SYSTEM_FOREGROUND, EnumWindows,
     FindWindowExW, GetClassNameW, GetForegroundWindow, GetMessageW, GetWindowRect, GetWindowTextW,
-    HWINEVENTHOOK, IsWindow, IsWindowVisible, MSG, SetWinEventHook, TranslateMessage, UnhookWinEvent,
-    WINEVENT_OUTOFCONTEXT, WINEVENT_SKIPOWNPROCESS,
+    IsWindow, IsWindowVisible, MSG, TranslateMessage, WINEVENT_OUTOFCONTEXT,
+    WINEVENT_SKIPOWNPROCESS,
 };
 use windows::core::w;
 
@@ -88,8 +89,8 @@ fn start_event_wakeup_hook() -> Receiver<()> {
             ]
         };
 
-        let active_hooks: Vec<HWINEVENTHOOK> = hooks.into_iter().filter(|h| h.0 != 0).collect();
-        if active_hooks.is_empty() {
+        let registered_hooks: Vec<HWINEVENTHOOK> = hooks.into_iter().filter(|h| h.0 != 0).collect();
+        if registered_hooks.is_empty() {
             if let Ok(mut guard) = monitor_wakeup_sender().lock() {
                 *guard = None;
             }
@@ -108,7 +109,7 @@ fn start_event_wakeup_hook() -> Receiver<()> {
             }
         }
 
-        for hook in active_hooks {
+        for hook in registered_hooks {
             unsafe {
                 let _ = UnhookWinEvent(hook);
             }
@@ -195,7 +196,14 @@ pub fn start_monitor(sender: Sender<Option<DialogInfo>>, ctx: egui::Context) {
         if remaining > Duration::ZERO {
             match wakeup_rx.recv_timeout(remaining) {
                 Ok(_) => {
-                    while wakeup_rx.try_recv().is_ok() {}
+                    // Multiple events can arrive within one polling window; drain extras to coalesce wakeups.
+                    let mut drained = 0usize;
+                    while wakeup_rx.try_recv().is_ok() {
+                        drained += 1;
+                    }
+                    if drained > 0 {
+                        log::trace!("monitor wakeups coalesced: {} extra events", drained);
+                    }
                 }
                 Err(RecvTimeoutError::Timeout) => {}
                 Err(RecvTimeoutError::Disconnected) => std::thread::sleep(remaining),
