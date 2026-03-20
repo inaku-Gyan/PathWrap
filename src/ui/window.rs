@@ -34,6 +34,18 @@ fn next_selected_index(
     next
 }
 
+fn handle_path_item_interaction(
+    selected_index: usize,
+    item_index: usize,
+    clicked: bool,
+    double_clicked: bool,
+    has_target_dialog: bool,
+) -> (usize, bool) {
+    let next_selected_index = if clicked { item_index } else { selected_index };
+    let should_inject = double_clicked && has_target_dialog;
+    (next_selected_index, should_inject)
+}
+
 pub fn render(ctx: &Context, app: &mut PathWarpApp) {
     if ctx.input(|i| i.key_pressed(Key::Escape)) {
         app.hide_overlay_by_user(ctx);
@@ -76,13 +88,16 @@ pub fn render(ctx: &Context, app: &mut PathWarpApp) {
                         let is_selected = idx == app.selected_index;
                         let label = egui::SelectableLabel::new(is_selected, path.as_str());
                         let response = ui.add(label);
-                        if response.clicked() {
-                            app.selected_index = idx;
-                        }
-                        if response.double_clicked() {
-                            if let Some(dialog) = app.target_dialog {
-                                crate::os::dialog::inject_folder_path(dialog.hwnd, path.as_str());
-                            }
+                        let (next_selected_index, should_inject) = handle_path_item_interaction(
+                            app.selected_index,
+                            idx,
+                            response.clicked(),
+                            response.double_clicked(),
+                            app.target_dialog.is_some(),
+                        );
+                        app.selected_index = next_selected_index;
+                        if should_inject && let Some(dialog) = app.target_dialog {
+                            crate::os::dialog::inject_folder_path(dialog.hwnd, path.as_str());
                         }
                     }
                 });
@@ -139,5 +154,26 @@ mod tests {
         assert_eq!(next_selected_index(2, 3, false, true), 2);
         assert_eq!(next_selected_index(5, 3, false, false), 2);
         assert_eq!(next_selected_index(0, 0, false, true), 0);
+    }
+
+    #[test]
+    fn single_click_only_changes_selection_without_injection() {
+        let (next_idx, should_inject) = handle_path_item_interaction(0, 2, true, false, true);
+        assert_eq!(next_idx, 2);
+        assert!(!should_inject);
+    }
+
+    #[test]
+    fn double_click_triggers_injection_when_dialog_exists() {
+        let (next_idx, should_inject) = handle_path_item_interaction(1, 1, true, true, true);
+        assert_eq!(next_idx, 1);
+        assert!(should_inject);
+    }
+
+    #[test]
+    fn double_click_does_not_inject_without_dialog() {
+        let (next_idx, should_inject) = handle_path_item_interaction(0, 0, true, true, false);
+        assert_eq!(next_idx, 0);
+        assert!(!should_inject);
     }
 }
