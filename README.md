@@ -35,7 +35,7 @@ The project root provides a `Justfile` with the following base commands:
 - `just fix`: runs auto-fix flow for formatting and lint/compiler suggestions
 - `just run`: runs the application with logging enabled
 - `just build`: builds the project
-- `just test`: runs unit tests
+- `just test`: runs all tests
 - `just clean`: cleans build artifacts
 - `just help`: shows command help
 
