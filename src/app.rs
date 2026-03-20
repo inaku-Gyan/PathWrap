@@ -6,10 +6,20 @@ const HIDE_GRACE_MS: u64 = 120;
 const UI_TICK_MS: u64 = 30;
 const OVERLAY_HEIGHT: f32 = 140.0;
 const OVERLAY_GAP: f32 = 0.0;
+const FOCUS_TRANSITION_GRACE_MS: u64 = 180;
 
 fn dialog_pixels_per_point(dialog: DialogInfo) -> f32 {
     // Per-Monitor V2: convert physical pixels with the dialog window's monitor DPI.
     (dialog.dpi as f32 / 96.0).max(0.1)
+}
+
+fn should_render_overlay(
+    dialog_focused: bool,
+    gui_focused: bool,
+    pointer_interacting: bool,
+    within_focus_grace: bool,
+) -> bool {
+    dialog_focused || gui_focused || (pointer_interacting && within_focus_grace)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -34,6 +44,7 @@ pub struct PathWarpApp {
     pub last_applied_visible: Option<bool>,
     pub last_applied_dialog: Option<DialogInfo>,
     pub last_applied_scale: Option<f32>,
+    pub last_focus_allowed_at: Option<Instant>,
 }
 
 impl PathWarpApp {
@@ -53,6 +64,7 @@ impl PathWarpApp {
             last_applied_visible: None,
             last_applied_dialog: None,
             last_applied_scale: None,
+            last_focus_allowed_at: None,
         }
     }
 
@@ -106,6 +118,7 @@ impl PathWarpApp {
         self.target_dialog = None;
         self.pending_none_since = None;
         self.last_dialog_focused = false;
+        self.last_focus_allowed_at = None;
         self.search_query.clear();
         self.selected_index = 0;
         self.set_overlay_visible(ctx, false);
@@ -119,6 +132,7 @@ impl PathWarpApp {
         self.target_dialog = None;
         self.pending_none_since = None;
         self.last_dialog_focused = false;
+        self.last_focus_allowed_at = None;
         self.set_overlay_visible(ctx, false);
     }
 
@@ -257,6 +271,24 @@ impl eframe::App for PathWarpApp {
             let dialog_focused = crate::os::monitor::is_foreground_hwnd(dialog.hwnd);
             let gui_focused = crate::os::monitor::is_foreground_current_process_window();
             if dialog_focused || gui_focused {
+                self.last_focus_allowed_at = Some(Instant::now());
+            }
+            let pointer_interacting =
+                ctx.input(|i| i.pointer.any_down() || i.pointer.any_pressed());
+            let within_focus_grace = self
+                .last_focus_allowed_at
+                .map(|since| {
+                    Instant::now().duration_since(since)
+                        <= Duration::from_millis(FOCUS_TRANSITION_GRACE_MS)
+                })
+                .unwrap_or(false);
+
+            if should_render_overlay(
+                dialog_focused,
+                gui_focused,
+                pointer_interacting,
+                within_focus_grace,
+            ) {
                 self.place_overlay_for_dialog(ctx, dialog, dialog_focused);
                 crate::ui::window::render(ctx, self);
             } else {
@@ -269,6 +301,7 @@ impl eframe::App for PathWarpApp {
                 egui::CentralPanel::default().show(ctx, |_| {});
             }
         } else {
+            self.last_focus_allowed_at = None;
             self.set_overlay_visible(ctx, false);
             egui::CentralPanel::default().show(ctx, |_| {});
         }
@@ -276,5 +309,31 @@ impl eframe::App for PathWarpApp {
         if self.target_dialog.is_some() || self.pending_none_since.is_some() {
             ctx.request_repaint();
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::should_render_overlay;
+
+    #[test]
+    fn renders_when_dialog_focused() {
+        assert!(should_render_overlay(true, false, false, false));
+    }
+
+    #[test]
+    fn renders_when_gui_focused() {
+        assert!(should_render_overlay(false, true, false, false));
+    }
+
+    #[test]
+    fn keeps_rendering_during_click_transition_within_grace() {
+        assert!(should_render_overlay(false, false, true, true));
+    }
+
+    #[test]
+    fn hides_when_no_focus_and_no_graceful_interaction() {
+        assert!(!should_render_overlay(false, false, false, true));
+        assert!(!should_render_overlay(false, false, true, false));
     }
 }
