@@ -1,8 +1,8 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // 移除 release 时的黑框
 mod app;
+mod logging;
 mod os;
 mod ui;
-mod utils;
 
 fn enable_per_monitor_v2_dpi_awareness() {
     use windows::Win32::UI::HiDpi::{
@@ -20,7 +20,7 @@ fn enable_per_monitor_v2_dpi_awareness() {
 }
 
 fn main() -> eframe::Result<()> {
-    utils::logging::init_logging();
+    logging::init_logging();
     enable_per_monitor_v2_dpi_awareness();
 
     let (tx, rx) = std::sync::mpsc::channel();
