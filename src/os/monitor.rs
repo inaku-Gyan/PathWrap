@@ -1,6 +1,8 @@
 use std::sync::mpsc::Sender;
 use std::time::{Duration, Instant};
+use std::mem::size_of;
 use windows::Win32::Foundation::{BOOL, HWND, LPARAM, RECT};
+use windows::Win32::Graphics::Dwm::{DWMWA_EXTENDED_FRAME_BOUNDS, DwmGetWindowAttribute};
 use windows::Win32::UI::HiDpi::GetDpiForWindow;
 use windows::Win32::UI::WindowsAndMessaging::{
     EnumWindows, FindWindowExW, GetClassNameW, GetForegroundWindow, GetWindowRect, GetWindowTextW,
@@ -229,8 +231,7 @@ pub fn get_dialog_info_by_hwnd(hwnd_isize: isize) -> Option<DialogInfo> {
 }
 
 fn get_dialog_info(hwnd: HWND) -> Option<DialogInfo> {
-    let mut rect = RECT::default();
-    if unsafe { GetWindowRect(hwnd, &mut rect) }.is_ok() {
+    if let Some(rect) = get_window_visual_rect(hwnd) {
         let dpi = get_window_dpi(hwnd);
         Some(DialogInfo {
             hwnd: hwnd.0,
@@ -240,6 +241,29 @@ fn get_dialog_info(hwnd: HWND) -> Option<DialogInfo> {
             height: rect.bottom - rect.top,
             dpi,
         })
+    } else {
+        None
+    }
+}
+
+fn get_window_visual_rect(hwnd: HWND) -> Option<RECT> {
+    let mut visual_rect = RECT::default();
+    let dwm_result = unsafe {
+        DwmGetWindowAttribute(
+            hwnd,
+            DWMWA_EXTENDED_FRAME_BOUNDS,
+            (&mut visual_rect as *mut RECT).cast(),
+            size_of::<RECT>() as u32,
+        )
+    };
+
+    if dwm_result.is_ok() {
+        return Some(visual_rect);
+    }
+
+    let mut window_rect = RECT::default();
+    if unsafe { GetWindowRect(hwnd, &mut window_rect) }.is_ok() {
+        Some(window_rect)
     } else {
         None
     }
