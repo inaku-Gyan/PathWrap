@@ -18,8 +18,9 @@ fix:
     cargo fix --all-targets --all-features --allow-dirty
 
 # Run the application
-run:
-    cargo run
+[arg("logLevel", pattern="error|warn|info|debug|trace")]
+run logLevel="info":
+    $env:RUST_LOG="{{ logLevel }}"; cargo run
 
 # Build all targets
 build:
