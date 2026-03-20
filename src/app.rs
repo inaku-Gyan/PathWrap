@@ -255,7 +255,7 @@ impl eframe::App for PathWarpApp {
 
         if let Some(dialog) = self.target_dialog {
             let dialog_focused = crate::os::monitor::is_foreground_hwnd(dialog.hwnd);
-            let gui_focused = ctx.input(|i| i.focused);
+            let gui_focused = crate::os::monitor::is_foreground_current_process_window();
             if dialog_focused || gui_focused {
                 self.place_overlay_for_dialog(ctx, dialog, dialog_focused);
                 crate::ui::window::render(ctx, self);

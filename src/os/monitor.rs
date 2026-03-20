@@ -9,7 +9,7 @@ use windows::Win32::UI::HiDpi::GetDpiForWindow;
 use windows::Win32::UI::WindowsAndMessaging::{
     DispatchMessageW, EVENT_OBJECT_FOCUS, EVENT_OBJECT_SHOW, EVENT_SYSTEM_FOREGROUND, EnumWindows,
     FindWindowExW, GetClassNameW, GetForegroundWindow, GetMessageW, GetWindowRect, GetWindowTextW,
-    IsWindow, IsWindowVisible, MSG, TranslateMessage, WINEVENT_OUTOFCONTEXT,
+    GetWindowThreadProcessId, IsWindow, IsWindowVisible, MSG, TranslateMessage, WINEVENT_OUTOFCONTEXT,
     WINEVENT_SKIPOWNPROCESS,
 };
 use windows::core::w;
@@ -231,6 +231,19 @@ pub fn get_active_file_dialog() -> Option<DialogInfo> {
 
 pub fn is_foreground_hwnd(hwnd: isize) -> bool {
     unsafe { GetForegroundWindow().0 == hwnd }
+}
+
+pub fn is_foreground_current_process_window() -> bool {
+    unsafe {
+        let foreground = GetForegroundWindow();
+        if foreground.0 == 0 {
+            return false;
+        }
+
+        let mut process_id = 0u32;
+        let _ = GetWindowThreadProcessId(foreground, Some(&mut process_id));
+        process_id == std::process::id()
+    }
 }
 
 fn get_dialog_info_if_match(hwnd: HWND) -> Option<DialogInfo> {
