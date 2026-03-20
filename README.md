@@ -35,10 +35,19 @@ The project root provides a `Justfile` with the following base commands:
 - `just fix`: runs auto-fix flow for formatting and lint/compiler suggestions
 - `just run`: runs the application with logging enabled
 - `just build`: builds the project
+- `just test`: runs unit tests
 - `just clean`: cleans build artifacts
 - `just help`: shows command help
 
 > Note: In non-Windows environments, `build` may fail due to Win32 symbol linking constraints; perform final build verification on Windows.
+
+### Tests
+
+- Test framework: Rust built-in unit test framework (`cargo test`)
+- Current tests cover basic logic units, including UTF-16 string conversion and UI filtering/selection logic
+- Run tests with:
+  - `cargo test`
+  - or `just test` (if `just` is installed)
 
 ## License
 

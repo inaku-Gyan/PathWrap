@@ -26,6 +26,10 @@ run logLevel="info":
 build:
     cargo build --all-targets --verbose
 
+# Run unit tests
+test:
+    cargo test
+
 # Clean build artifacts
 clean:
     cargo clean
