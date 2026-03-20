@@ -58,9 +58,11 @@ impl PathWarpApp {
 
     fn transition_overlay_state(&mut self, next: OverlayState, reason: &str) {
         if self.overlay_state != next {
-            println!(
+            log::debug!(
                 "[overlay] state transition: {:?} -> {:?} ({})",
-                self.overlay_state, next, reason
+                self.overlay_state,
+                next,
+                reason
             );
             self.overlay_state = next;
         }
@@ -132,7 +134,7 @@ impl PathWarpApp {
         self.last_dialog_focused = dialog_focused;
 
         if focus_returned {
-            println!(
+            log::debug!(
                 "[overlay] focus returned to dialog {}, apply one-shot topmost and resync",
                 dialog.hwnd
             );
@@ -167,7 +169,7 @@ impl PathWarpApp {
         let new_pos = egui::pos2(pos_x, pos_y);
         let new_size = egui::vec2(width, ui_height);
 
-        println!("[overlay] sync position={:?}, size={:?}", new_pos, new_size);
+        log::trace!("[overlay] sync position={:?}, size={:?}", new_pos, new_size);
         ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(new_size));
         ctx.send_viewport_cmd(egui::ViewportCommand::OuterPosition(new_pos));
 
@@ -195,9 +197,10 @@ impl PathWarpApp {
             }
 
             if self.user_hidden_dialog_hwnd.is_some() {
-                println!(
+                log::debug!(
                     "[overlay] release user suppression due to dialog switch: {:?} -> {}",
-                    self.user_hidden_dialog_hwnd, info.hwnd
+                    self.user_hidden_dialog_hwnd,
+                    info.hwnd
                 );
                 self.user_hidden_dialog_hwnd = None;
             }
@@ -218,7 +221,7 @@ impl PathWarpApp {
                     if Instant::now().duration_since(since) >= Duration::from_millis(HIDE_GRACE_MS)
                     {
                         if self.user_hidden_dialog_hwnd.take().is_some() {
-                            println!(
+                            log::debug!(
                                 "[overlay] release user suppression after dialog session ended"
                             );
                         }
@@ -239,7 +242,7 @@ impl PathWarpApp {
             && Instant::now().duration_since(since) >= Duration::from_millis(HIDE_GRACE_MS)
         {
             if self.user_hidden_dialog_hwnd.take().is_some() {
-                println!("[overlay] release user suppression after grace timeout");
+                log::debug!("[overlay] release user suppression after grace timeout");
             }
             self.hide_overlay_by_system(ctx);
         }
