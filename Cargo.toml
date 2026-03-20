@@ -31,3 +31,22 @@ features = [
     "Win32_Web_InternetExplorer",
     "Win32_System_Com_StructuredStorage",
 ]
+
+[lints.clippy]
+unnecessary_cast = "warn"
+cast_lossless = "warn"            # 提示无损转换（例如 u8 -> u32 可能不需要转）
+cast_possible_truncation = "warn" # 警告可能截断数据的转换（Windows 开发重要！）
+cast_sign_loss = "warn"           # 警告有符号转无符号
+cast_ptr_alignment = "warn"       # 指针转换对齐问题 (FFI 常见)
+
+# 3. 代码卫生与生产环境
+unwrap_used = "warn"   # 警告 .unwrap()，GUI 程序 panic 会导致闪退
+expect_used = "warn"   # 警告 .expect()，建议更优雅的错误处理
+dbg_macro = "warn"     # 禁止提交 dbg!() 调试代码
+print_stdout = "warn"  # 建议用日志库代替 println! (GUI 程序通常无控制台)
+todo = "warn"          # 禁止提交 TODO 标记
+unimplemented = "warn" # 禁止提交未实现代码
+
+# 4. 性能与最佳实践
+clone_on_copy = "warn"    # 警告对 Copy 类型调用 .clone()
+wildcard_imports = "warn" # 禁止 use crate::* (保持命名空间清晰)
