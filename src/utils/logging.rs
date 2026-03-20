@@ -1,3 +1,5 @@
+const LOG_CONFIG_FILE: &str = "pathwrap.toml";
+
 fn parse_level_filter(level: &str) -> Option<log::LevelFilter> {
     match level.trim().to_ascii_lowercase().as_str() {
         "off" => Some(log::LevelFilter::Off),
@@ -12,7 +14,7 @@ fn parse_level_filter(level: &str) -> Option<log::LevelFilter> {
 
 fn read_level_from_config_file() -> Option<log::LevelFilter> {
     let cwd = std::env::current_dir().ok()?;
-    let config_path = cwd.join("pathwrap.toml");
+    let config_path = cwd.join(LOG_CONFIG_FILE);
     let content = std::fs::read_to_string(config_path).ok()?;
 
     for line in content.lines() {
