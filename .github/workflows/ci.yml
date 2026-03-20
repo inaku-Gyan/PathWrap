@@ -31,9 +31,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: rustfmt, clippy
+      # GitHub hosted runners using the latest stable version of Rust have Clippy pre-installed.
 
       - name: Cache Rust artifacts
         uses: Swatinem/rust-cache@v2
