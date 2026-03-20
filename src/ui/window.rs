@@ -93,8 +93,8 @@ pub fn render(ctx: &Context, app: &mut PathWarpApp) {
     }
 }
 
-/** Below is the unit test module. **/
 // Read about unit testing in Rust: https://doc.rust-lang.org/book/ch11-03-test-organization.html#unit-tests
+/* Below is the unit test module. **/
 
 #[cfg(test)]
 mod tests {
