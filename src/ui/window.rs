@@ -54,8 +54,6 @@ pub fn render(ctx: &Context, app: &mut PathWarpApp) {
             }
 
             let filtered_paths = filtered_paths(&app.paths, &app.search_query);
-            app.selected_index =
-                normalized_selected_index(app.selected_index, filtered_paths.len());
             app.selected_index = next_selected_index(
                 app.selected_index,
                 filtered_paths.len(),
