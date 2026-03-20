@@ -6,6 +6,7 @@ const HIDE_GRACE_MS: u64 = 120;
 const UI_TICK_MS: u64 = 30;
 const OVERLAY_HEIGHT: f32 = 140.0;
 const OVERLAY_GAP: f32 = 0.0;
+// Cover the brief click-time focus handoff between file dialog and PathWrap window on Windows.
 const FOCUS_TRANSITION_GRACE_MS: u64 = 180;
 
 fn dialog_pixels_per_point(dialog: DialogInfo) -> f32 {
