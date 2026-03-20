@@ -44,7 +44,7 @@ The project root provides a `Justfile` with the following base commands:
 ### Tests
 
 - Test framework: Rust built-in unit test framework (`cargo test`)
-- Current tests cover basic logic units, including UTF-16 string conversion and UI filtering/selection logic
+- Current tests cover basic UI filtering/selection logic units
 - Run tests with:
   - `cargo test`
   - or `just test` (if `just` is installed)
