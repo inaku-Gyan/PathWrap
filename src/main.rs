@@ -4,8 +4,24 @@ pub mod os;
 pub mod ui;
 pub mod utils;
 
+fn enable_per_monitor_v2_dpi_awareness() {
+    use windows::Win32::UI::HiDpi::{
+        DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2, SetProcessDpiAwarenessContext,
+    };
+
+    // Best-effort: if a manifest already set DPI awareness, this call can fail with access denied.
+    let result =
+        unsafe { SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2) };
+    if result.is_err() {
+        log::warn!(
+            "SetProcessDpiAwarenessContext(PER_MONITOR_AWARE_V2) failed; continuing with existing DPI context"
+        );
+    }
+}
+
 fn main() -> eframe::Result<()> {
     env_logger::init();
+    enable_per_monitor_v2_dpi_awareness();
 
     let (tx, rx) = std::sync::mpsc::channel();
 
