@@ -37,9 +37,13 @@ pub fn start_monitor(sender: Sender<Option<DialogInfo>>, ctx: egui::Context) {
         if let Some(info) = current_dialog {
             lost_ticks = 0;
             if last_hwnd != info.hwnd {
-                println!(
+                log::debug!(
                     "[monitor] dialog detected: hwnd={} rect=({}, {}) {}x{}",
-                    info.hwnd, info.x, info.y, info.width, info.height
+                    info.hwnd,
+                    info.x,
+                    info.y,
+                    info.width,
+                    info.height
                 );
                 last_hwnd = info.hwnd;
             }
@@ -57,7 +61,7 @@ pub fn start_monitor(sender: Sender<Option<DialogInfo>>, ctx: egui::Context) {
                 // This fallback only runs while we already have a trusted last_hwnd.
                 if let Some(info) = find_any_file_dialog() {
                     if last_hwnd != info.hwnd {
-                        println!("[monitor] dialog switched: {} -> {}", last_hwnd, info.hwnd);
+                        log::debug!("[monitor] dialog switched: {} -> {}", last_hwnd, info.hwnd);
                         last_hwnd = info.hwnd;
                     }
                     lost_ticks = 0;
@@ -66,7 +70,7 @@ pub fn start_monitor(sender: Sender<Option<DialogInfo>>, ctx: egui::Context) {
                 } else {
                     lost_ticks = lost_ticks.saturating_add(1);
                     if lost_ticks >= LOST_CONFIRM_TICKS {
-                        println!("[monitor] dialog lost: hwnd={}", last_hwnd);
+                        log::debug!("[monitor] dialog lost: hwnd={}", last_hwnd);
                         last_hwnd = INVALID_HWND;
                         lost_ticks = 0;
                         let _ = sender.send(None);
@@ -77,7 +81,7 @@ pub fn start_monitor(sender: Sender<Option<DialogInfo>>, ctx: egui::Context) {
         } else if let Some(sig) = get_foreground_signature()
             && last_foreground_signature.as_deref() != Some(sig.as_str())
         {
-            println!("[monitor] foreground: {}", sig);
+            log::trace!("[monitor] foreground: {}", sig);
             last_foreground_signature = Some(sig);
         }
 
