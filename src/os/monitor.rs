@@ -1,6 +1,7 @@
 use std::sync::mpsc::Sender;
 use std::time::{Duration, Instant};
 use windows::Win32::Foundation::{BOOL, HWND, LPARAM, RECT};
+use windows::Win32::UI::HiDpi::GetDpiForWindow;
 use windows::Win32::UI::WindowsAndMessaging::{
     EnumWindows, FindWindowExW, GetClassNameW, GetForegroundWindow, GetWindowRect, GetWindowTextW,
     IsWindow, IsWindowVisible,
@@ -14,6 +15,7 @@ pub struct DialogInfo {
     pub y: i32,
     pub width: i32,
     pub height: i32,
+    pub dpi: u32,
 }
 
 pub fn start_monitor(sender: Sender<Option<DialogInfo>>, ctx: egui::Context) {
@@ -229,14 +231,21 @@ pub fn get_dialog_info_by_hwnd(hwnd_isize: isize) -> Option<DialogInfo> {
 fn get_dialog_info(hwnd: HWND) -> Option<DialogInfo> {
     let mut rect = RECT::default();
     if unsafe { GetWindowRect(hwnd, &mut rect) }.is_ok() {
+        let dpi = get_window_dpi(hwnd);
         Some(DialogInfo {
             hwnd: hwnd.0,
             x: rect.left,
             y: rect.top,
             width: rect.right - rect.left,
             height: rect.bottom - rect.top,
+            dpi,
         })
     } else {
         None
     }
+}
+
+fn get_window_dpi(hwnd: HWND) -> u32 {
+    let dpi = unsafe { GetDpiForWindow(hwnd) };
+    if dpi == 0 { 96 } else { dpi }
 }

@@ -7,6 +7,11 @@ const UI_TICK_MS: u64 = 30;
 const OVERLAY_HEIGHT: f32 = 140.0;
 const OVERLAY_GAP: f32 = 0.0;
 
+fn dialog_pixels_per_point(dialog: DialogInfo) -> f32 {
+    // Per-Monitor V2: convert physical pixels with the dialog window's monitor DPI.
+    (dialog.dpi as f32 / 96.0).max(0.1)
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum OverlayState {
     Visible,
@@ -141,7 +146,7 @@ impl PathWarpApp {
             ));
         }
 
-        let pixels_per_point = ctx.pixels_per_point();
+        let pixels_per_point = dialog_pixels_per_point(dialog);
         let needs_update = self.last_applied_dialog != Some(dialog)
             || self
                 .last_applied_scale
