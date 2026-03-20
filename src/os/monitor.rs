@@ -1,6 +1,6 @@
+use std::mem::size_of;
 use std::sync::mpsc::Sender;
 use std::time::{Duration, Instant};
-use std::mem::size_of;
 use windows::Win32::Foundation::{BOOL, HWND, LPARAM, RECT};
 use windows::Win32::Graphics::Dwm::{DWMWA_EXTENDED_FRAME_BOUNDS, DwmGetWindowAttribute};
 use windows::Win32::UI::HiDpi::GetDpiForWindow;
