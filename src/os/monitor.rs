@@ -241,7 +241,10 @@ pub fn is_foreground_current_process_window() -> bool {
         }
 
         let mut process_id = 0u32;
-        let _ = GetWindowThreadProcessId(foreground, Some(&mut process_id));
+        let thread_id = GetWindowThreadProcessId(foreground, Some(&mut process_id));
+        if thread_id == 0 {
+            return false;
+        }
         process_id == std::process::id()
     }
 }
