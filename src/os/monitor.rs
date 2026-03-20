@@ -1,12 +1,15 @@
 use std::mem::size_of;
-use std::sync::mpsc::Sender;
+use std::sync::mpsc::{Receiver, RecvTimeoutError, Sender};
+use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, Instant};
 use windows::Win32::Foundation::{BOOL, HWND, LPARAM, RECT};
 use windows::Win32::Graphics::Dwm::{DWMWA_EXTENDED_FRAME_BOUNDS, DwmGetWindowAttribute};
 use windows::Win32::UI::HiDpi::GetDpiForWindow;
 use windows::Win32::UI::WindowsAndMessaging::{
-    EnumWindows, FindWindowExW, GetClassNameW, GetForegroundWindow, GetWindowRect, GetWindowTextW,
-    IsWindow, IsWindowVisible,
+    DispatchMessageW, EnumWindows, EVENT_OBJECT_FOCUS, EVENT_OBJECT_SHOW, EVENT_SYSTEM_FOREGROUND,
+    FindWindowExW, GetClassNameW, GetForegroundWindow, GetMessageW, GetWindowRect, GetWindowTextW,
+    HWINEVENTHOOK, IsWindow, IsWindowVisible, MSG, SetWinEventHook, TranslateMessage, UnhookWinEvent,
+    WINEVENT_OUTOFCONTEXT, WINEVENT_SKIPOWNPROCESS,
 };
 use windows::core::w;
 
@@ -20,11 +23,111 @@ pub struct DialogInfo {
     pub dpi: u32,
 }
 
+fn monitor_wakeup_sender() -> &'static Mutex<Option<Sender<()>>> {
+    static WAKEUP_SENDER: OnceLock<Mutex<Option<Sender<()>>>> = OnceLock::new();
+    WAKEUP_SENDER.get_or_init(|| Mutex::new(None))
+}
+
+unsafe extern "system" fn monitor_event_callback(
+    _h_win_event_hook: HWINEVENTHOOK,
+    _event: u32,
+    hwnd: HWND,
+    _id_object: i32,
+    _id_child: i32,
+    _dw_event_thread: u32,
+    _dwms_event_time: u32,
+) {
+    if hwnd.0 == 0 {
+        return;
+    }
+
+    if let Ok(guard) = monitor_wakeup_sender().lock()
+        && let Some(sender) = guard.as_ref()
+    {
+        let _ = sender.send(());
+    }
+}
+
+fn start_event_wakeup_hook() -> Receiver<()> {
+    let (tx, rx) = std::sync::mpsc::channel();
+
+    std::thread::spawn(move || {
+        if let Ok(mut guard) = monitor_wakeup_sender().lock() {
+            *guard = Some(tx);
+        }
+
+        let hooks = unsafe {
+            [
+                SetWinEventHook(
+                    EVENT_SYSTEM_FOREGROUND,
+                    EVENT_SYSTEM_FOREGROUND,
+                    None,
+                    Some(monitor_event_callback),
+                    0,
+                    0,
+                    WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS,
+                ),
+                SetWinEventHook(
+                    EVENT_OBJECT_FOCUS,
+                    EVENT_OBJECT_FOCUS,
+                    None,
+                    Some(monitor_event_callback),
+                    0,
+                    0,
+                    WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS,
+                ),
+                SetWinEventHook(
+                    EVENT_OBJECT_SHOW,
+                    EVENT_OBJECT_SHOW,
+                    None,
+                    Some(monitor_event_callback),
+                    0,
+                    0,
+                    WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS,
+                ),
+            ]
+        };
+
+        let active_hooks: Vec<HWINEVENTHOOK> = hooks.into_iter().filter(|h| h.0 != 0).collect();
+        if active_hooks.is_empty() {
+            if let Ok(mut guard) = monitor_wakeup_sender().lock() {
+                *guard = None;
+            }
+            return;
+        }
+
+        let mut msg = MSG::default();
+        loop {
+            let result = unsafe { GetMessageW(&mut msg, HWND(0), 0, 0) };
+            if result.0 <= 0 {
+                break;
+            }
+            unsafe {
+                TranslateMessage(&msg);
+                DispatchMessageW(&msg);
+            }
+        }
+
+        for hook in active_hooks {
+            unsafe {
+                let _ = UnhookWinEvent(hook);
+            }
+        }
+
+        if let Ok(mut guard) = monitor_wakeup_sender().lock() {
+            *guard = None;
+        }
+    });
+
+    rx
+}
+
 pub fn start_monitor(sender: Sender<Option<DialogInfo>>, ctx: egui::Context) {
     const INVALID_HWND: isize = 0;
     const IDLE_POLL_INTERVAL_MS: u64 = 30;
     const TRACKING_POLL_INTERVAL_MS: u64 = 8;
     const LOST_CONFIRM_TICKS: u8 = 3;
+    let wakeup_rx = start_event_wakeup_hook();
 
     let mut last_hwnd: isize = INVALID_HWND;
     let mut last_foreground_signature: Option<String> = None;
@@ -88,8 +191,15 @@ pub fn start_monitor(sender: Sender<Option<DialogInfo>>, ctx: egui::Context) {
         };
         let target_interval = Duration::from_millis(poll_interval);
         let elapsed = loop_started.elapsed();
-        if elapsed < target_interval {
-            std::thread::sleep(target_interval - elapsed);
+        let remaining = target_interval.saturating_sub(elapsed);
+        if remaining > Duration::ZERO {
+            match wakeup_rx.recv_timeout(remaining) {
+                Ok(_) => {
+                    while wakeup_rx.try_recv().is_ok() {}
+                }
+                Err(RecvTimeoutError::Timeout) => {}
+                Err(RecvTimeoutError::Disconnected) => std::thread::sleep(remaining),
+            }
         }
     }
 }

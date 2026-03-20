@@ -270,10 +270,8 @@ impl eframe::App for PathWarpApp {
             egui::CentralPanel::default().show(ctx, |_| {});
         }
 
-        if self.target_dialog.is_some() {
+        if self.target_dialog.is_some() || self.pending_none_since.is_some() {
             ctx.request_repaint();
-        } else {
-            ctx.request_repaint_after(Duration::from_millis(UI_TICK_MS));
         }
     }
 }
