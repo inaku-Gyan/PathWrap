@@ -1,8 +1,8 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // 移除 release 时的黑框
-pub mod app;
-pub mod os;
-pub mod ui;
-pub mod utils;
+mod app;
+mod os;
+mod ui;
+mod utils;
 
 fn enable_per_monitor_v2_dpi_awareness() {
     use windows::Win32::UI::HiDpi::{
