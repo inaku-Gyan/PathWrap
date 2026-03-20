@@ -26,15 +26,23 @@ fn read_level_from_config_file() -> Option<log::LevelFilter> {
         if trimmed.starts_with('#') || trimmed.is_empty() {
             continue;
         }
-        if let Some(raw) = trimmed.strip_prefix("log_level") {
-            let raw = raw.trim_start();
-            if !raw.starts_with('=') {
-                continue;
-            }
-            let value = raw.trim_start_matches('=').trim().trim_matches('"');
-            if let Some(level) = parse_level_filter(value) {
-                return Some(level);
-            }
+
+        let without_inline_comment = trimmed.split('#').next().unwrap_or("").trim();
+        if without_inline_comment.is_empty() {
+            continue;
+        }
+
+        let Some((key, value)) = without_inline_comment.split_once('=') else {
+            continue;
+        };
+
+        if key.trim() != "log_level" {
+            continue;
+        }
+
+        let value = value.trim().trim_matches('"');
+        if let Some(level) = parse_level_filter(value) {
+            return Some(level);
         }
     }
 
@@ -55,7 +63,6 @@ fn init_logging() {
 
     let mut builder = env_logger::Builder::new();
     builder.filter_level(level);
-    builder.parse_default_env();
     builder.init();
 }
 
