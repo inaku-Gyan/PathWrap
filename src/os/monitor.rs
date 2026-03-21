@@ -9,8 +9,8 @@ use windows::Win32::UI::HiDpi::GetDpiForWindow;
 use windows::Win32::UI::WindowsAndMessaging::{
     DispatchMessageW, EVENT_OBJECT_FOCUS, EVENT_OBJECT_SHOW, EVENT_SYSTEM_FOREGROUND, EnumWindows,
     FindWindowExW, GetClassNameW, GetForegroundWindow, GetMessageW, GetWindowRect, GetWindowTextW,
-    IsWindow, IsWindowVisible, MSG, TranslateMessage, WINEVENT_OUTOFCONTEXT,
-    WINEVENT_SKIPOWNPROCESS,
+    GetWindowThreadProcessId, IsWindow, IsWindowVisible, MSG, TranslateMessage,
+    WINEVENT_OUTOFCONTEXT, WINEVENT_SKIPOWNPROCESS,
 };
 use windows::core::w;
 
@@ -233,6 +233,33 @@ pub fn is_foreground_hwnd(hwnd: isize) -> bool {
     unsafe { GetForegroundWindow().0 == hwnd }
 }
 
+pub fn is_foreground_current_process_window() -> bool {
+    unsafe {
+        let foreground = GetForegroundWindow();
+        let mut process_id = 0u32;
+        let thread_id = if foreground.0 == 0 {
+            0
+        } else {
+            GetWindowThreadProcessId(foreground, Some(&mut process_id))
+        };
+        is_foreground_from_current_process_by_ids(
+            foreground.0,
+            thread_id,
+            process_id,
+            std::process::id(),
+        )
+    }
+}
+
+fn is_foreground_from_current_process_by_ids(
+    foreground_hwnd: isize,
+    thread_id: u32,
+    foreground_process_id: u32,
+    current_process_id: u32,
+) -> bool {
+    foreground_hwnd != 0 && thread_id != 0 && foreground_process_id == current_process_id
+}
+
 fn get_dialog_info_if_match(hwnd: HWND) -> Option<DialogInfo> {
     if unsafe { !IsWindowVisible(hwnd).as_bool() } {
         return None;
@@ -394,4 +421,29 @@ fn get_window_visual_rect(hwnd: HWND) -> Option<RECT> {
 fn get_window_dpi(hwnd: HWND) -> u32 {
     let dpi = unsafe { GetDpiForWindow(hwnd) };
     if dpi == 0 { 96 } else { dpi }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_foreground_from_current_process_by_ids;
+
+    #[test]
+    fn matches_current_process_when_foreground_and_thread_valid() {
+        assert!(is_foreground_from_current_process_by_ids(100, 1, 42, 42));
+    }
+
+    #[test]
+    fn returns_false_when_no_foreground_window() {
+        assert!(!is_foreground_from_current_process_by_ids(0, 1, 42, 42));
+    }
+
+    #[test]
+    fn returns_false_when_thread_lookup_failed() {
+        assert!(!is_foreground_from_current_process_by_ids(100, 0, 42, 42));
+    }
+
+    #[test]
+    fn returns_false_when_foreground_from_other_process() {
+        assert!(!is_foreground_from_current_process_by_ids(100, 1, 7, 42));
+    }
 }
