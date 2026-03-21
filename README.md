@@ -1,4 +1,4 @@
-# PathWarp
+# PathWarp (still under development)
 
 PathWarp is a Windows desktop application for quickly switching target folders when a system Open/Save file dialog appears.
 
