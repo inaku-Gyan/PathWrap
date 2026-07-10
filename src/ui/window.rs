@@ -58,3 +58,75 @@ pub fn render(root: &mut Ui, controller: &Controller) -> Option<UiEvent> {
 
     event
 }
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used)]
+mod tests {
+    use super::*;
+    use crate::core::controller::{Controller, Env, Event};
+    use crate::core::types::KeyAction;
+    use egui_kittest::Harness;
+    use egui_kittest::kittest::Queryable;
+    use std::time::Instant;
+
+    /// 构造一个带路径、可选已输入查询的控制器（用于喂给纯渲染器）。
+    fn controller_with(paths: &[&str], query: &str) -> Controller {
+        let mut controller = Controller::new();
+        controller.set_paths(paths.iter().map(|s| (*s).to_string()).collect());
+        let env = Env {
+            now: Instant::now(),
+            foreground_hwnd: 1,
+        };
+        for ch in query.chars() {
+            controller.step(env, Event::Key(KeyAction::Char(ch)));
+        }
+        controller
+    }
+
+    fn harness_for(controller: Controller) -> Harness<'static, (Controller, Option<UiEvent>)> {
+        Harness::builder()
+            .with_size(egui::vec2(420.0, 320.0))
+            .build_ui_state(
+                |ui, state: &mut (Controller, Option<UiEvent>)| {
+                    // 点击在某一帧被消费，后续帧 render 返回 None；这里latch住首个非空事件。
+                    if let Some(event) = render(ui, &state.0) {
+                        state.1 = Some(event);
+                    }
+                },
+                (controller, None),
+            )
+    }
+
+    #[test]
+    fn renders_only_filtered_paths() {
+        let mut harness = harness_for(controller_with(&["C:\\Work", "D:\\Games"], "work"));
+        harness.run();
+        assert!(harness.query_by_label("C:\\Work").is_some());
+        assert!(
+            harness.query_by_label("D:\\Games").is_none(),
+            "filtered-out path must not be rendered"
+        );
+    }
+
+    #[test]
+    fn clicking_item_emits_item_clicked_with_index() {
+        let mut harness = harness_for(controller_with(&["C:\\Work", "D:\\Games"], ""));
+        harness.run();
+        harness.get_by_label("D:\\Games").click();
+        harness.run();
+        assert_eq!(harness.state().1, Some(UiEvent::ItemClicked(1)));
+    }
+
+    #[test]
+    fn search_row_shows_placeholder_when_empty_and_query_when_typed() {
+        // 空查询：显示占位符。
+        let mut empty = harness_for(controller_with(&["C:\\Work"], ""));
+        empty.run();
+        assert!(empty.query_by_label_contains("输入以筛选").is_some());
+
+        // 有查询：回显查询文本（含合成光标）。
+        let mut typed = harness_for(controller_with(&["C:\\Work"], "wo"));
+        typed.run();
+        assert!(typed.query_by_label_contains("wo").is_some());
+    }
+}
