@@ -6,10 +6,38 @@ The app listens to file dialog state and shows a lightweight overlay with paths 
 
 ## Features
 
-- Detects system Open/Save file dialogs and shows an overlay panel when appropriate
+- Detects system Open/Save file dialogs and docks a lightweight overlay flush beneath them
 - Reads active Explorer window paths and displays them as selectable items
-- Supports search filtering, keyboard up/down selection, and Enter confirmation
+- Type-to-filter, up/down selection, Enter or double-click to jump the dialog to that folder
+- Non-intrusive: the overlay never steals focus from the dialog
 - Built with Rust + egui/eframe + windows-rs
+
+## Architecture
+
+PathWarp is layered as `os/` (Win32 integration) ↔ `ui/` (egui presentation) ↔ `app.rs`
+(state + coordination), decoupled by channels. Key design decisions:
+
+- **Non-activating overlay** ([src/os/window_ext.rs](src/os/window_ext.rs)): the eframe
+  window carries `WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW | WS_EX_TOPMOST`, so clicking it never
+  moves foreground away from the dialog. Show/hide uses `ShowWindow`, and docking uses
+  `SetWindowPos` in **physical pixels** matched to the dialog's DWM frame bounds — no
+  logical-point/DPI conversion, hence no seam. This collapses the old focus state machine to
+  a single "is the dialog foreground?" gate in [src/app.rs](src/app.rs).
+- **Global keyboard hook** ([src/os/input_hook.rs](src/os/input_hook.rs)): because a
+  non-activating window can't hold keyboard focus, a `WH_KEYBOARD_LL` hook — gated to
+  "overlay visible AND dialog foreground" — intercepts typing/navigation keys and routes them
+  to app state; all other keys pass through to the dialog. egui is a pure renderer over that
+  state (no `TextEdit`).
+- **UI Automation injection** ([src/os/dialog.rs](src/os/dialog.rs)): locates the filename
+  edit and the default button via UIA, then `ValuePattern::SetValue` + `InvokePattern::Invoke`.
+  Synchronous, no sleeps, no synthetic keystrokes, no focus theft; works on modern
+  `IFileDialog`.
+- **Dialog detection** ([src/os/monitor.rs](src/os/monitor.rs)): `SetWinEventHook` wakeups +
+  adaptive polling, matching class `#32770` plus structural child-class evidence to avoid
+  false positives on generic message boxes.
+
+> Known limitation: the keyboard hook translates keys via `ToUnicodeEx`, so IME composition
+> (e.g. Chinese input) is not captured for filtering; ASCII/partial filtering is unaffected.
 
 ## Development
 

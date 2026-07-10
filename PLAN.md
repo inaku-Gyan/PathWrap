@@ -114,7 +114,7 @@
   - 默认仅输出 `error`；
   - 支持通过环境变量或配置文件打开 `debug/trace`；
   - 将 monitor / app 的调试输出统一迁移到 `log` 宏，移除 `println!`。
-- **Task 5.5 (后续优化)**: GUI 视觉风格优化：统一间距、字号、列表密度与高亮样式，提升可读性与现代感。
+- [x] **Task 5.5 (后续优化)**: GUI 视觉风格优化：统一间距、字号、列表密度与高亮样式，提升可读性与现代感。（见下方 V2 重构记录）
 - **Task 5.6 (未来)**: 支持跟随系统浅色/深色模式自动切换 UI 主题，并保留手动覆盖选项。
 - **Task 5.7 (未来)**: 优化多桌面（Virtual Desktop）场景下的显示逻辑，避免跨桌面误显示或焦点错位。
 - **Task 5.8 (未来的未来)**: 新增设置界面，支持常用开关（含开机自启启用/关闭）与基础行为配置。
@@ -123,3 +123,17 @@
 ---
 
 AGENT, 执行本计划时请按当前未完成 Task 顺序推进：每完成一个 Task 必须立刻在本文件勾选/标注状态并同步结果；若发现新增需求或衍生任务，需先补充进对应阶段后再继续开发。
+
+---
+
+## 🔧 V2 架构重构记录
+
+V1 落地后暴露三类问题（显隐交互 bug、注入延迟/不稳、界面简陋），根因集中在三处而非整体架构。保留原有 `os/ui/app` 分层与可测试纯函数，做定向重构：
+
+- **非激活悬浮窗**（`src/os/window_ext.rs`、`src/app.rs`）：悬浮窗改为 `WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW | WS_EX_TOPMOST`，永不抢前台，对话框在交互期间始终保持前台。由此**删除**了 `should_render_overlay`/焦点 grace/`AlwaysOnTop` 切换/进程前台判定等一整套显隐补丁（原 Task 3.7–3.15 的历史包袱），仅保留“对话框是否前台”这一唯一门控。停靠改用 `SetWindowPos` 物理像素直接匹配对话框 DWM 边界，消除逻辑点/DPI 口径不一致造成的贴边缝隙；隐藏改用真正的 `ShowWindow(SW_HIDE)`，替代移到屏幕外的 hack。
+- **全局键盘钩子**（`src/os/input_hook.rs`）：非激活窗拿不到键盘焦点，故用 `WH_KEYBOARD_LL`（门控：悬浮条可见且对话框前台）截获打字/导航键送回 UI 线程，其余按键透传给对话框；egui 降级为纯渲染器（移除 `TextEdit`/`request_focus`）。已知限制：`ToUnicodeEx` 逐键翻译不处理 IME 组字。
+- **UI Automation 注入**（`src/os/dialog.rs`，替换原 Task 4.1 的 CDM/键盘模拟方案）：`ElementFromHandle` → 评分定位文件名 Edit 与默认按钮 → `ValuePattern::SetValue` + `InvokePattern::Invoke`。同步、无 sleep、无按键模拟、不抢焦点，对现代 `IFileDialog` 稳定。
+- **视觉重塑 + 中文字体**（`src/ui/theme.rs`、`src/ui/window.rs`，对应 Task 5.5）：统一深色调色板/间距/圆角，悬浮卡片加描边+阴影与对话框脱开；加载系统微软雅黑（`msyh.ttc`）以正确显示中文路径。
+- **卫生**：移除未用依赖 `lazy_static`/`parking_lot` 与空 `build.rs`；`logging.rs` 接入 `RUST_LOG`（默认 error）；裁剪未用 `windows` features（`Win32_UI_Controls`、`Win32_System_Com_StructuredStorage`）；新增 `raw-window-handle`、`Win32_System_LibraryLoader`、`Win32_UI_TextServices`。全树通过 `cargo clippy --all-targets --all-features -- -D warnings`。
+
+> 仍待办：Task 3.11（多 file dialog 并存策略）、Task 5.6（跟随系统浅/深色）、Task 5.7（多桌面）、Task 5.8（设置界面）。V2 交互/注入/停靠需在 Windows 真实对话框上手动验证。
