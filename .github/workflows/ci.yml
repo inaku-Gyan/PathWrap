@@ -46,6 +46,8 @@ jobs:
         run: cargo build --all-targets --verbose
 
       # 单元测试（控制器状态机 + 窗口子类化 + egui_kittest 渲染）。
-      # E2E（#[ignore]，需交互式桌面）不在此跑，见 e2e.yml。
       - name: Run tests
         run: cargo test --all-features --verbose
+
+      - name: Run E2E tests
+        run: cargo test --test e2e -- --ignored --test-threads=1
