@@ -1,5 +1,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // 移除 release 时的黑框
 mod app;
+mod core;
 mod logging;
 mod os;
 mod ui;

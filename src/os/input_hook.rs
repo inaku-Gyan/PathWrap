@@ -22,16 +22,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
     WM_SYSKEYDOWN,
 };
 
-/// 用户在悬浮条上产生的一次输入意图。
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum KeyAction {
-    Char(char),
-    Backspace,
-    Up,
-    Down,
-    Enter,
-    Escape,
-}
+pub use crate::core::types::KeyAction;
 
 /// 仅当为真时钩子才会截获（吞掉）消费集内的按键；否则一律透传。
 static ACTIVE: AtomicBool = AtomicBool::new(false);

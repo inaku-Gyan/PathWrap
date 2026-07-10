@@ -15,15 +15,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
 use windows::core::BOOL;
 use windows::core::w;
 
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct DialogInfo {
-    pub hwnd: isize,
-    pub x: i32,
-    pub y: i32,
-    pub width: i32,
-    pub height: i32,
-    pub dpi: u32,
-}
+pub use crate::core::types::DialogInfo;
 
 fn monitor_wakeup_sender() -> &'static Mutex<Option<Sender<()>>> {
     static WAKEUP_SENDER: OnceLock<Mutex<Option<Sender<()>>>> = OnceLock::new();
@@ -231,8 +223,9 @@ pub fn get_active_file_dialog() -> Option<DialogInfo> {
     None
 }
 
-pub fn is_foreground_hwnd(hwnd: isize) -> bool {
-    unsafe { GetForegroundWindow().0 as isize == hwnd }
+/// 当前前台窗口的 HWND（供控制器判定“对话框是否仍前台”）。
+pub fn foreground_hwnd() -> isize {
+    unsafe { GetForegroundWindow().0 as isize }
 }
 
 fn get_dialog_info_if_match(hwnd: HWND) -> Option<DialogInfo> {

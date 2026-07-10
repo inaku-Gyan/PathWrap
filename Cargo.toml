@@ -3,6 +3,7 @@ name = "PathWarp"
 version = "0.1.0"
 edition = "2024"
 description = "Windows file dialog path switching tool"
+default-run = "PathWarp"
 
 [dependencies]
 eframe = "0.35"

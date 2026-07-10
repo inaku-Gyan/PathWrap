@@ -1,17 +1,18 @@
+//! eframe 应用外壳：把外部事件（对话框通道、键盘钩子、egui 鼠标响应）喂给纯
+//! 控制器 [`crate::core::controller::Controller`]，并执行控制器返回的 [`Effect`]。
+//! 本文件不含任何显隐/停靠/注入/去抖判断——那些全在控制器里，可被单测覆盖。
+
+use crate::core::controller::{Controller, Effect, Env, Event};
 use crate::os::input_hook::{self, KeyAction};
-use crate::os::monitor::DialogInfo;
-use crate::os::window_ext;
-use crate::ui::window::FrameIntents;
+use crate::os::monitor::{self, DialogInfo};
+use crate::os::{explorer, window_ext};
+use crate::ui::window::UiEvent;
 use raw_window_handle::{HasWindowHandle, RawWindowHandle};
 use std::sync::mpsc::Receiver;
 use std::time::{Duration, Instant};
 
-const HIDE_GRACE_MS: u64 = 120;
+/// 跟踪期的重绘心跳周期：推进去抖/宽限计时并平滑跟随对话框移动。
 const UI_TICK_MS: u64 = 30;
-/// 悬浮条逻辑高度（像素，按对话框 DPI 缩放为物理像素）。
-const OVERLAY_HEIGHT_LOGICAL: u32 = 140;
-/// 悬浮条与对话框下边缘的物理像素间距（0 = 紧贴）。
-const OVERLAY_GAP: i32 = 0;
 
 /// 从实现了 `HasWindowHandle` 的对象（CreationContext / Frame）中取 Win32 HWND。
 fn extract_hwnd(handle: &impl HasWindowHandle) -> isize {
@@ -29,20 +30,11 @@ pub struct PathWarpApp {
     overlay_hwnd: isize,
     styles_applied: bool,
 
-    pub dialog_rx: Receiver<Option<DialogInfo>>,
+    dialog_rx: Receiver<Option<DialogInfo>>,
     /// 低层键盘钩子送来的输入意图（悬浮条为非激活窗，无法用 egui 接收键盘）。
     key_rx: Receiver<KeyAction>,
-    pub target_dialog: Option<DialogInfo>,
-    pub pending_none_since: Option<Instant>,
 
-    pub paths: Vec<String>,
-    pub search_query: String,
-    pub selected_index: usize,
-
-    /// 用户按 ESC 主动隐藏时记录被抑制的对话框，避免同一会话立即被重新拉起。
-    user_hidden_dialog_hwnd: Option<isize>,
-    last_applied_visible: Option<bool>,
-    last_applied_dialog: Option<DialogInfo>,
+    controller: Controller,
 }
 
 impl PathWarpApp {
@@ -54,35 +46,23 @@ impl PathWarpApp {
         let mut app = Self {
             overlay_hwnd: extract_hwnd(cc),
             styles_applied: false,
-
             dialog_rx,
             key_rx,
-            target_dialog: None,
-            pending_none_since: None,
-
-            paths: crate::os::explorer::get_open_windows(),
-            search_query: String::new(),
-            selected_index: 0,
-
-            user_hidden_dialog_hwnd: None,
-            last_applied_visible: None,
-            last_applied_dialog: None,
+            controller: Controller::new(),
         };
-        // 尽早应用样式并隐藏，减少启动时窗口在默认位置的可见时间。
+        // 尽早应用非激活样式并停靠到屏幕外，避免启动时窗口在默认位置可见。
         app.ensure_overlay_window_by_hwnd(app.overlay_hwnd);
         app
     }
 
-    /// 首帧确保拿到 HWND 并应用非激活扩展样式 + 立即隐藏（幂等）。
     fn ensure_overlay_window(&mut self, frame: &eframe::Frame) {
-        let hwnd = if self.overlay_hwnd == 0 {
-            extract_hwnd(frame)
-        } else {
-            self.overlay_hwnd
-        };
-        self.ensure_overlay_window_by_hwnd(hwnd);
+        if self.overlay_hwnd == 0 {
+            self.overlay_hwnd = extract_hwnd(frame);
+        }
+        self.ensure_overlay_window_by_hwnd(self.overlay_hwnd);
     }
 
+    /// 首帧确保拿到 HWND 并应用非激活扩展样式 + 子类化 + 立即停靠到屏幕外（幂等）。
     fn ensure_overlay_window_by_hwnd(&mut self, hwnd: isize) {
         self.overlay_hwnd = hwnd;
         if hwnd == 0 || self.styles_applied {
@@ -90,147 +70,27 @@ impl PathWarpApp {
         }
         self.styles_applied = window_ext::apply_overlay_ex_styles(hwnd);
         if self.styles_applied {
-            log::debug!("[overlay] applied non-activating ex-styles to hwnd={hwnd}");
-            // 初始即隐藏（移到屏幕外 + SW_HIDE），避免启动残留矩形。
-            self.set_overlay_visible(false);
+            window_ext::install_noactivate_subclass(hwnd);
+            window_ext::park(hwnd);
+            log::debug!("[overlay] non-activating styles + subclass applied to hwnd={hwnd}");
         }
     }
 
-    fn set_overlay_visible(&mut self, visible: bool) {
-        if self.last_applied_visible == Some(visible) {
-            return;
-        }
-        self.last_applied_visible = Some(visible);
-        if !visible {
-            window_ext::hide(self.overlay_hwnd);
-            self.last_applied_dialog = None;
-            log::debug!("[overlay] hidden");
-        }
-        // 显示动作由 place_overlay_for_dialog 的 dock() 完成（显示+定位一次到位）。
-    }
-
-    pub fn hide_overlay_by_user(&mut self) {
-        self.user_hidden_dialog_hwnd = self.target_dialog.map(|d| d.hwnd);
-        log::debug!("[overlay] user pressed ESC, suppress current dialog session");
-        self.target_dialog = None;
-        self.pending_none_since = None;
-        self.search_query.clear();
-        self.selected_index = 0;
-        self.set_overlay_visible(false);
-    }
-
-    fn hide_overlay_by_system(&mut self) {
-        self.target_dialog = None;
-        self.pending_none_since = None;
-        self.search_query.clear();
-        self.selected_index = 0;
-        self.set_overlay_visible(false);
-    }
-
-    /// 排空键盘钩子通道，直接消费文本编辑类动作，返回本帧的导航/确认/退出意图。
-    fn drain_key_actions(&mut self) -> (FrameIntents, bool) {
-        let mut intents = FrameIntents::default();
-        let mut escape = false;
-        for action in self.key_rx.try_iter() {
-            match action {
-                KeyAction::Char(c) => self.search_query.push(c),
-                KeyAction::Backspace => {
-                    self.search_query.pop();
-                }
-                KeyAction::Up => intents.nav_up = true,
-                KeyAction::Down => intents.nav_down = true,
-                KeyAction::Enter => intents.confirm = true,
-                KeyAction::Escape => escape = true,
+    /// 执行控制器返回的一批副作用。
+    fn apply_effects(&mut self, effects: Vec<Effect>) {
+        for effect in effects {
+            match effect {
+                Effect::Dock {
+                    x,
+                    y,
+                    width,
+                    height,
+                } => window_ext::dock(self.overlay_hwnd, x, y, width, height),
+                Effect::Park => window_ext::park(self.overlay_hwnd),
+                Effect::Inject { hwnd, path } => crate::os::dialog::inject_folder_path(hwnd, &path),
+                Effect::SetHookActive(active) => input_hook::set_active(active),
+                Effect::RefreshPaths => self.controller.set_paths(explorer::get_open_windows()),
             }
-        }
-        (intents, escape)
-    }
-
-    /// 以物理像素把悬浮条停靠到对话框正下方，并显示（不抢焦点）。
-    fn place_overlay_for_dialog(&mut self, dialog: DialogInfo) {
-        let needs_update =
-            self.last_applied_dialog != Some(dialog) || self.last_applied_visible != Some(true);
-        if !needs_update {
-            return;
-        }
-
-        let scaled_height = OVERLAY_HEIGHT_LOGICAL.saturating_mul(dialog.dpi) / 96;
-        let height = i32::try_from(scaled_height).unwrap_or(OVERLAY_HEIGHT_LOGICAL as i32);
-
-        let x = dialog.x;
-        let y = dialog.y + dialog.height + OVERLAY_GAP;
-        let width = dialog.width;
-
-        log::trace!("[overlay] dock at ({}, {}) {}x{}", x, y, width, height);
-        window_ext::dock(self.overlay_hwnd, x, y, width, height);
-
-        self.last_applied_dialog = Some(dialog);
-        self.last_applied_visible = Some(true);
-    }
-
-    fn sync_dialog_state_from_channel(&mut self, ctx: &eframe::egui::Context) {
-        let mut newest_some: Option<DialogInfo> = None;
-        let mut saw_none = false;
-
-        for msg in self.dialog_rx.try_iter() {
-            match msg {
-                Some(info) => newest_some = Some(info),
-                None => saw_none = true,
-            }
-        }
-
-        if let Some(info) = newest_some {
-            if self.user_hidden_dialog_hwnd == Some(info.hwnd) {
-                self.pending_none_since = None;
-                self.target_dialog = None;
-                return;
-            }
-
-            if self.user_hidden_dialog_hwnd.is_some() {
-                log::debug!(
-                    "[overlay] release user suppression due to dialog switch: {:?} -> {}",
-                    self.user_hidden_dialog_hwnd,
-                    info.hwnd
-                );
-                self.user_hidden_dialog_hwnd = None;
-            }
-
-            self.target_dialog = Some(info);
-            self.pending_none_since = None;
-            self.paths = crate::os::explorer::get_open_windows();
-            return;
-        }
-
-        if saw_none {
-            match self.pending_none_since {
-                None => {
-                    self.pending_none_since = Some(Instant::now());
-                    ctx.request_repaint_after(Duration::from_millis(UI_TICK_MS));
-                }
-                Some(since) => {
-                    if Instant::now().duration_since(since) >= Duration::from_millis(HIDE_GRACE_MS)
-                    {
-                        if self.user_hidden_dialog_hwnd.take().is_some() {
-                            log::debug!(
-                                "[overlay] release user suppression after dialog session ended"
-                            );
-                        }
-                        self.hide_overlay_by_system();
-                    } else {
-                        ctx.request_repaint_after(Duration::from_millis(UI_TICK_MS));
-                    }
-                }
-            }
-        }
-
-        // 即使 None 只到达一次，也要在宽限超时后收敛隐藏。
-        if let Some(since) = self.pending_none_since
-            && Instant::now().duration_since(since) >= Duration::from_millis(HIDE_GRACE_MS)
-        {
-            if self.user_hidden_dialog_hwnd.take().is_some() {
-                log::debug!("[overlay] release user suppression after grace timeout");
-            }
-            self.hide_overlay_by_system();
         }
     }
 }
@@ -242,36 +102,42 @@ impl eframe::App for PathWarpApp {
     }
 
     fn ui(&mut self, root: &mut egui::Ui, frame: &mut eframe::Frame) {
-        let ctx = root.ctx().clone();
         self.ensure_overlay_window(frame);
-        self.sync_dialog_state_from_channel(&ctx);
 
-        // 唯一显隐门控：目标对话框仍是前台窗口时才显示。
-        // 悬浮窗为非激活窗口，点击它不会改变前台，故此判定在交互期间保持为真。
-        let active = self
-            .target_dialog
-            .is_some_and(|d| crate::os::monitor::is_foreground_hwnd(d.hwnd));
+        let env = Env {
+            now: Instant::now(),
+            foreground_hwnd: monitor::foreground_hwnd(),
+        };
 
-        // 通知键盘钩子：仅在悬浮条可见时截获打字/导航键，否则全部透传给对话框。
-        input_hook::set_active(active);
+        // 1. 排空对话框状态通道。
+        let mut effects = Vec::new();
+        for msg in self.dialog_rx.try_iter() {
+            effects.extend(self.controller.step(env, Event::DialogUpdate(msg)));
+        }
+        // 2. 排空键盘钩子通道。
+        for key in self.key_rx.try_iter() {
+            effects.extend(self.controller.step(env, Event::Key(key)));
+        }
+        // 3. 心跳，推进去抖/宽限计时并做显隐收敛。
+        effects.extend(self.controller.step(env, Event::Tick));
+        self.apply_effects(effects);
 
-        // 非活跃帧不绘制任何内容：clear_color 为全透明，窗口不会残留可见背景。
-        if active {
-            let (intents, escape) = self.drain_key_actions();
-            if escape {
-                self.hide_overlay_by_user();
-                input_hook::set_active(false);
-            } else if let Some(dialog) = self.target_dialog {
-                self.place_overlay_for_dialog(dialog);
-                crate::ui::window::render(root, self, intents);
-            }
-        } else {
-            self.set_overlay_visible(false);
+        // 4. 可见时渲染，并把鼠标交互回喂控制器。
+        if self.controller.is_visible()
+            && let Some(ui_event) = crate::ui::window::render(root, &self.controller)
+        {
+            let event = match ui_event {
+                UiEvent::ItemClicked(idx) => Event::ItemClicked(idx),
+                UiEvent::ItemDoubleClicked(idx) => Event::ItemDoubleClicked(idx),
+            };
+            let fx = self.controller.step(env, event);
+            self.apply_effects(fx);
         }
 
-        // 跟踪期间持续重绘以平滑跟随对话框移动；空闲时不重绘以省电。
-        if self.target_dialog.is_some() || self.pending_none_since.is_some() {
-            ctx.request_repaint();
+        // 会话进行期间持续心跳；空闲时停止重绘以省电（新对话框由 monitor 唤醒）。
+        if self.controller.needs_tick() {
+            root.ctx()
+                .request_repaint_after(Duration::from_millis(UI_TICK_MS));
         }
     }
 }
