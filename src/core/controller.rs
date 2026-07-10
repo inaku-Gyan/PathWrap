@@ -190,7 +190,12 @@ impl Controller {
         }
     }
 
-    /// 完成选择：先关钩子门控，再注入选中路径，然后抑制当前会话。
+    /// 完成选择：先关钩子门控，再注入选中路径——**注入后保持停靠**，让用户可继续
+    /// 挑选/输入。收起悬浮条是 ESC 的职责，不在此处。
+    ///
+    /// 关钩子只是为了 UIA 同步调用期间不吞键：注入完成后，同一 `step` 的 `reconcile`
+    /// 见「目标仍在 + 对话框仍前台」会自动重新 `SetHookActive(true)`，故净效果为
+    /// `[SetHookActive(false), Inject, SetHookActive(true)]`，钩子随即恢复。
     fn confirm(&mut self, fx: &mut Vec<Effect>) {
         let Some(dialog) = self.target_dialog else {
             return;
@@ -207,10 +212,9 @@ impl Controller {
             hwnd: dialog.hwnd,
             path,
         });
-        self.suppress_current_session();
     }
 
-    /// ESC / 注入后：抑制当前对话框会话，收起悬浮条。
+    /// ESC：抑制当前对话框会话，收起悬浮条。
     fn suppress_current_session(&mut self) {
         self.user_hidden_hwnd = self.target_dialog.map(|d| d.hwnd);
         self.target_dialog = None;
@@ -642,7 +646,7 @@ mod tests {
     }
 
     #[test]
-    fn enter_injects_selected_path_with_hook_off_first() {
+    fn enter_injects_selected_path_and_stays_docked() {
         let mut c = Controller::new();
         let t = dock_at(&mut c, 1);
         c.set_paths(vec!["C:\\Work".into(), "D:\\Games".into()]);
@@ -654,13 +658,21 @@ mod tests {
         c.step(env, Event::Key(KeyAction::Down)); // 选中第 2 项
         let fx = c.step(env, Event::Key(KeyAction::Enter));
 
-        // 顺序：SetHookActive(false) 必须在 Inject 之前。
+        // 顺序：SetHookActive(false) 必须在 Inject 之前（UIA 同步调用期间不吞键）。
         let hook_idx = fx.iter().position(|e| e == &Effect::SetHookActive(false));
         let inject_idx = fx.iter().position(|e| matches!(e, Effect::Inject { .. }));
         assert!(hook_idx.is_some() && inject_idx.is_some());
         assert!(hook_idx < inject_idx, "hook must be disabled before inject");
         assert_eq!(inject_path(&fx).as_deref(), Some("D:\\Games"));
-        assert!(has_park(&fx));
+
+        // 注入后悬浮条保持停靠，且钩子门控在同帧内自动恢复。
+        assert!(!has_park(&fx), "overlay must stay docked after injection");
+        assert!(c.is_visible());
+        assert_eq!(
+            hook_set(&fx),
+            Some(true),
+            "hook must be re-enabled after inject"
+        );
     }
 
     #[test]
@@ -679,10 +691,11 @@ mod tests {
         assert!(!has_park(&fx));
         assert_eq!(c.selected_index(), 1);
 
-        // 双击注入对应路径。
+        // 双击注入对应路径，且悬浮条保持停靠（不 Park）。
         let fx = c.step(env, Event::ItemDoubleClicked(0));
         assert_eq!(inject_path(&fx).as_deref(), Some("C:\\Work"));
-        assert!(has_park(&fx));
+        assert!(!has_park(&fx), "overlay must stay docked after injection");
+        assert!(c.is_visible());
     }
 
     #[test]
@@ -716,5 +729,79 @@ mod tests {
             width: 600,
             height: 140,
         }));
+    }
+
+    /// 回归：注入选中路径后，悬浮条必须**保持停靠**（不得 Park），且会话未被抑制，
+    /// 用户可继续挑选并再次注入——修复「选中/回车条目后 GUI 不应关闭却关闭了」。
+    #[test]
+    fn confirm_injects_but_keeps_overlay_docked() {
+        let mut c = Controller::new();
+        let t = dock_at(&mut c, 1);
+        c.set_paths(vec!["C:\\Work".into(), "D:\\Games".into()]);
+        let env = Env {
+            now: t,
+            foreground_hwnd: 1,
+        };
+
+        // 双击注入 → 停靠保持。
+        let fx = c.step(env, Event::ItemDoubleClicked(1));
+        assert_eq!(inject_path(&fx).as_deref(), Some("D:\\Games"));
+        assert!(!has_park(&fx), "overlay must stay docked after injection");
+        assert!(c.is_visible());
+
+        // 注入后仍可再次注入（会话未被抑制 → 与 ESC 的收起行为区分开）。
+        let fx = c.step(env, Event::Key(KeyAction::Enter));
+        assert!(
+            inject_path(&fx).is_some(),
+            "session must remain active so another item can be injected"
+        );
+        assert!(!has_park(&fx));
+        assert!(c.is_visible());
+    }
+
+    /// 多个文件对话框同时打开时，GUI 只跟随「活动中（前台）」的那一个：监视器只上报
+    /// 前台 `#32770`（见 monitor::get_active_file_dialog），控制器据此把悬浮条迁移到
+    /// 当前活动对话框，绝不为后台对话框显示第二个悬浮条。
+    #[test]
+    fn overlay_follows_active_dialog_when_multiple_open() {
+        let mut c = Controller::new();
+        let t = base();
+
+        // 对话框 A（hwnd 1）在前台：停靠到 A 正下方。
+        let fx = c.step(
+            Env {
+                now: t,
+                foreground_hwnd: 1,
+            },
+            Event::DialogUpdate(Some(dialog(1))),
+        );
+        assert!(fx.contains(&Effect::Dock {
+            x: 100,
+            y: 600,
+            width: 600,
+            height: 140,
+        }));
+
+        // 用户切到第二个对话框 B（hwnd 2，位置不同），B 成为前台，监视器改报 B。
+        let mut b = dialog(2);
+        b.x = 900;
+        b.y = 100;
+        let fx = c.step(
+            Env {
+                now: t + Duration::from_millis(8),
+                foreground_hwnd: 2,
+            },
+            Event::DialogUpdate(Some(b)),
+        );
+
+        // 悬浮条迁移到活动中的 B（新会话 → 刷新路径 + 停靠到 B 的几何），只此一个。
+        assert!(fx.contains(&Effect::Dock {
+            x: 900,
+            y: 500,
+            width: 600,
+            height: 140,
+        }));
+        assert!(fx.contains(&Effect::RefreshPaths));
+        assert!(c.is_visible());
     }
 }

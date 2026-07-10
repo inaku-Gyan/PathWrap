@@ -100,7 +100,7 @@
 **目标**：当用户在 UI 中选择了一个路径后，强制修改系统对话框的工作目录。
 
 - [x] **Task 4.1**: 在 `src/os/dialog.rs` 实现注入逻辑。方案A：基于消息传递 `SendMessageAction`，向对话框发送 `CDM_SETFOLDERPATH` 消息，或模拟键盘输入绝对路径后回车（方案B，备用）。
-- [x] **Task 4.2**: 在 `src/ui/window.rs` 捕获到用户的“回车确认”或“鼠标双击”动作后，调用 Task 4.1 的注入逻辑，并在成功后隐藏当前 egui UI 窗口。
+- [x] **Task 4.2**: 在 `src/ui/window.rs` 捕获到用户的“回车确认”或“鼠标双击”动作后，调用 Task 4.1 的注入逻辑。注入后**保持悬浮条停靠**（对话框只是跳转到该文件夹、仍开着，用户可继续挑选/再次注入）；收起悬浮条改由 `ESC` 负责（`Controller::confirm` 只注入不 Park/不抑制，`suppress_current_session` 专供 ESC）。
 - [x] **[阶段四自检工作流]**: just check --ci -> cargo test -> commit (若有修正)
 
 ### 阶段五：整体验收与后台常驻优化

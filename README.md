@@ -92,9 +92,10 @@ The project root provides a `Justfile` with the following base commands:
 The suite is a three-layer pyramid:
 
 1. **Controller unit tests** ([src/core/controller.rs](src/core/controller.rs)): the state
-   machine's full behavior — docking, foreground debounce, `None`-grace hide, ESC/inject
-   suppression, injection ordering (hook off before inject), dock de-duplication — driven with
-   injected time. Pure and millisecond-fast.
+   machine's full behavior — docking, foreground debounce, `None`-grace hide, ESC suppression,
+   injection ordering (hook off before inject) with the overlay staying docked afterwards,
+   following the active dialog when several are open, dock de-duplication — driven with injected
+   time. Pure and millisecond-fast.
 2. **Glue-layer UI tests** ([src/ui/window.rs](src/ui/window.rs)): [`egui_kittest`] drives the
    real renderer via AccessKit — filtered rendering, clicking an item emitting the right event,
    the search row's placeholder/echo.
