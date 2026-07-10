@@ -122,7 +122,7 @@ mod tests {
         let paths = vec![
             "C:\\Work".to_string(),
             "D:\\Games".to_string(),
-            "C:\\workspace\\PathWrap".to_string(),
+            "C:\\workspace\\PathWarp".to_string(),
         ];
 
         let result = filtered_paths(&paths, "WORK");
@@ -130,7 +130,7 @@ mod tests {
             result,
             vec![
                 "C:\\Work".to_string(),
-                "C:\\workspace\\PathWrap".to_string()
+                "C:\\workspace\\PathWarp".to_string()
             ]
         );
     }
