@@ -24,9 +24,11 @@ use windows::Win32::UI::Input::KeyboardAndMouse::{
     SetFocus,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
-    BringWindowToTop, EnumWindows, GetClassNameW, GetForegroundWindow, GetWindowRect,
+    BringWindowToTop, GWL_EXSTYLE, GetForegroundWindow, GetWindowLongPtrW, GetWindowRect,
     GetWindowTextW, GetWindowThreadProcessId, IsWindowVisible, SetCursorPos, SetForegroundWindow,
+    WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW, WS_EX_TOPMOST,
 };
+use windows::Win32::UI::WindowsAndMessaging::{EnumWindows, GetClassNameW};
 use windows::core::BOOL;
 
 // ---------- 进程管理 ----------
@@ -306,6 +308,60 @@ fn wait_for<T>(timeout: Duration, mut probe: impl FnMut() -> Option<T>) -> Optio
 
 // ---------- 测试用例 ----------
 
+/// 诊断辅助：探明点击悬浮条时它为何被激活——运行时它到底有没有 WS_EX_NOACTIVATE，
+/// 点击后前台落到谁身上。
+#[test]
+#[ignore = "diagnostic helper; run manually"]
+fn diagnose_overlay_activation() {
+    let ex_flags = |raw: isize| -> String {
+        let ex = unsafe { GetWindowLongPtrW(hwnd_of(raw), GWL_EXSTYLE) } as u32;
+        let mut names = Vec::new();
+        if ex & WS_EX_NOACTIVATE.0 != 0 {
+            names.push("NOACTIVATE");
+        }
+        if ex & WS_EX_TOOLWINDOW.0 != 0 {
+            names.push("TOOLWINDOW");
+        }
+        if ex & WS_EX_TOPMOST.0 != 0 {
+            names.push("TOPMOST");
+        }
+        format!("0x{ex:08X} [{}]", names.join("|"))
+    };
+
+    let (_app, app_pid) = spawn_pathwarp();
+    let mut host = DialogHost::spawn();
+    let dialog = host.open_dialog();
+    let (overlay, rect) = wait_for(Duration::from_secs(5), || overlay_onscreen(app_pid))
+        .expect("overlay did not dock");
+
+    eprintln!("overlay={overlay} dialog={dialog}");
+    eprintln!("overlay ex-style BEFORE click: {}", ex_flags(overlay));
+    eprintln!("foreground BEFORE click: {}", unsafe {
+        GetForegroundWindow().0 as isize
+    });
+
+    let center = center_of(&rect);
+    click_at(center.x, center.y);
+
+    for i in 0..6 {
+        std::thread::sleep(Duration::from_millis(50));
+        let fg = unsafe { GetForegroundWindow().0 as isize };
+        let tag = if fg == overlay {
+            "OVERLAY"
+        } else if fg == dialog {
+            "dialog"
+        } else {
+            "other"
+        };
+        eprintln!(
+            "  t+{}ms fg={fg} ({tag}) class='{}'",
+            (i + 1) * 50,
+            class_of(fg)
+        );
+    }
+    eprintln!("overlay ex-style AFTER click: {}", ex_flags(overlay));
+}
+
 /// 诊断辅助：dump 被测进程在「空闲 / 对话框打开 / 对话框关闭」三个阶段的窗口清单。
 /// 排查探针误匹配（winit/wgpu 辅助窗口）时手动运行。
 #[test]
@@ -341,22 +397,18 @@ fn dump_windows() {
     dump(app_pid, "dialog closed");
 }
 
-/// 回归（核心）：点击悬浮条绝不能激活悬浮窗自身——这正是用户报告“点击即消失”的
-/// 根因（旧实现里点击激活悬浮窗 → 对话框失去前台 → 悬浮条被隐藏）。
+/// 回归（核心）：点击悬浮条后，① 悬浮窗自身绝不能被激活，② 对话框必须仍是前台，
+/// ③ 悬浮条必须仍停靠可见——这正是用户报告“点击即消失”的根因场景。
 ///
-/// 断言口径为“悬浮窗自身永不成为前台”，对环境里其它抢焦点的工具（如同时运行的
-/// Listary，会在文件对话框获焦时弹出自己的搜索条）鲁棒——那类干扰会抢走对话框的
-/// 前台，但绝不会把前台交给*我们的*悬浮窗；只有本 bug 复发时悬浮窗才会自我激活。
-///
-/// 停靠持续性（点击后仍紧贴对话框）依赖干净桌面，见 `overlay_recovers_after_click_and_reopen`
-/// 与 `window_ext` 的确定性子类化单测。
+/// 需要干净桌面：其它会在文件对话框获焦时抢前台的工具（如 Listary）会抢走对话框的
+/// 前台从而使悬浮条被正常收起，导致 ②③ 误判。运行前请关闭此类工具。
 #[test]
-#[ignore = "requires interactive desktop; run via `just e2e`"]
-fn clicking_overlay_never_activates_it() {
+#[ignore = "requires a clean interactive desktop (close Listary etc.); run via `just e2e`"]
+fn clicking_overlay_keeps_it_docked_and_dialog_foreground() {
     let (_app, app_pid) = spawn_pathwarp();
     let mut host = DialogHost::spawn();
 
-    host.open_dialog();
+    let dialog = host.open_dialog();
     let (overlay_hwnd, overlay_rect) =
         wait_for(Duration::from_secs(5), || overlay_onscreen(app_pid))
             .expect("overlay did not dock after dialog opened");
@@ -364,17 +416,23 @@ fn clicking_overlay_never_activates_it() {
     let center = center_of(&overlay_rect);
     click_at(center.x, center.y);
 
-    // 点击后连续采样一段时间：悬浮窗自身在任何时刻都不得成为前台窗口。
-    for _ in 0..10 {
-        std::thread::sleep(Duration::from_millis(50));
-        let fg = unsafe { GetForegroundWindow().0 as isize };
-        assert_ne!(
-            fg,
-            overlay_hwnd,
-            "overlay window activated itself on click (WS_EX_NOACTIVATE / MA_NOACTIVATE regression); fg_class='{}'",
-            class_of(fg),
-        );
-    }
+    // 给足任何潜在的去抖/隐藏窗口时间，再断言状态已稳定。
+    std::thread::sleep(Duration::from_millis(600));
+
+    let fg = unsafe { GetForegroundWindow().0 as isize };
+    assert_ne!(
+        fg, overlay_hwnd,
+        "overlay window activated itself on click (WS_EX_NOACTIVATE / MA_NOACTIVATE regression)"
+    );
+    assert!(
+        is_foreground(dialog),
+        "clicking the overlay stole foreground from the dialog; fg_class='{}'",
+        class_of(fg),
+    );
+    assert!(
+        overlay_onscreen(app_pid).is_some(),
+        "overlay disappeared after being clicked"
+    );
 }
 
 /// 回归：点击悬浮条后（用户报告触发点），关闭并重开对话框，悬浮条必须再次出现。

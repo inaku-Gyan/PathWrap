@@ -25,13 +25,21 @@ decoupled by channels. Key design decisions:
   only collects events (dialog channel, keyboard hook, egui mouse responses), calls `step`,
   and executes the returned `Effect`s — it contains no decision logic.
 - **Non-activating overlay** ([src/os/window_ext.rs](src/os/window_ext.rs)): the eframe window
-  carries `WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW | WS_EX_TOPMOST` (applied with
-  `SWP_FRAMECHANGED` so it takes effect immediately), **and** the window procedure is
-  subclassed to answer `WM_MOUSEACTIVATE` with `MA_NOACTIVATE`. Together these guarantee that
-  clicking the overlay never activates it or moves foreground off the dialog. "Hiding" moves
-  the window off-screen while keeping it `WS_VISIBLE` (never `SW_HIDE`) — a hidden window stops
-  receiving paints and would starve eframe's event loop. Docking uses `SetWindowPos` in
+  carries `WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW | WS_EX_TOPMOST`, **re-asserted every frame** in
+  [src/app.rs](src/app.rs) — winit recomputes and rewrites `GWL_EXSTYLE` after our initial
+  apply (wiping `WS_EX_NOACTIVATE`), so a one-time set does not hold; the per-frame idempotent
+  re-assert is the load-bearing guarantee. The window procedure is additionally subclassed to
+  answer `WM_MOUSEACTIVATE` with `MA_NOACTIVATE` as a second line of defence. Together these
+  ensure clicking the overlay never activates it or moves foreground off the dialog. "Hiding"
+  moves the window off-screen while keeping it `WS_VISIBLE` (never `SW_HIDE`) — a hidden window
+  stops receiving paints and would starve eframe's event loop. Docking uses `SetWindowPos` in
   **physical pixels** matched to the dialog's DWM frame bounds — no DPI conversion, no seam.
+- **glow renderer** ([src/main.rs](src/main.rs), `Cargo.toml`): eframe is pinned to the glow
+  (OpenGL) backend instead of the default wgpu. wgpu's Windows HWND surface only advertises an
+  opaque `CompositeAlphaMode`, so a transparent window renders its transparent pixels as black;
+  glow composites transparency via the window's own alpha + DWM, giving the overlay real
+  rounded corners and drop shadow. It also avoids noisy Vulkan-loader errors from unrelated
+  third-party layers.
 - **Global keyboard hook** ([src/os/input_hook.rs](src/os/input_hook.rs)): because a
   non-activating window can't hold keyboard focus, a `WH_KEYBOARD_LL` hook — gated to
   "overlay visible AND dialog foreground" — intercepts typing/navigation keys and feeds them to

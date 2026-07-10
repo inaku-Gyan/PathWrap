@@ -59,13 +59,12 @@ pub fn apply_overlay_ex_styles(handle: isize) -> bool {
 }
 
 /// 子类化窗口过程，对 `WM_MOUSEACTIVATE` 返回 `MA_NOACTIVATE`：点击悬浮窗永不激活它。
-pub fn install_noactivate_subclass(handle: isize) {
+/// 返回是否成功安装。
+pub fn install_noactivate_subclass(handle: isize) -> bool {
     if handle == 0 {
-        return;
+        return false;
     }
-    unsafe {
-        let _ = SetWindowSubclass(hwnd(handle), Some(subclass_proc), SUBCLASS_ID, 0);
-    }
+    unsafe { SetWindowSubclass(hwnd(handle), Some(subclass_proc), SUBCLASS_ID, 0).as_bool() }
 }
 
 unsafe extern "system" fn subclass_proc(

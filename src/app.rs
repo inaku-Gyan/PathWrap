@@ -28,7 +28,10 @@ fn extract_hwnd(handle: &impl HasWindowHandle) -> isize {
 pub struct PathWarpApp {
     /// 悬浮窗自身的 HWND（首帧从 eframe Frame 获取，0 表示尚未就绪）。
     overlay_hwnd: isize,
-    styles_applied: bool,
+    /// 子类化只装一次（幂等，装成功后置真）。
+    subclassed: bool,
+    /// 启动阶段是否已 park 过一次（避免默认位置残留）。
+    parked_once: bool,
 
     dialog_rx: Receiver<Option<DialogInfo>>,
     /// 低层键盘钩子送来的输入意图（悬浮条为非激活窗，无法用 egui 接收键盘）。
@@ -45,34 +48,46 @@ impl PathWarpApp {
     ) -> Self {
         let mut app = Self {
             overlay_hwnd: extract_hwnd(cc),
-            styles_applied: false,
+            subclassed: false,
+            parked_once: false,
             dialog_rx,
             key_rx,
             controller: Controller::new(),
         };
         // 尽早应用非激活样式并停靠到屏幕外，避免启动时窗口在默认位置可见。
-        app.ensure_overlay_window_by_hwnd(app.overlay_hwnd);
+        app.ensure_overlay_window(None);
         app
     }
 
-    fn ensure_overlay_window(&mut self, frame: &eframe::Frame) {
-        if self.overlay_hwnd == 0 {
+    /// 每帧确保悬浮窗的非激活状态就绪（幂等）。
+    ///
+    /// 关键：扩展样式**每帧重新断言**——winit 在启动/显示阶段会用自己算出的
+    /// `GWL_EXSTYLE` 覆盖我们首次设置的值（实测会抹掉 `WS_EX_NOACTIVATE`/`TOOLWINDOW`），
+    /// 单次设置守不住。`apply_overlay_ex_styles` 幂等：位齐了就只读不写。子类化与
+    /// 首次 park 各只做一次。
+    fn ensure_overlay_window(&mut self, frame: Option<&eframe::Frame>) {
+        if self.overlay_hwnd == 0
+            && let Some(frame) = frame
+        {
             self.overlay_hwnd = extract_hwnd(frame);
         }
-        self.ensure_overlay_window_by_hwnd(self.overlay_hwnd);
-    }
-
-    /// 首帧确保拿到 HWND 并应用非激活扩展样式 + 子类化 + 立即停靠到屏幕外（幂等）。
-    fn ensure_overlay_window_by_hwnd(&mut self, hwnd: isize) {
-        self.overlay_hwnd = hwnd;
-        if hwnd == 0 || self.styles_applied {
+        let hwnd = self.overlay_hwnd;
+        if hwnd == 0 {
             return;
         }
-        self.styles_applied = window_ext::apply_overlay_ex_styles(hwnd);
-        if self.styles_applied {
-            window_ext::install_noactivate_subclass(hwnd);
+
+        window_ext::apply_overlay_ex_styles(hwnd);
+
+        if !self.subclassed {
+            self.subclassed = window_ext::install_noactivate_subclass(hwnd);
+            log::debug!(
+                "[overlay] hwnd={hwnd} subclass_installed={}",
+                self.subclassed
+            );
+        }
+        if !self.parked_once {
             window_ext::park(hwnd);
-            log::debug!("[overlay] non-activating styles + subclass applied to hwnd={hwnd}");
+            self.parked_once = true;
         }
     }
 
@@ -102,7 +117,7 @@ impl eframe::App for PathWarpApp {
     }
 
     fn ui(&mut self, root: &mut egui::Ui, frame: &mut eframe::Frame) {
-        self.ensure_overlay_window(frame);
+        self.ensure_overlay_window(Some(frame));
 
         let env = Env {
             now: Instant::now(),
