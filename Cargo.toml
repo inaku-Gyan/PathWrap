@@ -6,7 +6,13 @@ description = "Windows file dialog path switching tool"
 default-run = "PathWarp"
 
 [dependencies]
-eframe = "0.35"
+# glow (OpenGL) 渲染器：Windows 上经窗口自身 alpha + DWM 合成，支持真正的窗口透明；
+# 默认的 wgpu 渲染器对 HWND surface 只报告 Opaque alpha，透明区域会渲染成黑。
+eframe = { version = "0.35", default-features = false, features = [
+    "glow",
+    "default_fonts",
+    "accesskit",
+] }
 egui = "0.35"
 raw-window-handle = "0.6"
 
