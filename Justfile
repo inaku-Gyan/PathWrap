@@ -30,6 +30,10 @@ build:
 test:
     cargo test
 
+# Run Windows E2E tests (real dialogs + real mouse input; needs interactive desktop)
+e2e:
+    cargo test --test e2e -- --ignored --test-threads=1 --nocapture
+
 # Clean build artifacts
 clean:
     cargo clean
