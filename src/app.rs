@@ -1,5 +1,7 @@
+use crate::os::input_hook::{self, KeyAction};
 use crate::os::monitor::DialogInfo;
 use crate::os::window_ext;
+use crate::ui::window::FrameIntents;
 use raw_window_handle::{HasWindowHandle, RawWindowHandle};
 use std::sync::mpsc::Receiver;
 use std::time::{Duration, Instant};
@@ -28,6 +30,8 @@ pub struct PathWarpApp {
     styles_applied: bool,
 
     pub dialog_rx: Receiver<Option<DialogInfo>>,
+    /// 低层键盘钩子送来的输入意图（悬浮条为非激活窗，无法用 egui 接收键盘）。
+    key_rx: Receiver<KeyAction>,
     pub target_dialog: Option<DialogInfo>,
     pub pending_none_since: Option<Instant>,
 
@@ -42,12 +46,17 @@ pub struct PathWarpApp {
 }
 
 impl PathWarpApp {
-    pub fn new(cc: &eframe::CreationContext<'_>, dialog_rx: Receiver<Option<DialogInfo>>) -> Self {
+    pub fn new(
+        cc: &eframe::CreationContext<'_>,
+        dialog_rx: Receiver<Option<DialogInfo>>,
+        key_rx: Receiver<KeyAction>,
+    ) -> Self {
         Self {
             overlay_hwnd: extract_hwnd(cc),
             styles_applied: false,
 
             dialog_rx,
+            key_rx,
             target_dialog: None,
             pending_none_since: None,
 
@@ -100,7 +109,28 @@ impl PathWarpApp {
     fn hide_overlay_by_system(&mut self) {
         self.target_dialog = None;
         self.pending_none_since = None;
+        self.search_query.clear();
+        self.selected_index = 0;
         self.set_overlay_visible(false);
+    }
+
+    /// 排空键盘钩子通道，直接消费文本编辑类动作，返回本帧的导航/确认/退出意图。
+    fn drain_key_actions(&mut self) -> (FrameIntents, bool) {
+        let mut intents = FrameIntents::default();
+        let mut escape = false;
+        for action in self.key_rx.try_iter() {
+            match action {
+                KeyAction::Char(c) => self.search_query.push(c),
+                KeyAction::Backspace => {
+                    self.search_query.pop();
+                }
+                KeyAction::Up => intents.nav_up = true,
+                KeyAction::Down => intents.nav_down = true,
+                KeyAction::Enter => intents.confirm = true,
+                KeyAction::Escape => escape = true,
+            }
+        }
+        (intents, escape)
     }
 
     /// 以物理像素把悬浮条停靠到对话框正下方，并显示（不抢焦点）。
@@ -199,15 +229,24 @@ impl eframe::App for PathWarpApp {
         self.ensure_overlay_window(frame);
         self.sync_dialog_state_from_channel(ctx);
 
-        if let Some(dialog) = self.target_dialog {
-            // 唯一显隐门控：目标对话框仍是前台窗口时才显示。
-            // 悬浮窗为非激活窗口，点击它不会改变前台，故此判定在交互期间保持为真。
-            if crate::os::monitor::is_foreground_hwnd(dialog.hwnd) {
-                self.place_overlay_for_dialog(dialog);
-                crate::ui::window::render(ctx, self);
-            } else {
-                self.set_overlay_visible(false);
+        // 唯一显隐门控：目标对话框仍是前台窗口时才显示。
+        // 悬浮窗为非激活窗口，点击它不会改变前台，故此判定在交互期间保持为真。
+        let active = self
+            .target_dialog
+            .is_some_and(|d| crate::os::monitor::is_foreground_hwnd(d.hwnd));
+
+        // 通知键盘钩子：仅在悬浮条可见时截获打字/导航键，否则全部透传给对话框。
+        input_hook::set_active(active);
+
+        if active {
+            let (intents, escape) = self.drain_key_actions();
+            if escape {
+                self.hide_overlay_by_user();
+                input_hook::set_active(false);
                 egui::CentralPanel::default().show(ctx, |_| {});
+            } else if let Some(dialog) = self.target_dialog {
+                self.place_overlay_for_dialog(dialog);
+                crate::ui::window::render(ctx, self, intents);
             }
         } else {
             self.set_overlay_visible(false);

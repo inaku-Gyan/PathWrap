@@ -1,5 +1,13 @@
 use crate::app::PathWarpApp;
-use egui::{Context, Key};
+use egui::Context;
+
+/// 本帧来自键盘钩子的导航/确认意图（Char/Backspace 已由 app 直接消费）。
+#[derive(Debug, Default, Clone, Copy)]
+pub struct FrameIntents {
+    pub nav_up: bool,
+    pub nav_down: bool,
+    pub confirm: bool,
+}
 
 fn filtered_paths(paths: &[String], search_query: &str) -> Vec<String> {
     let query_lower = search_query.to_lowercase();
@@ -46,10 +54,19 @@ fn handle_path_item_interaction(
     (next_selected_index, should_inject)
 }
 
-pub fn render(ctx: &Context, app: &mut PathWarpApp) {
-    if ctx.input(|i| i.key_pressed(Key::Escape)) {
-        app.hide_overlay_by_user();
-        return;
+pub fn render(ctx: &Context, app: &mut PathWarpApp, intents: FrameIntents) {
+    let filtered = filtered_paths(&app.paths, &app.search_query);
+    app.selected_index =
+        next_selected_index(app.selected_index, filtered.len(), intents.nav_up, intents.nav_down);
+
+    // 收集本帧要注入的目标，实际注入放到闭包外执行，避免与 UI 借用冲突。
+    let mut inject_target: Option<(isize, String)> = None;
+
+    if intents.confirm
+        && let Some(selected) = filtered.get(app.selected_index)
+        && let Some(dialog) = app.target_dialog
+    {
+        inject_target = Some((dialog.hwnd, selected.clone()));
     }
 
     egui::CentralPanel::default()
@@ -59,54 +76,36 @@ pub fn render(ctx: &Context, app: &mut PathWarpApp) {
                 .inner_margin(10.0),
         )
         .show(ctx, |ui| {
-            let search_response = ui.text_edit_singleline(&mut app.search_query);
-            search_response.request_focus();
-            if search_response.lost_focus() && ctx.input(|i| i.key_pressed(Key::Enter)) {
-                search_response.request_focus();
-            }
-
-            let filtered_paths = filtered_paths(&app.paths, &app.search_query);
-            app.selected_index = next_selected_index(
-                app.selected_index,
-                filtered_paths.len(),
-                ctx.input(|i| i.key_pressed(Key::ArrowUp)),
-                ctx.input(|i| i.key_pressed(Key::ArrowDown)),
-            );
-
-            if ctx.input(|i| i.key_pressed(Key::Enter))
-                && let Some(selected) = filtered_paths.get(app.selected_index)
-                && let Some(dialog) = app.target_dialog
-            {
-                crate::os::dialog::inject_folder_path(dialog.hwnd, selected.as_str());
-            }
-
+            // 搜索行为纯展示：输入来自全局键盘钩子，而非 egui 焦点。
+            ui.label(format!("🔎 {}", app.search_query));
             ui.separator();
 
             egui::ScrollArea::vertical().show(ui, |ui| {
                 ui.with_layout(egui::Layout::top_down_justified(egui::Align::Min), |ui| {
-                    for (idx, path) in filtered_paths.iter().enumerate() {
+                    for (idx, path) in filtered.iter().enumerate() {
                         let is_selected = idx == app.selected_index;
                         let label = egui::SelectableLabel::new(is_selected, path.as_str());
                         let response = ui.add(label);
-                        let (next_selected_index, should_inject) = handle_path_item_interaction(
+                        let (next_idx, should_inject) = handle_path_item_interaction(
                             app.selected_index,
                             idx,
                             response.clicked(),
                             response.double_clicked(),
                             app.target_dialog.is_some(),
                         );
-                        app.selected_index = next_selected_index;
+                        app.selected_index = next_idx;
                         if should_inject && let Some(dialog) = app.target_dialog {
-                            crate::os::dialog::inject_folder_path(dialog.hwnd, path.as_str());
+                            inject_target = Some((dialog.hwnd, path.clone()));
                         }
                     }
                 });
             });
         });
 
-    // Handle background drag to move window without blocking clicks on children
-    if ctx.input(|i| i.pointer.primary_down()) && !ctx.wants_pointer_input() {
-        ctx.send_viewport_cmd(egui::ViewportCommand::StartDrag);
+    if let Some((hwnd, path)) = inject_target {
+        crate::os::dialog::inject_folder_path(hwnd, &path);
+        // 选定后隐藏并抑制当前对话框会话，避免立即被重新拉起。
+        app.hide_overlay_by_user();
     }
 }
 
