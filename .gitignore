@@ -1,1 +1,6 @@
 /target
+
+# 本地临时/冒烟测试输出
+/smoke_*.txt
+/se.txt
+/so.txt
