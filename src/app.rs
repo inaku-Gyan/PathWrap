@@ -1,36 +1,32 @@
 use crate::os::monitor::DialogInfo;
+use crate::os::window_ext;
+use raw_window_handle::{HasWindowHandle, RawWindowHandle};
 use std::sync::mpsc::Receiver;
 use std::time::{Duration, Instant};
 
 const HIDE_GRACE_MS: u64 = 120;
 const UI_TICK_MS: u64 = 30;
-const OVERLAY_HEIGHT: f32 = 140.0;
-const OVERLAY_GAP: f32 = 0.0;
-// Cover the brief click-time focus handoff between file dialog and PathWrap window on Windows.
-const FOCUS_TRANSITION_GRACE_MS: u64 = 180;
+/// 悬浮条逻辑高度（像素，按对话框 DPI 缩放为物理像素）。
+const OVERLAY_HEIGHT_LOGICAL: u32 = 140;
+/// 悬浮条与对话框下边缘的物理像素间距（0 = 紧贴）。
+const OVERLAY_GAP: i32 = 0;
 
-fn dialog_pixels_per_point(dialog: DialogInfo) -> f32 {
-    // Per-Monitor V2: convert physical pixels with the dialog window's monitor DPI.
-    (dialog.dpi as f32 / 96.0).max(0.1)
-}
-
-fn should_render_overlay(
-    dialog_focused: bool,
-    gui_focused: bool,
-    pointer_interacting: bool,
-    within_focus_grace: bool,
-) -> bool {
-    dialog_focused || gui_focused || (pointer_interacting && within_focus_grace)
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum OverlayState {
-    Visible,
-    HiddenByUser,
-    HiddenBySystem,
+/// 从实现了 `HasWindowHandle` 的对象（CreationContext / Frame）中取 Win32 HWND。
+fn extract_hwnd(handle: &impl HasWindowHandle) -> isize {
+    match handle.window_handle() {
+        Ok(h) => match h.as_raw() {
+            RawWindowHandle::Win32(win32) => win32.hwnd.get(),
+            _ => 0,
+        },
+        Err(_) => 0,
+    }
 }
 
 pub struct PathWarpApp {
+    /// 悬浮窗自身的 HWND（首帧从 eframe Frame 获取，0 表示尚未就绪）。
+    overlay_hwnd: isize,
+    styles_applied: bool,
+
     pub dialog_rx: Receiver<Option<DialogInfo>>,
     pub target_dialog: Option<DialogInfo>,
     pub pending_none_since: Option<Instant>,
@@ -39,18 +35,18 @@ pub struct PathWarpApp {
     pub search_query: String,
     pub selected_index: usize,
 
-    overlay_state: OverlayState,
+    /// 用户按 ESC 主动隐藏时记录被抑制的对话框，避免同一会话立即被重新拉起。
     user_hidden_dialog_hwnd: Option<isize>,
-    last_dialog_focused: bool,
-    pub last_applied_visible: Option<bool>,
-    pub last_applied_dialog: Option<DialogInfo>,
-    pub last_applied_scale: Option<f32>,
-    pub last_focus_allowed_at: Option<Instant>,
+    last_applied_visible: Option<bool>,
+    last_applied_dialog: Option<DialogInfo>,
 }
 
 impl PathWarpApp {
-    pub fn new(_cc: &eframe::CreationContext<'_>, dialog_rx: Receiver<Option<DialogInfo>>) -> Self {
+    pub fn new(cc: &eframe::CreationContext<'_>, dialog_rx: Receiver<Option<DialogInfo>>) -> Self {
         Self {
+            overlay_hwnd: extract_hwnd(cc),
+            styles_applied: false,
+
             dialog_rx,
             target_dialog: None,
             pending_none_since: None,
@@ -59,138 +55,74 @@ impl PathWarpApp {
             search_query: String::new(),
             selected_index: 0,
 
-            overlay_state: OverlayState::HiddenBySystem,
             user_hidden_dialog_hwnd: None,
-            last_dialog_focused: false,
             last_applied_visible: None,
             last_applied_dialog: None,
-            last_applied_scale: None,
-            last_focus_allowed_at: None,
         }
     }
 
-    fn transition_overlay_state(&mut self, next: OverlayState, reason: &str) {
-        if self.overlay_state != next {
-            log::debug!(
-                "[overlay] state transition: {:?} -> {:?} ({})",
-                self.overlay_state,
-                next,
-                reason
-            );
-            self.overlay_state = next;
+    /// 首帧确保拿到 HWND 并应用非激活扩展样式（幂等）。
+    fn ensure_overlay_window(&mut self, frame: &eframe::Frame) {
+        if self.overlay_hwnd == 0 {
+            self.overlay_hwnd = extract_hwnd(frame);
+        }
+        if self.overlay_hwnd != 0 && !self.styles_applied {
+            self.styles_applied = window_ext::apply_overlay_ex_styles(self.overlay_hwnd);
+            if self.styles_applied {
+                log::debug!("[overlay] applied non-activating ex-styles to hwnd={}", self.overlay_hwnd);
+            }
         }
     }
 
-    pub fn set_overlay_visible(&mut self, ctx: &eframe::egui::Context, visible: bool) {
-        if visible {
-            self.transition_overlay_state(OverlayState::Visible, "overlay requested visible");
-        } else if self.overlay_state == OverlayState::Visible {
-            self.transition_overlay_state(
-                OverlayState::HiddenBySystem,
-                "overlay requested hidden while visible",
-            );
-        }
-
+    fn set_overlay_visible(&mut self, visible: bool) {
         if self.last_applied_visible == Some(visible) {
             return;
         }
-
         self.last_applied_visible = Some(visible);
-
         if !visible {
-            ctx.send_viewport_cmd(egui::ViewportCommand::WindowLevel(
-                egui::WindowLevel::Normal,
-            ));
-            ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(egui::vec2(1.0, 1.0)));
-            ctx.send_viewport_cmd(egui::ViewportCommand::OuterPosition(egui::pos2(
-                -10000.0, -10000.0,
-            )));
+            window_ext::hide(self.overlay_hwnd);
             self.last_applied_dialog = None;
-            self.last_applied_scale = None;
+            log::debug!("[overlay] hidden");
         }
+        // 显示动作由 place_overlay_for_dialog 的 dock() 完成（显示+定位一次到位）。
     }
 
-    pub fn hide_overlay_by_user(&mut self, ctx: &eframe::egui::Context) {
+    pub fn hide_overlay_by_user(&mut self) {
         self.user_hidden_dialog_hwnd = self.target_dialog.map(|d| d.hwnd);
-        self.transition_overlay_state(
-            OverlayState::HiddenByUser,
-            "user pressed ESC, suppress current dialog session",
-        );
+        log::debug!("[overlay] user pressed ESC, suppress current dialog session");
         self.target_dialog = None;
         self.pending_none_since = None;
-        self.last_dialog_focused = false;
-        self.last_focus_allowed_at = None;
         self.search_query.clear();
         self.selected_index = 0;
-        self.set_overlay_visible(ctx, false);
+        self.set_overlay_visible(false);
     }
 
-    fn hide_overlay_by_system(&mut self, ctx: &eframe::egui::Context) {
-        self.transition_overlay_state(
-            OverlayState::HiddenBySystem,
-            "dialog lost from monitor detection",
-        );
+    fn hide_overlay_by_system(&mut self) {
         self.target_dialog = None;
         self.pending_none_since = None;
-        self.last_dialog_focused = false;
-        self.last_focus_allowed_at = None;
-        self.set_overlay_visible(ctx, false);
+        self.set_overlay_visible(false);
     }
 
-    fn place_overlay_for_dialog(
-        &mut self,
-        ctx: &eframe::egui::Context,
-        dialog: DialogInfo,
-        dialog_focused: bool,
-    ) {
-        let was_dialog_focused = self.last_dialog_focused;
-        let focus_returned = dialog_focused && !was_dialog_focused;
-        let focus_lost = !dialog_focused && was_dialog_focused;
-        self.last_dialog_focused = dialog_focused;
-
-        if focus_returned {
-            log::debug!(
-                "[overlay] focus returned to dialog {}, apply one-shot topmost and resync",
-                dialog.hwnd
-            );
-            ctx.send_viewport_cmd(egui::ViewportCommand::WindowLevel(
-                egui::WindowLevel::AlwaysOnTop,
-            ));
-            self.last_applied_dialog = None;
-        } else if focus_lost {
-            ctx.send_viewport_cmd(egui::ViewportCommand::WindowLevel(
-                egui::WindowLevel::Normal,
-            ));
-        }
-
-        let pixels_per_point = dialog_pixels_per_point(dialog);
-        let needs_update = self.last_applied_dialog != Some(dialog)
-            || self
-                .last_applied_scale
-                .map(|s| (s - pixels_per_point).abs() > 0.01)
-                .unwrap_or(true)
-            || self.last_applied_visible != Some(true)
-            || focus_returned;
-
+    /// 以物理像素把悬浮条停靠到对话框正下方，并显示（不抢焦点）。
+    fn place_overlay_for_dialog(&mut self, dialog: DialogInfo) {
+        let needs_update =
+            self.last_applied_dialog != Some(dialog) || self.last_applied_visible != Some(true);
         if !needs_update {
             return;
         }
 
-        let ui_height = OVERLAY_HEIGHT;
-        let pos_x = dialog.x as f32 / pixels_per_point;
-        let pos_y = (dialog.y + dialog.height) as f32 / pixels_per_point + OVERLAY_GAP;
-        let width = dialog.width as f32 / pixels_per_point;
+        let scaled_height = OVERLAY_HEIGHT_LOGICAL.saturating_mul(dialog.dpi) / 96;
+        let height = i32::try_from(scaled_height).unwrap_or(OVERLAY_HEIGHT_LOGICAL as i32);
 
-        let new_pos = egui::pos2(pos_x, pos_y);
-        let new_size = egui::vec2(width, ui_height);
+        let x = dialog.x;
+        let y = dialog.y + dialog.height + OVERLAY_GAP;
+        let width = dialog.width;
 
-        log::trace!("[overlay] sync position={:?}, size={:?}", new_pos, new_size);
-        ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(new_size));
-        ctx.send_viewport_cmd(egui::ViewportCommand::OuterPosition(new_pos));
+        log::trace!("[overlay] dock at ({}, {}) {}x{}", x, y, width, height);
+        window_ext::dock(self.overlay_hwnd, x, y, width, height);
 
         self.last_applied_dialog = Some(dialog);
-        self.last_applied_scale = Some(pixels_per_point);
-        self.set_overlay_visible(ctx, true);
+        self.last_applied_visible = Some(true);
     }
 
     fn sync_dialog_state_from_channel(&mut self, ctx: &eframe::egui::Context) {
@@ -233,14 +165,11 @@ impl PathWarpApp {
                     ctx.request_repaint_after(Duration::from_millis(UI_TICK_MS));
                 }
                 Some(since) => {
-                    if Instant::now().duration_since(since) >= Duration::from_millis(HIDE_GRACE_MS)
-                    {
+                    if Instant::now().duration_since(since) >= Duration::from_millis(HIDE_GRACE_MS) {
                         if self.user_hidden_dialog_hwnd.take().is_some() {
-                            log::debug!(
-                                "[overlay] release user suppression after dialog session ended"
-                            );
+                            log::debug!("[overlay] release user suppression after dialog session ended");
                         }
-                        self.hide_overlay_by_system(ctx);
+                        self.hide_overlay_by_system();
                     } else {
                         ctx.request_repaint_after(Duration::from_millis(UI_TICK_MS));
                     }
@@ -248,93 +177,46 @@ impl PathWarpApp {
             }
         }
 
-        if self.target_dialog.is_some() && self.pending_none_since.is_some() {
-            ctx.request_repaint_after(Duration::from_millis(UI_TICK_MS));
-        }
-
-        // Finalize hide even when `None` is only sent once.
+        // 即使 None 只到达一次，也要在宽限超时后收敛隐藏。
         if let Some(since) = self.pending_none_since
             && Instant::now().duration_since(since) >= Duration::from_millis(HIDE_GRACE_MS)
         {
             if self.user_hidden_dialog_hwnd.take().is_some() {
                 log::debug!("[overlay] release user suppression after grace timeout");
             }
-            self.hide_overlay_by_system(ctx);
+            self.hide_overlay_by_system();
         }
     }
 }
 
 impl eframe::App for PathWarpApp {
-    fn update(&mut self, ctx: &eframe::egui::Context, _frame: &mut eframe::Frame) {
+    fn clear_color(&self, _visuals: &egui::Visuals) -> [f32; 4] {
+        // 透明背景，让悬浮卡片的圆角与阴影落在透明区域上。
+        [0.0, 0.0, 0.0, 0.0]
+    }
+
+    fn update(&mut self, ctx: &eframe::egui::Context, frame: &mut eframe::Frame) {
+        self.ensure_overlay_window(frame);
         self.sync_dialog_state_from_channel(ctx);
 
         if let Some(dialog) = self.target_dialog {
-            let dialog_focused = crate::os::monitor::is_foreground_hwnd(dialog.hwnd);
-            let gui_focused = crate::os::monitor::is_foreground_current_process_window();
-            if dialog_focused || gui_focused {
-                self.last_focus_allowed_at = Some(Instant::now());
-            }
-            let pointer_interacting =
-                ctx.input(|i| i.pointer.any_down() || i.pointer.any_pressed());
-            let within_focus_grace = self
-                .last_focus_allowed_at
-                .map(|since| {
-                    Instant::now().duration_since(since)
-                        <= Duration::from_millis(FOCUS_TRANSITION_GRACE_MS)
-                })
-                .unwrap_or(false);
-
-            if should_render_overlay(
-                dialog_focused,
-                gui_focused,
-                pointer_interacting,
-                within_focus_grace,
-            ) {
-                self.place_overlay_for_dialog(ctx, dialog, dialog_focused);
+            // 唯一显隐门控：目标对话框仍是前台窗口时才显示。
+            // 悬浮窗为非激活窗口，点击它不会改变前台，故此判定在交互期间保持为真。
+            if crate::os::monitor::is_foreground_hwnd(dialog.hwnd) {
+                self.place_overlay_for_dialog(dialog);
                 crate::ui::window::render(ctx, self);
             } else {
-                self.last_dialog_focused = false;
-                self.transition_overlay_state(
-                    OverlayState::HiddenBySystem,
-                    "dialog and GUI both unfocused; hide overlay until focus returns",
-                );
-                self.set_overlay_visible(ctx, false);
+                self.set_overlay_visible(false);
                 egui::CentralPanel::default().show(ctx, |_| {});
             }
         } else {
-            self.last_focus_allowed_at = None;
-            self.set_overlay_visible(ctx, false);
+            self.set_overlay_visible(false);
             egui::CentralPanel::default().show(ctx, |_| {});
         }
 
+        // 跟踪期间持续重绘以平滑跟随对话框移动；空闲时不重绘以省电。
         if self.target_dialog.is_some() || self.pending_none_since.is_some() {
             ctx.request_repaint();
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::should_render_overlay;
-
-    #[test]
-    fn renders_when_dialog_focused() {
-        assert!(should_render_overlay(true, false, false, false));
-    }
-
-    #[test]
-    fn renders_when_gui_focused() {
-        assert!(should_render_overlay(false, true, false, false));
-    }
-
-    #[test]
-    fn keeps_rendering_during_click_transition_within_grace() {
-        assert!(should_render_overlay(false, false, true, true));
-    }
-
-    #[test]
-    fn hides_when_no_focus_and_no_graceful_interaction() {
-        assert!(!should_render_overlay(false, false, false, true));
-        assert!(!should_render_overlay(false, false, true, false));
     }
 }
