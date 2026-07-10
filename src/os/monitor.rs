@@ -2,7 +2,7 @@ use std::mem::size_of;
 use std::sync::mpsc::{Receiver, RecvTimeoutError, Sender};
 use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, Instant};
-use windows::Win32::Foundation::{BOOL, HWND, LPARAM, RECT};
+use windows::Win32::Foundation::{HWND, LPARAM, RECT};
 use windows::Win32::Graphics::Dwm::{DWMWA_EXTENDED_FRAME_BOUNDS, DwmGetWindowAttribute};
 use windows::Win32::UI::Accessibility::{HWINEVENTHOOK, SetWinEventHook, UnhookWinEvent};
 use windows::Win32::UI::HiDpi::GetDpiForWindow;
@@ -12,17 +12,10 @@ use windows::Win32::UI::WindowsAndMessaging::{
     IsWindow, IsWindowVisible, MSG, TranslateMessage, WINEVENT_OUTOFCONTEXT,
     WINEVENT_SKIPOWNPROCESS,
 };
+use windows::core::BOOL;
 use windows::core::w;
 
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct DialogInfo {
-    pub hwnd: isize,
-    pub x: i32,
-    pub y: i32,
-    pub width: i32,
-    pub height: i32,
-    pub dpi: u32,
-}
+pub use crate::core::types::DialogInfo;
 
 fn monitor_wakeup_sender() -> &'static Mutex<Option<Sender<()>>> {
     static WAKEUP_SENDER: OnceLock<Mutex<Option<Sender<()>>>> = OnceLock::new();
@@ -38,7 +31,7 @@ unsafe extern "system" fn monitor_event_callback(
     _dw_event_thread: u32,
     _dwms_event_time: u32,
 ) {
-    if hwnd.0 == 0 {
+    if hwnd.is_invalid() {
         return;
     }
 
@@ -89,7 +82,8 @@ fn start_event_wakeup_hook() -> Receiver<()> {
             ]
         };
 
-        let registered_hooks: Vec<HWINEVENTHOOK> = hooks.into_iter().filter(|h| h.0 != 0).collect();
+        let registered_hooks: Vec<HWINEVENTHOOK> =
+            hooks.into_iter().filter(|h| !h.is_invalid()).collect();
         if registered_hooks.is_empty() {
             if let Ok(mut guard) = monitor_wakeup_sender().lock() {
                 *guard = None;
@@ -99,12 +93,12 @@ fn start_event_wakeup_hook() -> Receiver<()> {
 
         let mut msg = MSG::default();
         loop {
-            let result = unsafe { GetMessageW(&mut msg, HWND(0), 0, 0) };
+            let result = unsafe { GetMessageW(&mut msg, None, 0, 0) };
             if result.0 <= 0 {
                 break;
             }
             unsafe {
-                TranslateMessage(&msg);
+                let _ = TranslateMessage(&msg);
                 DispatchMessageW(&msg);
             }
         }
@@ -218,7 +212,7 @@ pub fn start_monitor(sender: Sender<Option<DialogInfo>>, ctx: egui::Context) {
 
 pub fn get_active_file_dialog() -> Option<DialogInfo> {
     let hwnd = unsafe { GetForegroundWindow() };
-    if hwnd.0 != 0
+    if !hwnd.is_invalid()
         && let Some(info) = get_dialog_info_if_match(hwnd)
     {
         return Some(info);
@@ -229,8 +223,9 @@ pub fn get_active_file_dialog() -> Option<DialogInfo> {
     None
 }
 
-pub fn is_foreground_hwnd(hwnd: isize) -> bool {
-    unsafe { GetForegroundWindow().0 == hwnd }
+/// 当前前台窗口的 HWND（供控制器判定“对话框是否仍前台”）。
+pub fn foreground_hwnd() -> isize {
+    unsafe { GetForegroundWindow().0 as isize }
 }
 
 fn get_dialog_info_if_match(hwnd: HWND) -> Option<DialogInfo> {
@@ -278,7 +273,16 @@ fn get_dialog_info_if_match(hwnd: HWND) -> Option<DialogInfo> {
 }
 
 fn has_child_class(parent: HWND, class_name: windows::core::PCWSTR) -> bool {
-    unsafe { FindWindowExW(parent, HWND(0), class_name, windows::core::PCWSTR::null()).0 != 0 }
+    unsafe {
+        FindWindowExW(
+            Some(parent),
+            None,
+            class_name,
+            windows::core::PCWSTR::null(),
+        )
+        .map(|h| !h.is_invalid())
+        .unwrap_or(false)
+    }
 }
 
 fn find_any_file_dialog() -> Option<DialogInfo> {
@@ -286,7 +290,7 @@ fn find_any_file_dialog() -> Option<DialogInfo> {
 
     unsafe extern "system" fn enum_proc(hwnd: HWND, lparam: LPARAM) -> BOOL {
         let hwnds = unsafe { &mut *(lparam.0 as *mut Vec<isize>) };
-        hwnds.push(hwnd.0);
+        hwnds.push(hwnd.0 as isize);
         BOOL(1)
     }
 
@@ -294,7 +298,7 @@ fn find_any_file_dialog() -> Option<DialogInfo> {
     let _ = unsafe { EnumWindows(Some(enum_proc), lparam) };
 
     for hwnd_raw in hwnds {
-        let hwnd = HWND(hwnd_raw as _);
+        let hwnd = HWND(hwnd_raw as *mut core::ffi::c_void);
         if let Some(info) = get_dialog_info_if_match(hwnd) {
             return Some(info);
         }
@@ -307,10 +311,9 @@ fn get_class_name(hwnd: HWND) -> String {
     unsafe {
         let mut class_name = [0u16; 256];
         let len = GetClassNameW(hwnd, &mut class_name);
-        if len > 0 {
-            String::from_utf16_lossy(&class_name[..len as usize])
-        } else {
-            String::new()
+        match usize::try_from(len) {
+            Ok(n) if n > 0 => String::from_utf16_lossy(&class_name[..n]),
+            _ => String::new(),
         }
     }
 }
@@ -319,10 +322,9 @@ fn get_window_text(hwnd: HWND) -> String {
     unsafe {
         let mut text = [0u16; 512];
         let len = GetWindowTextW(hwnd, &mut text);
-        if len > 0 {
-            String::from_utf16_lossy(&text[..len as usize])
-        } else {
-            String::new()
+        match usize::try_from(len) {
+            Ok(n) if n > 0 => String::from_utf16_lossy(&text[..n]),
+            _ => String::new(),
         }
     }
 }
@@ -330,7 +332,7 @@ fn get_window_text(hwnd: HWND) -> String {
 fn get_foreground_signature() -> Option<String> {
     unsafe {
         let hwnd = GetForegroundWindow();
-        if hwnd.0 == 0 {
+        if hwnd.is_invalid() {
             return None;
         }
 
@@ -338,14 +340,14 @@ fn get_foreground_signature() -> Option<String> {
         let title = get_window_text(hwnd);
         Some(format!(
             "hwnd={} class='{}' title='{}'",
-            hwnd.0, class_name, title
+            hwnd.0 as isize, class_name, title
         ))
     }
 }
 
 pub fn get_dialog_info_by_hwnd(hwnd_isize: isize) -> Option<DialogInfo> {
-    let hwnd = HWND(hwnd_isize as _);
-    if unsafe { IsWindow(hwnd).as_bool() && IsWindowVisible(hwnd).as_bool() } {
+    let hwnd = HWND(hwnd_isize as *mut core::ffi::c_void);
+    if unsafe { IsWindow(Some(hwnd)).as_bool() && IsWindowVisible(hwnd).as_bool() } {
         get_dialog_info(hwnd)
     } else {
         None
@@ -356,7 +358,7 @@ fn get_dialog_info(hwnd: HWND) -> Option<DialogInfo> {
     if let Some(rect) = get_window_visual_rect(hwnd) {
         let dpi = get_window_dpi(hwnd);
         Some(DialogInfo {
-            hwnd: hwnd.0,
+            hwnd: hwnd.0 as isize,
             x: rect.left,
             y: rect.top,
             width: rect.right - rect.left,
@@ -375,7 +377,7 @@ fn get_window_visual_rect(hwnd: HWND) -> Option<RECT> {
             hwnd,
             DWMWA_EXTENDED_FRAME_BOUNDS,
             (&mut visual_rect as *mut RECT).cast(),
-            size_of::<RECT>() as u32,
+            u32::try_from(size_of::<RECT>()).unwrap_or_default(),
         )
     };
 

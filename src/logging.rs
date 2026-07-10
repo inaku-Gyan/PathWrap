@@ -1,6 +1,5 @@
 pub fn init_logging() {
-    let mut builder = env_logger::Builder::new();
-    // TODO: 读取应用配置中的日志级别设置
-    builder.filter_level(log::LevelFilter::Info);
-    builder.init();
+    // 默认仅输出 error；通过 RUST_LOG 环境变量可打开 debug/trace。
+    let env = env_logger::Env::default().default_filter_or("error");
+    env_logger::Builder::from_env(env).init();
 }

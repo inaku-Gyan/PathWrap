@@ -1,5 +1,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // 移除 release 时的黑框
 mod app;
+mod core;
 mod logging;
 mod os;
 mod ui;
@@ -30,6 +31,7 @@ fn main() -> eframe::Result<()> {
             .with_inner_size([400.0, 300.0])
             .with_transparent(true)
             .with_taskbar(false)
+            .with_visible(false) // 启动即隐藏，仅在检测到 file dialog 时显示
             .with_decorations(false), // 移除原生边框，后续自定义为漂浮窗口
         ..Default::default()
     };
@@ -45,7 +47,10 @@ fn main() -> eframe::Result<()> {
                 os::monitor::start_monitor(tx, ctx_clone);
             });
 
-            Box::new(app::PathWarpApp::new(cc, rx))
+            // 安装全局键盘钩子，为非激活悬浮窗提供打字筛选输入。
+            let key_rx = os::input_hook::install(cc.egui_ctx.clone());
+
+            Ok(Box::new(app::PathWarpApp::new(cc, rx, key_rx)))
         }),
     )
 }

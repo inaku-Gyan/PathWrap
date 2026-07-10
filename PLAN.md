@@ -86,6 +86,10 @@
   - _说明_：该任务与 Task 3.10 不同。3.10 仅约束“置顶触发时机”，3.12 约束“是否显示 GUI 的根条件”。
 - [x] **Task 3.13 (新增)**: 补充焦点白名单：当焦点从 file dialog 切到 PathWrap GUI 本身时，GUI 仍需保持显示（避免用户点击搜索框后 GUI 误隐藏）；仅当 file dialog 与 GUI 均失焦时才隐藏。
   - _说明_：3.12 的“仅 file dialog 聚焦显示”在可用性上过严，3.13 将“GUI 自身聚焦”纳入允许显示条件。
+- [x] **Task 3.14 (新增)**: 修复 GUI 点击即消失：将“GUI 聚焦”判定从 egui `ctx.input().focused` 改为 Win32 前台窗口进程判定，仅当焦点位于目标 file dialog 或 PathWrap 窗口时显示 GUI。
+  - _说明_：避免鼠标点击 GUI 控件时因焦点源判定不稳定导致误隐藏。
+- [x] **Task 3.15 (新增)**: 修复“点击 GUI 仍偶发消失”回归：在 file dialog/PathWrap 焦点切换瞬间加入短暂交互宽限，并为显隐判定补充单元测试覆盖点击过渡帧。
+  - _说明_：处理 Win32 前台切换与 egui 输入事件不同步导致的一帧误隐藏问题。
 - [ ] **Task 3.11 (提醒项，可滞后)**: 验证并记录“同时存在多个 file dialog”时的行为与期望策略（主跟随窗口选择、切换规则、冲突处理）。
 - [x] **Task 3.12**: GUI 贴边优化：将悬浮层与 file dialog 下边缘间距调整为 0，确保视觉上紧贴。
 - [x] **Task 3.13**: 跟踪延迟优化：优化对话框跟踪刷新策略，消除可感知跟随延迟。
@@ -96,7 +100,7 @@
 **目标**：当用户在 UI 中选择了一个路径后，强制修改系统对话框的工作目录。
 
 - [x] **Task 4.1**: 在 `src/os/dialog.rs` 实现注入逻辑。方案A：基于消息传递 `SendMessageAction`，向对话框发送 `CDM_SETFOLDERPATH` 消息，或模拟键盘输入绝对路径后回车（方案B，备用）。
-- [x] **Task 4.2**: 在 `src/ui/window.rs` 捕获到用户的“回车确认”或“鼠标双击”动作后，调用 Task 4.1 的注入逻辑，并在成功后隐藏当前 egui UI 窗口。
+- [x] **Task 4.2**: 在 `src/ui/window.rs` 捕获到用户的“回车确认”或“鼠标双击”动作后，调用 Task 4.1 的注入逻辑。注入后**保持悬浮条停靠**（对话框只是跳转到该文件夹、仍开着，用户可继续挑选/再次注入）；收起悬浮条改由 `ESC` 负责（`Controller::confirm` 只注入不 Park/不抑制，`suppress_current_session` 专供 ESC）。
 - [x] **[阶段四自检工作流]**: just check --ci -> cargo test -> commit (若有修正)
 
 ### 阶段五：整体验收与后台常驻优化
@@ -110,7 +114,7 @@
   - 默认仅输出 `error`；
   - 支持通过环境变量或配置文件打开 `debug/trace`；
   - 将 monitor / app 的调试输出统一迁移到 `log` 宏，移除 `println!`。
-- **Task 5.5 (后续优化)**: GUI 视觉风格优化：统一间距、字号、列表密度与高亮样式，提升可读性与现代感。
+- [x] **Task 5.5 (后续优化)**: GUI 视觉风格优化：统一间距、字号、列表密度与高亮样式，提升可读性与现代感。（见下方 V2 重构记录）
 - **Task 5.6 (未来)**: 支持跟随系统浅色/深色模式自动切换 UI 主题，并保留手动覆盖选项。
 - **Task 5.7 (未来)**: 优化多桌面（Virtual Desktop）场景下的显示逻辑，避免跨桌面误显示或焦点错位。
 - **Task 5.8 (未来的未来)**: 新增设置界面，支持常用开关（含开机自启启用/关闭）与基础行为配置。
@@ -119,3 +123,42 @@
 ---
 
 AGENT, 执行本计划时请按当前未完成 Task 顺序推进：每完成一个 Task 必须立刻在本文件勾选/标注状态并同步结果；若发现新增需求或衍生任务，需先补充进对应阶段后再继续开发。
+
+---
+
+## 🔧 V2 架构重构记录
+
+V1 落地后暴露三类问题（显隐交互 bug、注入延迟/不稳、界面简陋），根因集中在三处而非整体架构。保留原有 `os/ui/app` 分层与可测试纯函数，做定向重构：
+
+- **非激活悬浮窗**（`src/os/window_ext.rs`、`src/app.rs`）：悬浮窗改为 `WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW | WS_EX_TOPMOST`，永不抢前台，对话框在交互期间始终保持前台。由此**删除**了 `should_render_overlay`/焦点 grace/`AlwaysOnTop` 切换/进程前台判定等一整套显隐补丁（原 Task 3.7–3.15 的历史包袱），仅保留“对话框是否前台”这一唯一门控。停靠改用 `SetWindowPos` 物理像素直接匹配对话框 DWM 边界，消除逻辑点/DPI 口径不一致造成的贴边缝隙；隐藏改用真正的 `ShowWindow(SW_HIDE)`，替代移到屏幕外的 hack。
+- **全局键盘钩子**（`src/os/input_hook.rs`）：非激活窗拿不到键盘焦点，故用 `WH_KEYBOARD_LL`（门控：悬浮条可见且对话框前台）截获打字/导航键送回 UI 线程，其余按键透传给对话框；egui 降级为纯渲染器（移除 `TextEdit`/`request_focus`）。已知限制：`ToUnicodeEx` 逐键翻译不处理 IME 组字。
+- **UI Automation 注入**（`src/os/dialog.rs`，替换原 Task 4.1 的 CDM/键盘模拟方案）：`ElementFromHandle` → 评分定位文件名 Edit 与默认按钮 → `ValuePattern::SetValue` + `InvokePattern::Invoke`。同步、无 sleep、无按键模拟、不抢焦点，对现代 `IFileDialog` 稳定。
+- **视觉重塑 + 中文字体**（`src/ui/theme.rs`、`src/ui/window.rs`，对应 Task 5.5）：统一深色调色板/间距/圆角，悬浮卡片加描边+阴影与对话框脱开；加载系统微软雅黑（`msyh.ttc`）以正确显示中文路径。
+- **卫生**：移除未用依赖 `lazy_static`/`parking_lot` 与空 `build.rs`；`logging.rs` 接入 `RUST_LOG`（默认 error）；裁剪未用 `windows` features（`Win32_UI_Controls`、`Win32_System_Com_StructuredStorage`）；新增 `raw-window-handle`、`Win32_System_LibraryLoader`、`Win32_UI_TextServices`。全树通过 `cargo clippy --all-targets --all-features -- -D warnings`。
+
+---
+
+## 🔧 V3：点击即消失根治 + TDD 测试体系
+
+V2 落地后暴露致命回归：**点击悬浮条后 GUI 立即消失且不再出现**。定向排查确认根因单一——点击误激活了悬浮窗，抢走对话框前台。据此根治并补齐自动化测试。
+
+- **根因**：`apply_overlay_ex_styles` 应用 `WS_EX_NOACTIVATE` 后的 `SetWindowPos` **漏了 `SWP_FRAMECHANGED`**，扩展样式未即时生效，点击仍激活悬浮窗 → 对话框失去前台 → 门控隐藏。经实测 `SW_HIDE` **不会**饿死 eframe 事件循环（重开仍能唤醒），故“永不再现”是抢焦的下游症状，而非独立 bug。
+- **窗口层修复**（`src/os/window_ext.rs`）：`SetWindowPos` 补 `SWP_FRAMECHANGED`；新增 `install_noactivate_subclass` 子类化窗口过程，对 `WM_MOUSEACTIVATE` 硬性返回 `MA_NOACTIVATE`（点击永不激活的第二重保证）；`hide()` → `park()`：仅移屏幕外、保持 `WS_VISIBLE`，去掉 `SW_HIDE`。
+- **纯控制器状态机**（新增 `src/core/`，对应架构升级）：`Controller::step(env, event) -> Vec<Effect>` 集中所有显隐/停靠/注入/钩子门控/去抖/抑制决策；时间与前台经 `Env` 注入，可确定性单测。新增**前台丢失 150ms 去抖**吸收瞬时抖动。`app.rs` 退化为薄壳（收事件→step→执行 Effect），`window.rs` 转纯渲染器（读控制器快照、鼠标交互回传 `UiEvent`）。`DialogInfo`/`KeyAction` 上移到 `core::types`。
+- **依赖升级**：egui/eframe `0.27 → 0.35`、windows `0.54 → 0.62`（eframe 0.35/wgpu 生态要求），引入官方 UI 测试框架 `egui_kittest`。
+- **测试金字塔**：① 控制器单测 12 项（去抖/抑制/注入顺序/停靠去重等全分支）；② `window_ext` 子类化确定性单测（`WM_MOUSEACTIVATE→MA_NOACTIVATE`，fix 的权威证明）；③ `egui_kittest` 胶水层 3 项（过滤渲染/点击回传/搜索行）；④ Windows E2E（`tests/e2e.rs` + `src/bin/dialog_host.rs` 驱动真实 `IFileOpenDialog`，`AttachThreadInput` 强制前台、`SendInput` 真实点击、Win32 探针断言），`#[ignore]` 经 `just e2e` 运行。CI 补 `cargo test`；新增 `.github/workflows/e2e.yml`（手动/每日）。
+- **已知环境限制**：E2E 的“点击后悬浮条仍停靠”依赖干净桌面——同时运行的 Listary 等会在文件对话框获焦时弹出自己的搜索条抢走前台，导致悬浮条被正常收起；`clicking_overlay_never_activates_it` 已改为只断言“悬浮窗自身永不成为前台”，对此类干扰鲁棒。
+
+### V3 补记：根因订正（点击仍消失）
+V3 初版以为根因是漏 `SWP_FRAMECHANGED`，实测（用户手动 + E2E 强断言）发现**仍会点击即消失**。真正根因：**winit 在启动/显示阶段会用自己算出的 `GWL_EXSTYLE` 覆盖我们首次设置的扩展样式，抹掉 `WS_EX_NOACTIVATE`/`TOOLWINDOW`**；单次设置守不住。运行时探针实测：修复前悬浮窗 ex-style 为 `0x00040118`（无 NOACTIVATE），点击后自我激活抢走对话框前台。
+- **修复**：在 `app.rs` 每帧幂等**重新断言**扩展样式（`apply_overlay_ex_styles` 位齐则只读不写），子类化与首次 park 各只做一次。修复后 ex-style 稳定为 `0x08040198 [NOACTIVATE|TOOLWINDOW|TOPMOST]`，点击后前台稳留对话框。
+- **渲染器**：切到 glow（OpenGL）。wgpu 的 Windows HWND surface 只报告不透明 `CompositeAlphaMode`，透明窗的透明像素会渲染成黑；glow 经 DWM 合成透明，恢复悬浮卡片的圆角与阴影，并顺带消除无关第三方 Vulkan 层的 loader 报错。
+- **测试订正**：E2E `clicking_overlay_keeps_it_docked_and_dialog_foreground` 恢复强断言（点击后①悬浮窗不自我激活②对话框仍前台③悬浮条仍停靠）；此前弱断言在 Listary 运行时会假绿（前台被 Listary 抢走，掩盖了自我激活），是本 bug 漏网的原因。新增 `diagnose_overlay_activation` 诊断用例（运行时 dump ex-style 与点击后前台归属）。
+
+### 待办（未来）
+- **Task 5.6**：跟随系统浅色/深色主题。
+- **Task 5.7**：多虚拟桌面显示逻辑。
+- **Task 5.8**：设置界面（开机自启等）。
+- **IME 组字**：`ToUnicodeEx` 逐键翻译不支持中文输入法组字筛选。
+
+> 仍待办：Task 3.11（多 file dialog 并存策略）、Task 5.6（跟随系统浅/深色）、Task 5.7（多桌面）、Task 5.8（设置界面）。V2 交互/注入/停靠需在 Windows 真实对话框上手动验证。

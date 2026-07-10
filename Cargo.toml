@@ -3,33 +3,44 @@ name = "PathWarp"
 version = "0.1.0"
 edition = "2024"
 description = "Windows file dialog path switching tool"
+default-run = "PathWarp"
 
 [dependencies]
-eframe = "0.27"
-egui = "0.27"
+# glow (OpenGL) 渲染器：Windows 上经窗口自身 alpha + DWM 合成，支持真正的窗口透明；
+# 默认的 wgpu 渲染器对 HWND surface 只报告 Opaque alpha，透明区域会渲染成黑。
+eframe = { version = "0.35", default-features = false, features = [
+    "glow",
+    "default_fonts",
+    "accesskit",
+] }
+egui = "0.35"
+raw-window-handle = "0.6"
 
-lazy_static = "1.4"
-parking_lot = "0.12"
 log = "0.4"
 env_logger = "0.11"
 url = "2.5.8"
 
+[dev-dependencies]
+egui_kittest = "0.35"
+uiautomation = "0.25"
+
 [dependencies.windows]
-version = "0.54"
+version = "0.62"
 features = [
     "Win32_Foundation",
     "Win32_Graphics_Dwm",
     "Win32_System_Com",
+    "Win32_System_LibraryLoader",
+    "Win32_System_Threading",
     "Win32_UI_HiDpi",
     "Win32_UI_Accessibility",
     "Win32_UI_WindowsAndMessaging",
     "Win32_UI_Input_KeyboardAndMouse",
-    "Win32_UI_Controls",
+    "Win32_UI_TextServices",
     "Win32_UI_Shell",
     "Win32_System_Ole",
     "Win32_System_Variant",
     "Win32_Web_InternetExplorer",
-    "Win32_System_Com_StructuredStorage",
 ]
 
 [lints.clippy]
