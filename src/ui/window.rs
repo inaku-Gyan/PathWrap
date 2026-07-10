@@ -54,6 +54,20 @@ fn handle_path_item_interaction(
     (next_selected_index, should_inject)
 }
 
+/// 渲染搜索行（纯展示胶囊：放大镜 + 查询文本/占位符 + 光标）。
+fn render_search_row(ui: &mut egui::Ui, query: &str) {
+    crate::ui::theme::search_frame().show(ui, |ui| {
+        ui.horizontal(|ui| {
+            ui.label(egui::RichText::new("🔎").color(crate::ui::theme::accent()));
+            if query.is_empty() {
+                ui.label(egui::RichText::new("输入以筛选路径…").weak());
+            } else {
+                ui.label(egui::RichText::new(format!("{query}▏")).strong());
+            }
+        });
+    });
+}
+
 pub fn render(ctx: &Context, app: &mut PathWarpApp, intents: FrameIntents) {
     let filtered = filtered_paths(&app.paths, &app.search_query);
     app.selected_index = next_selected_index(
@@ -74,15 +88,10 @@ pub fn render(ctx: &Context, app: &mut PathWarpApp, intents: FrameIntents) {
     }
 
     egui::CentralPanel::default()
-        .frame(
-            egui::Frame::none()
-                .fill(egui::Color32::from_rgba_premultiplied(20, 20, 20, 240))
-                .inner_margin(10.0),
-        )
+        .frame(crate::ui::theme::overlay_frame(ctx))
         .show(ctx, |ui| {
-            // 搜索行为纯展示：输入来自全局键盘钩子，而非 egui 焦点。
-            ui.label(format!("🔎 {}", app.search_query));
-            ui.separator();
+            render_search_row(ui, &app.search_query);
+            ui.add_space(4.0);
 
             egui::ScrollArea::vertical().show(ui, |ui| {
                 ui.with_layout(egui::Layout::top_down_justified(egui::Align::Min), |ui| {
