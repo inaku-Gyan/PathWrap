@@ -8,9 +8,12 @@
 use windows::Win32::Foundation::HWND;
 use windows::Win32::UI::WindowsAndMessaging::{
     GWL_EXSTYLE, GetWindowLongPtrW, HWND_TOPMOST, SW_HIDE, SWP_NOACTIVATE, SWP_NOMOVE,
-    SWP_NOSENDCHANGING, SWP_NOSIZE, SWP_SHOWWINDOW, SetWindowLongPtrW, SetWindowPos, ShowWindow,
-    WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW, WS_EX_TOPMOST,
+    SWP_NOSENDCHANGING, SWP_NOSIZE, SWP_NOZORDER, SWP_SHOWWINDOW, SetWindowLongPtrW, SetWindowPos,
+    ShowWindow, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW, WS_EX_TOPMOST,
 };
+
+/// 隐藏时把窗口挪到的屏幕外坐标（与系统最小化窗口所用坐标一致，安全越界）。
+const OFFSCREEN: i32 = -32000;
 
 fn hwnd(handle: isize) -> HWND {
     HWND(handle as _)
@@ -64,12 +67,26 @@ pub fn dock(handle: isize, x: i32, y: i32, width: i32, height: i32) {
     }
 }
 
-/// 隐藏悬浮窗（真正的 SW_HIDE，而非移到屏幕外）。
+/// 隐藏悬浮窗。
+///
+/// 先移到屏幕外再 `SW_HIDE`：启动阶段 winit/eframe 可能在我们首帧隐藏之后又把
+/// 窗口显示出来（默认位置），单靠 `SW_HIDE` 会输掉这个竞争而残留一个矩形；移到
+/// 屏幕外后，即便被重新显示也落在可见区域之外，不会出现“关不掉的黑色矩形”。
 pub fn hide(handle: isize) {
     if handle == 0 {
         return;
     }
+    let target = hwnd(handle);
     unsafe {
-        let _ = ShowWindow(hwnd(handle), SW_HIDE);
+        let _ = SetWindowPos(
+            target,
+            HWND_TOPMOST,
+            OFFSCREEN,
+            OFFSCREEN,
+            0,
+            0,
+            SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE,
+        );
+        let _ = ShowWindow(target, SW_HIDE);
     }
 }

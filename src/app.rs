@@ -24,6 +24,14 @@ fn extract_hwnd(handle: &impl HasWindowHandle) -> isize {
     }
 }
 
+/// 隐藏态下仍需产出一帧，但必须完全透明——否则默认 CentralPanel 会用不透明的
+/// 主题背景铺满整个窗口，形成“关不掉的黑色矩形”。
+fn paint_transparent(ctx: &eframe::egui::Context) {
+    egui::CentralPanel::default()
+        .frame(egui::Frame::none())
+        .show(ctx, |_| {});
+}
+
 pub struct PathWarpApp {
     /// 悬浮窗自身的 HWND（首帧从 eframe Frame 获取，0 表示尚未就绪）。
     overlay_hwnd: isize,
@@ -51,7 +59,7 @@ impl PathWarpApp {
         dialog_rx: Receiver<Option<DialogInfo>>,
         key_rx: Receiver<KeyAction>,
     ) -> Self {
-        Self {
+        let mut app = Self {
             overlay_hwnd: extract_hwnd(cc),
             styles_applied: false,
 
@@ -67,22 +75,32 @@ impl PathWarpApp {
             user_hidden_dialog_hwnd: None,
             last_applied_visible: None,
             last_applied_dialog: None,
-        }
+        };
+        // 尽早应用样式并隐藏，减少启动时窗口在默认位置的可见时间。
+        app.ensure_overlay_window_by_hwnd(app.overlay_hwnd);
+        app
     }
 
-    /// 首帧确保拿到 HWND 并应用非激活扩展样式（幂等）。
+    /// 首帧确保拿到 HWND 并应用非激活扩展样式 + 立即隐藏（幂等）。
     fn ensure_overlay_window(&mut self, frame: &eframe::Frame) {
-        if self.overlay_hwnd == 0 {
-            self.overlay_hwnd = extract_hwnd(frame);
+        let hwnd = if self.overlay_hwnd == 0 {
+            extract_hwnd(frame)
+        } else {
+            self.overlay_hwnd
+        };
+        self.ensure_overlay_window_by_hwnd(hwnd);
+    }
+
+    fn ensure_overlay_window_by_hwnd(&mut self, hwnd: isize) {
+        self.overlay_hwnd = hwnd;
+        if hwnd == 0 || self.styles_applied {
+            return;
         }
-        if self.overlay_hwnd != 0 && !self.styles_applied {
-            self.styles_applied = window_ext::apply_overlay_ex_styles(self.overlay_hwnd);
-            if self.styles_applied {
-                log::debug!(
-                    "[overlay] applied non-activating ex-styles to hwnd={}",
-                    self.overlay_hwnd
-                );
-            }
+        self.styles_applied = window_ext::apply_overlay_ex_styles(hwnd);
+        if self.styles_applied {
+            log::debug!("[overlay] applied non-activating ex-styles to hwnd={hwnd}");
+            // 初始即隐藏（移到屏幕外 + SW_HIDE），避免启动残留矩形。
+            self.set_overlay_visible(false);
         }
     }
 
@@ -249,14 +267,14 @@ impl eframe::App for PathWarpApp {
             if escape {
                 self.hide_overlay_by_user();
                 input_hook::set_active(false);
-                egui::CentralPanel::default().show(ctx, |_| {});
+                paint_transparent(ctx);
             } else if let Some(dialog) = self.target_dialog {
                 self.place_overlay_for_dialog(dialog);
                 crate::ui::window::render(ctx, self, intents);
             }
         } else {
             self.set_overlay_visible(false);
-            egui::CentralPanel::default().show(ctx, |_| {});
+            paint_transparent(ctx);
         }
 
         // 跟踪期间持续重绘以平滑跟随对话框移动；空闲时不重绘以省电。

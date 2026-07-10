@@ -30,6 +30,7 @@ fn main() -> eframe::Result<()> {
             .with_inner_size([400.0, 300.0])
             .with_transparent(true)
             .with_taskbar(false)
+            .with_visible(false) // 启动即隐藏，仅在检测到 file dialog 时显示
             .with_decorations(false), // 移除原生边框，后续自定义为漂浮窗口
         ..Default::default()
     };
