@@ -136,4 +136,23 @@ V1 落地后暴露三类问题（显隐交互 bug、注入延迟/不稳、界面
 - **视觉重塑 + 中文字体**（`src/ui/theme.rs`、`src/ui/window.rs`，对应 Task 5.5）：统一深色调色板/间距/圆角，悬浮卡片加描边+阴影与对话框脱开；加载系统微软雅黑（`msyh.ttc`）以正确显示中文路径。
 - **卫生**：移除未用依赖 `lazy_static`/`parking_lot` 与空 `build.rs`；`logging.rs` 接入 `RUST_LOG`（默认 error）；裁剪未用 `windows` features（`Win32_UI_Controls`、`Win32_System_Com_StructuredStorage`）；新增 `raw-window-handle`、`Win32_System_LibraryLoader`、`Win32_UI_TextServices`。全树通过 `cargo clippy --all-targets --all-features -- -D warnings`。
 
+---
+
+## 🔧 V3：点击即消失根治 + TDD 测试体系
+
+V2 落地后暴露致命回归：**点击悬浮条后 GUI 立即消失且不再出现**。定向排查确认根因单一——点击误激活了悬浮窗，抢走对话框前台。据此根治并补齐自动化测试。
+
+- **根因**：`apply_overlay_ex_styles` 应用 `WS_EX_NOACTIVATE` 后的 `SetWindowPos` **漏了 `SWP_FRAMECHANGED`**，扩展样式未即时生效，点击仍激活悬浮窗 → 对话框失去前台 → 门控隐藏。经实测 `SW_HIDE` **不会**饿死 eframe 事件循环（重开仍能唤醒），故“永不再现”是抢焦的下游症状，而非独立 bug。
+- **窗口层修复**（`src/os/window_ext.rs`）：`SetWindowPos` 补 `SWP_FRAMECHANGED`；新增 `install_noactivate_subclass` 子类化窗口过程，对 `WM_MOUSEACTIVATE` 硬性返回 `MA_NOACTIVATE`（点击永不激活的第二重保证）；`hide()` → `park()`：仅移屏幕外、保持 `WS_VISIBLE`，去掉 `SW_HIDE`。
+- **纯控制器状态机**（新增 `src/core/`，对应架构升级）：`Controller::step(env, event) -> Vec<Effect>` 集中所有显隐/停靠/注入/钩子门控/去抖/抑制决策；时间与前台经 `Env` 注入，可确定性单测。新增**前台丢失 150ms 去抖**吸收瞬时抖动。`app.rs` 退化为薄壳（收事件→step→执行 Effect），`window.rs` 转纯渲染器（读控制器快照、鼠标交互回传 `UiEvent`）。`DialogInfo`/`KeyAction` 上移到 `core::types`。
+- **依赖升级**：egui/eframe `0.27 → 0.35`、windows `0.54 → 0.62`（eframe 0.35/wgpu 生态要求），引入官方 UI 测试框架 `egui_kittest`。
+- **测试金字塔**：① 控制器单测 12 项（去抖/抑制/注入顺序/停靠去重等全分支）；② `window_ext` 子类化确定性单测（`WM_MOUSEACTIVATE→MA_NOACTIVATE`，fix 的权威证明）；③ `egui_kittest` 胶水层 3 项（过滤渲染/点击回传/搜索行）；④ Windows E2E（`tests/e2e.rs` + `src/bin/dialog_host.rs` 驱动真实 `IFileOpenDialog`，`AttachThreadInput` 强制前台、`SendInput` 真实点击、Win32 探针断言），`#[ignore]` 经 `just e2e` 运行。CI 补 `cargo test`；新增 `.github/workflows/e2e.yml`（手动/每日）。
+- **已知环境限制**：E2E 的“点击后悬浮条仍停靠”依赖干净桌面——同时运行的 Listary 等会在文件对话框获焦时弹出自己的搜索条抢走前台，导致悬浮条被正常收起；`clicking_overlay_never_activates_it` 已改为只断言“悬浮窗自身永不成为前台”，对此类干扰鲁棒。
+
+### 待办（未来）
+- **Task 5.6**：跟随系统浅色/深色主题。
+- **Task 5.7**：多虚拟桌面显示逻辑。
+- **Task 5.8**：设置界面（开机自启等）。
+- **IME 组字**：`ToUnicodeEx` 逐键翻译不支持中文输入法组字筛选。
+
 > 仍待办：Task 3.11（多 file dialog 并存策略）、Task 5.6（跟随系统浅/深色）、Task 5.7（多桌面）、Task 5.8（设置界面）。V2 交互/注入/停靠需在 Windows 真实对话框上手动验证。

@@ -1,0 +1,31 @@
+name: E2E
+
+# 端到端测试会启动真实 PathWarp 进程 + 真实文件对话框，并注入真实鼠标/前台操作，
+# 需要交互式桌面会话。GitHub 托管 windows runner 提供的会话足以运行，但这类测试较慢
+# 且对环境敏感（其它抢焦点的程序会干扰），故不阻塞 PR：仅手动触发或每日定时运行。
+
+on:
+  workflow_dispatch:
+  schedule:
+    # 每日 UTC 03:00 跑一次冒烟。
+    - cron: "0 3 * * *"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  e2e:
+    name: Windows E2E (ignored tests)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Cache Rust artifacts
+        uses: Swatinem/rust-cache@v2
+
+      - name: Run E2E tests
+        run: cargo test --test e2e -- --ignored --test-threads=1
