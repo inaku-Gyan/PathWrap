@@ -1,5 +1,5 @@
 use crate::app::PathWarpApp;
-use egui::Context;
+use egui::Ui;
 
 /// 本帧来自键盘钩子的导航/确认意图（Char/Backspace 已由 app 直接消费）。
 #[derive(Debug, Default, Clone, Copy)]
@@ -68,7 +68,7 @@ fn render_search_row(ui: &mut egui::Ui, query: &str) {
     });
 }
 
-pub fn render(ctx: &Context, app: &mut PathWarpApp, intents: FrameIntents) {
+pub fn render(root: &mut Ui, app: &mut PathWarpApp, intents: FrameIntents) {
     let filtered = filtered_paths(&app.paths, &app.search_query);
     app.selected_index = next_selected_index(
         app.selected_index,
@@ -88,8 +88,8 @@ pub fn render(ctx: &Context, app: &mut PathWarpApp, intents: FrameIntents) {
     }
 
     egui::CentralPanel::default()
-        .frame(crate::ui::theme::overlay_frame(ctx))
-        .show(ctx, |ui| {
+        .frame(crate::ui::theme::overlay_frame())
+        .show(root, |ui| {
             render_search_row(ui, &app.search_query);
             ui.add_space(4.0);
 
@@ -97,7 +97,7 @@ pub fn render(ctx: &Context, app: &mut PathWarpApp, intents: FrameIntents) {
                 ui.with_layout(egui::Layout::top_down_justified(egui::Align::Min), |ui| {
                     for (idx, path) in filtered.iter().enumerate() {
                         let is_selected = idx == app.selected_index;
-                        let label = egui::SelectableLabel::new(is_selected, path.as_str());
+                        let label = egui::Button::selectable(is_selected, path.as_str());
                         let response = ui.add(label);
                         let (next_idx, should_inject) = handle_path_item_interaction(
                             app.selected_index,

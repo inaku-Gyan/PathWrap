@@ -165,12 +165,12 @@ fn current_name(element: &IUIAutomationElement) -> String {
 /// 回退确认：向文件名框对应的原生窗口发一次回车（无 sleep、无 SendInput）。
 fn fallback_confirm(edit: &IUIAutomationElement) {
     let native = unsafe { edit.CurrentNativeWindowHandle() }.unwrap_or_default();
-    if native.0 == 0 {
+    if native.is_invalid() {
         warn!("fallback confirm skipped: filename edit has no native window handle");
         return;
     }
     unsafe {
-        let _ = SendMessageW(native, WM_KEYDOWN, WPARAM(VK_RETURN), LPARAM(0));
-        let _ = SendMessageW(native, WM_KEYUP, WPARAM(VK_RETURN), LPARAM(0));
+        let _ = SendMessageW(native, WM_KEYDOWN, Some(WPARAM(VK_RETURN)), Some(LPARAM(0)));
+        let _ = SendMessageW(native, WM_KEYUP, Some(WPARAM(VK_RETURN)), Some(LPARAM(0)));
     }
 }

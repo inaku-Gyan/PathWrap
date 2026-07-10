@@ -38,7 +38,7 @@ pub fn apply_overlay_ex_styles(handle: isize) -> bool {
         // 让样式变更立即生效，且不激活窗口。
         let _ = SetWindowPos(
             target,
-            HWND_TOPMOST,
+            Some(HWND_TOPMOST),
             0,
             0,
             0,
@@ -57,7 +57,7 @@ pub fn dock(handle: isize, x: i32, y: i32, width: i32, height: i32) {
     unsafe {
         let _ = SetWindowPos(
             hwnd(handle),
-            HWND_TOPMOST,
+            Some(HWND_TOPMOST),
             x,
             y,
             width,
@@ -80,7 +80,7 @@ pub fn hide(handle: isize) {
     unsafe {
         let _ = SetWindowPos(
             target,
-            HWND_TOPMOST,
+            None,
             OFFSCREEN,
             OFFSCREEN,
             0,

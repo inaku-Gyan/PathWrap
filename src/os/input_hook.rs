@@ -10,14 +10,14 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Mutex, OnceLock};
-use windows::Win32::Foundation::{HMODULE, LPARAM, LRESULT, WPARAM};
+use windows::Win32::Foundation::{HINSTANCE, LPARAM, LRESULT, WPARAM};
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::UI::Input::KeyboardAndMouse::{
     GetAsyncKeyState, GetKeyboardLayout, GetKeyboardState, ToUnicodeEx, VK_BACK, VK_CONTROL,
     VK_DOWN, VK_ESCAPE, VK_MENU, VK_RETURN, VK_UP,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
-    CallNextHookEx, DispatchMessageW, GetMessageW, HC_ACTION, HHOOK, KBDLLHOOKSTRUCT, MSG,
+    CallNextHookEx, DispatchMessageW, GetMessageW, HC_ACTION, KBDLLHOOKSTRUCT, MSG,
     SetWindowsHookExW, TranslateMessage, UnhookWindowsHookEx, WH_KEYBOARD_LL, WM_KEYDOWN,
     WM_SYSKEYDOWN,
 };
@@ -65,7 +65,12 @@ pub fn install(ctx: egui::Context) -> Receiver<KeyAction> {
 
         let hmodule = unsafe { GetModuleHandleW(None) }.unwrap_or_default();
         let hook = unsafe {
-            SetWindowsHookExW(WH_KEYBOARD_LL, Some(keyboard_proc), HMODULE(hmodule.0), 0)
+            SetWindowsHookExW(
+                WH_KEYBOARD_LL,
+                Some(keyboard_proc),
+                Some(HINSTANCE(hmodule.0)),
+                0,
+            )
         };
 
         let hook = match hook {
@@ -111,7 +116,7 @@ fn translate_char(vk: u32, scan: u32) -> Option<char> {
         let hkl = GetKeyboardLayout(0);
         let mut buf = [0u16; 8];
         // wFlags bit 2 (0x4): 不改变键盘状态（Win10 1607+），避免影响死键组合。
-        let n = ToUnicodeEx(vk, scan, &keystate, &mut buf, 0x4, hkl);
+        let n = ToUnicodeEx(vk, scan, &keystate, &mut buf, 0x4, Some(hkl));
         if n == 1 {
             let c = char::from_u32(u32::from(buf[0]))?;
             if c.is_control() { None } else { Some(c) }
@@ -139,7 +144,7 @@ fn classify(vk: u32) -> Option<KeyAction> {
 }
 
 unsafe extern "system" fn keyboard_proc(code: i32, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
-    let pass = || unsafe { CallNextHookEx(HHOOK(0), code, wparam, lparam) };
+    let pass = || unsafe { CallNextHookEx(None, code, wparam, lparam) };
 
     if code != HC_ACTION as i32 || !ACTIVE.load(Ordering::Relaxed) {
         return pass();

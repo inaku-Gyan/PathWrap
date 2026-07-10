@@ -24,14 +24,6 @@ fn extract_hwnd(handle: &impl HasWindowHandle) -> isize {
     }
 }
 
-/// 隐藏态下仍需产出一帧，但必须完全透明——否则默认 CentralPanel 会用不透明的
-/// 主题背景铺满整个窗口，形成“关不掉的黑色矩形”。
-fn paint_transparent(ctx: &eframe::egui::Context) {
-    egui::CentralPanel::default()
-        .frame(egui::Frame::none())
-        .show(ctx, |_| {});
-}
-
 pub struct PathWarpApp {
     /// 悬浮窗自身的 HWND（首帧从 eframe Frame 获取，0 表示尚未就绪）。
     overlay_hwnd: isize,
@@ -249,9 +241,10 @@ impl eframe::App for PathWarpApp {
         [0.0, 0.0, 0.0, 0.0]
     }
 
-    fn update(&mut self, ctx: &eframe::egui::Context, frame: &mut eframe::Frame) {
+    fn ui(&mut self, root: &mut egui::Ui, frame: &mut eframe::Frame) {
+        let ctx = root.ctx().clone();
         self.ensure_overlay_window(frame);
-        self.sync_dialog_state_from_channel(ctx);
+        self.sync_dialog_state_from_channel(&ctx);
 
         // 唯一显隐门控：目标对话框仍是前台窗口时才显示。
         // 悬浮窗为非激活窗口，点击它不会改变前台，故此判定在交互期间保持为真。
@@ -262,19 +255,18 @@ impl eframe::App for PathWarpApp {
         // 通知键盘钩子：仅在悬浮条可见时截获打字/导航键，否则全部透传给对话框。
         input_hook::set_active(active);
 
+        // 非活跃帧不绘制任何内容：clear_color 为全透明，窗口不会残留可见背景。
         if active {
             let (intents, escape) = self.drain_key_actions();
             if escape {
                 self.hide_overlay_by_user();
                 input_hook::set_active(false);
-                paint_transparent(ctx);
             } else if let Some(dialog) = self.target_dialog {
                 self.place_overlay_for_dialog(dialog);
-                crate::ui::window::render(ctx, self, intents);
+                crate::ui::window::render(root, self, intents);
             }
         } else {
             self.set_overlay_visible(false);
-            paint_transparent(ctx);
         }
 
         // 跟踪期间持续重绘以平滑跟随对话框移动；空闲时不重绘以省电。

@@ -4,7 +4,7 @@
 //! 避免主题与内联样式各写一套导致不一致。
 
 use egui::{
-    Color32, Context, FontData, FontDefinitions, FontFamily, Frame, Margin, Rounding, Stroke,
+    Color32, Context, CornerRadius, FontData, FontDefinitions, FontFamily, Frame, Margin, Stroke,
     Visuals,
 };
 
@@ -22,26 +22,26 @@ pub fn setup_theme(ctx: &Context) {
 }
 
 /// 悬浮卡片的统一外观：填充 + 圆角 + 描边 + 阴影，视觉上与上方对话框脱开。
-pub fn overlay_frame(ctx: &Context) -> Frame {
-    Frame::none()
-        .fill(ctx.style().visuals.panel_fill)
-        .rounding(Rounding::same(8.0))
-        .inner_margin(Margin::symmetric(10.0, 8.0))
+pub fn overlay_frame() -> Frame {
+    Frame::NONE
+        .fill(BG)
+        .corner_radius(CornerRadius::same(8))
+        .inner_margin(Margin::symmetric(10, 8))
         .stroke(Stroke::new(1.0, BORDER))
         .shadow(egui::epaint::Shadow {
-            offset: egui::vec2(0.0, 2.0),
-            blur: 12.0,
-            spread: 0.0,
+            offset: [0, 2],
+            blur: 12,
+            spread: 0,
             color: Color32::from_black_alpha(120),
         })
 }
 
 /// 搜索行的胶囊外观。
 pub fn search_frame() -> Frame {
-    Frame::none()
+    Frame::NONE
         .fill(Color32::from_rgba_premultiplied(255, 255, 255, 10))
-        .rounding(Rounding::same(6.0))
-        .inner_margin(Margin::symmetric(8.0, 5.0))
+        .corner_radius(CornerRadius::same(6))
+        .inner_margin(Margin::symmetric(8, 5))
 }
 
 pub fn accent() -> Color32 {
@@ -63,7 +63,7 @@ fn install_fonts(ctx: &Context) {
         let mut fonts = FontDefinitions::default();
         fonts
             .font_data
-            .insert("system_cjk".to_owned(), FontData::from_owned(bytes));
+            .insert("system_cjk".to_owned(), FontData::from_owned(bytes).into());
         for family in [FontFamily::Proportional, FontFamily::Monospace] {
             fonts
                 .families
@@ -80,7 +80,8 @@ fn install_fonts(ctx: &Context) {
 }
 
 fn apply_style(ctx: &Context) {
-    let mut style = (*ctx.style()).clone();
+    // 悬浮条只有深色一套外观，不跟随系统主题切换。
+    ctx.set_theme(egui::Theme::Dark);
 
     let mut visuals = Visuals::dark();
     visuals.panel_fill = BG;
@@ -97,16 +98,16 @@ fn apply_style(ctx: &Context) {
     visuals.widgets.active.weak_bg_fill = ACCENT;
 
     // 统一圆角。
-    let rounding = Rounding::same(6.0);
-    visuals.widgets.noninteractive.rounding = rounding;
-    visuals.widgets.inactive.rounding = rounding;
-    visuals.widgets.hovered.rounding = rounding;
-    visuals.widgets.active.rounding = rounding;
-    visuals.widgets.open.rounding = rounding;
+    let corner_radius = CornerRadius::same(6);
+    visuals.widgets.noninteractive.corner_radius = corner_radius;
+    visuals.widgets.inactive.corner_radius = corner_radius;
+    visuals.widgets.hovered.corner_radius = corner_radius;
+    visuals.widgets.active.corner_radius = corner_radius;
+    visuals.widgets.open.corner_radius = corner_radius;
 
-    style.visuals = visuals;
-    style.spacing.item_spacing = egui::vec2(6.0, 4.0);
-    style.spacing.button_padding = egui::vec2(8.0, 4.0);
-
-    ctx.set_style(style);
+    ctx.all_styles_mut(|style| {
+        style.visuals = visuals.clone();
+        style.spacing.item_spacing = egui::vec2(6.0, 4.0);
+        style.spacing.button_padding = egui::vec2(8.0, 4.0);
+    });
 }

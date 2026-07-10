@@ -5,8 +5,8 @@ edition = "2024"
 description = "Windows file dialog path switching tool"
 
 [dependencies]
-eframe = "0.27"
-egui = "0.27"
+eframe = "0.35"
+egui = "0.35"
 raw-window-handle = "0.6"
 
 log = "0.4"
@@ -14,7 +14,7 @@ env_logger = "0.11"
 url = "2.5.8"
 
 [dependencies.windows]
-version = "0.54"
+version = "0.62"
 features = [
     "Win32_Foundation",
     "Win32_Graphics_Dwm",
