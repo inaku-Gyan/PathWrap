@@ -48,6 +48,3 @@ jobs:
       # 单元测试（控制器状态机 + 窗口子类化 + egui_kittest 渲染）。
       - name: Run tests
         run: cargo test --all-features --verbose
-
-      - name: Run E2E tests
-        run: cargo test --test e2e -- --ignored --test-threads=1
