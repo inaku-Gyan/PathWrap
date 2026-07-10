@@ -17,9 +17,9 @@ use windows::Win32::UI::Input::KeyboardAndMouse::{
     VK_DOWN, VK_ESCAPE, VK_MENU, VK_RETURN, VK_UP,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
-    CallNextHookEx, DispatchMessageW, GetMessageW, HC_ACTION, HHOOK, KBDLLHOOKSTRUCT,
+    CallNextHookEx, DispatchMessageW, GetMessageW, HC_ACTION, HHOOK, KBDLLHOOKSTRUCT, MSG,
     SetWindowsHookExW, TranslateMessage, UnhookWindowsHookEx, WH_KEYBOARD_LL, WM_KEYDOWN,
-    WM_SYSKEYDOWN, MSG,
+    WM_SYSKEYDOWN,
 };
 
 /// 用户在悬浮条上产生的一次输入意图。
@@ -65,12 +65,7 @@ pub fn install(ctx: egui::Context) -> Receiver<KeyAction> {
 
         let hmodule = unsafe { GetModuleHandleW(None) }.unwrap_or_default();
         let hook = unsafe {
-            SetWindowsHookExW(
-                WH_KEYBOARD_LL,
-                Some(keyboard_proc),
-                HMODULE(hmodule.0),
-                0,
-            )
+            SetWindowsHookExW(WH_KEYBOARD_LL, Some(keyboard_proc), HMODULE(hmodule.0), 0)
         };
 
         let hook = match hook {

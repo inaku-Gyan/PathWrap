@@ -78,7 +78,10 @@ impl PathWarpApp {
         if self.overlay_hwnd != 0 && !self.styles_applied {
             self.styles_applied = window_ext::apply_overlay_ex_styles(self.overlay_hwnd);
             if self.styles_applied {
-                log::debug!("[overlay] applied non-activating ex-styles to hwnd={}", self.overlay_hwnd);
+                log::debug!(
+                    "[overlay] applied non-activating ex-styles to hwnd={}",
+                    self.overlay_hwnd
+                );
             }
         }
     }
@@ -195,9 +198,12 @@ impl PathWarpApp {
                     ctx.request_repaint_after(Duration::from_millis(UI_TICK_MS));
                 }
                 Some(since) => {
-                    if Instant::now().duration_since(since) >= Duration::from_millis(HIDE_GRACE_MS) {
+                    if Instant::now().duration_since(since) >= Duration::from_millis(HIDE_GRACE_MS)
+                    {
                         if self.user_hidden_dialog_hwnd.take().is_some() {
-                            log::debug!("[overlay] release user suppression after dialog session ended");
+                            log::debug!(
+                                "[overlay] release user suppression after dialog session ended"
+                            );
                         }
                         self.hide_overlay_by_system();
                     } else {

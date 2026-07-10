@@ -56,8 +56,12 @@ fn handle_path_item_interaction(
 
 pub fn render(ctx: &Context, app: &mut PathWarpApp, intents: FrameIntents) {
     let filtered = filtered_paths(&app.paths, &app.search_query);
-    app.selected_index =
-        next_selected_index(app.selected_index, filtered.len(), intents.nav_up, intents.nav_down);
+    app.selected_index = next_selected_index(
+        app.selected_index,
+        filtered.len(),
+        intents.nav_up,
+        intents.nav_down,
+    );
 
     // 收集本帧要注入的目标，实际注入放到闭包外执行，避免与 UI 借用冲突。
     let mut inject_target: Option<(isize, String)> = None;
