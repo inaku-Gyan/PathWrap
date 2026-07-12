@@ -29,7 +29,7 @@ jobs:
     env:
       RUSTFLAGS: -D warnings
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       # GitHub hosted runners using the latest stable version of Rust have Clippy pre-installed.
 
