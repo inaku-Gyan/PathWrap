@@ -13,7 +13,7 @@ eframe = { version = "0.35", default-features = false, features = [
     "default_fonts",
     "accesskit",
 ] }
-egui = "0.35"
+egui = "0.36"
 raw-window-handle = "0.6"
 
 log = "0.4"
