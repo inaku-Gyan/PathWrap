@@ -18,9 +18,9 @@ pub enum UiEvent {
 
 /// 渲染搜索行（纯展示胶囊：放大镜 + 查询文本/占位符 + 光标）。
 fn render_search_row(ui: &mut Ui, query: &str) -> bool {
-    let response = crate::ui::theme::search_frame().show(ui, |ui| {
+    let response = crate::ui::theme::search_frame(ui.ctx()).show(ui, |ui| {
         ui.horizontal(|ui| {
-            ui.label(egui::RichText::new("🔎").color(crate::ui::theme::accent()));
+            ui.label(egui::RichText::new("🔎").color(crate::ui::theme::accent(ui.ctx())));
             if query.is_empty() {
                 ui.label(egui::RichText::new("点击后输入以筛选路径…").weak());
             } else {
@@ -38,7 +38,7 @@ pub fn render(root: &mut Ui, controller: &Controller) -> Option<UiEvent> {
     let mut event = None;
 
     egui::CentralPanel::default()
-        .frame(crate::ui::theme::overlay_frame())
+        .frame(crate::ui::theme::overlay_frame(root.ctx()))
         .show(root, |ui| {
             if render_search_row(ui, controller.query()) {
                 event = Some(UiEvent::Search);

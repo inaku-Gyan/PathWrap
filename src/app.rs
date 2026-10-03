@@ -2,6 +2,7 @@
 //! 控制器 [`crate::core::controller::Controller`]，并执行控制器返回的 [`Effect`]。
 //! 本文件不含任何显隐/停靠/注入/去抖判断——那些全在控制器里，可被单测覆盖。
 
+use crate::config::{ThemeMode, ThemePreference};
 use crate::core::controller::{Controller, Effect, Env, Event};
 use crate::os::input_hook::{self, KeyAction};
 use crate::os::monitor::{self, DialogInfo};
@@ -37,6 +38,8 @@ pub struct PathWarpApp {
     /// 低层键盘钩子送来的输入意图（悬浮条为非激活窗，无法用 egui 接收键盘）。
     key_rx: Receiver<KeyAction>,
 
+    theme_preference: ThemePreference,
+    theme_mode: ThemeMode,
     controller: Controller,
 }
 
@@ -45,6 +48,7 @@ impl PathWarpApp {
         cc: &eframe::CreationContext<'_>,
         dialog_rx: Receiver<Option<DialogInfo>>,
         key_rx: Receiver<KeyAction>,
+        theme_preference: ThemePreference,
     ) -> Self {
         let mut app = Self {
             overlay_hwnd: extract_hwnd(cc),
@@ -52,6 +56,12 @@ impl PathWarpApp {
             parked_once: false,
             dialog_rx,
             key_rx,
+            theme_mode: match theme_preference {
+                ThemePreference::Auto => crate::ui::theme::system_theme(),
+                ThemePreference::Dark => ThemeMode::Dark,
+                ThemePreference::Light => ThemeMode::Light,
+            },
+            theme_preference,
             controller: Controller::new(),
         };
         // 尽早应用非激活样式并停靠到屏幕外，避免启动时窗口在默认位置可见。
@@ -93,6 +103,20 @@ impl PathWarpApp {
         }
     }
 
+    /// Re-resolve `auto` when an egui repaint is already needed.  This keeps a
+    /// visible overlay in sync with Windows theme changes without adding an
+    /// always-on polling timer or touching window activation behavior.
+    fn refresh_theme(&mut self, ctx: &egui::Context) {
+        let ThemePreference::Auto = self.theme_preference else {
+            return;
+        };
+        let mode = crate::ui::theme::system_theme();
+        if mode != self.theme_mode {
+            crate::ui::theme::apply_theme(ctx, mode);
+            self.theme_mode = mode;
+        }
+    }
+
     /// 执行控制器返回的一批副作用。
     fn apply_effects(&mut self, effects: Vec<Effect>) {
         for effect in effects {
@@ -120,6 +144,7 @@ impl eframe::App for PathWarpApp {
 
     fn ui(&mut self, root: &mut egui::Ui, frame: &mut eframe::Frame) {
         self.ensure_overlay_window(Some(frame));
+        self.refresh_theme(root.ctx());
 
         let env = Env {
             now: Instant::now(),

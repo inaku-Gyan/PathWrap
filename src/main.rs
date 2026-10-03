@@ -1,5 +1,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // 移除 release 时的黑框
 mod app;
+mod config;
 mod core;
 mod logging;
 mod os;
@@ -40,7 +41,8 @@ fn main() -> eframe::Result<()> {
         "PathWarp",
         options,
         Box::new(move |cc| {
-            ui::theme::setup_theme(&cc.egui_ctx);
+            let config = config::AppConfig::load();
+            ui::theme::setup_theme_with_preference(&cc.egui_ctx, config.theme);
 
             let ctx_clone = cc.egui_ctx.clone();
             std::thread::spawn(move || {
@@ -50,7 +52,12 @@ fn main() -> eframe::Result<()> {
             // 安装全局键盘钩子，为非激活悬浮窗提供打字筛选输入。
             let key_rx = os::input_hook::install(cc.egui_ctx.clone());
 
-            Ok(Box::new(app::PathWarpApp::new(cc, rx, key_rx)))
+            Ok(Box::new(app::PathWarpApp::new(
+                cc,
+                rx,
+                key_rx,
+                config.theme,
+            )))
         }),
     )
 }
