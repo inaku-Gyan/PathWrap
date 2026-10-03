@@ -38,3 +38,7 @@ of truth for plans, decisions, dependencies, and the product backlog.
 - **Theme control:** the compact sun/moon button beside the search frame. It
   keeps its own hover/focus feedback and context menu independently of the
   search frame.
+- **Search capture state:** the explicit keyboard-capture state armed by a
+  search or list click. It is separate from OS/egui focus because the overlay
+  is intentionally non-activating; the renderer uses it for the active ring
+  and caret.

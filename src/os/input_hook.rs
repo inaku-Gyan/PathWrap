@@ -67,6 +67,11 @@ pub fn set_capture_active(active: bool) {
     CAPTURE_ACTIVE.store(active, Ordering::Relaxed);
 }
 
+/// Read whether the non-activating overlay is currently armed for keyboard input.
+pub fn capture_active() -> bool {
+    CAPTURE_ACTIVE.load(Ordering::Relaxed)
+}
+
 /// 安装全局键盘钩子并返回接收 [`KeyAction`] 的通道。钩子运行于独立线程。
 pub fn install(ctx: egui::Context) -> Receiver<KeyAction> {
     let (tx, rx) = std::sync::mpsc::channel();

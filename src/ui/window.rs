@@ -40,6 +40,7 @@ fn render_header(
     query: &str,
     theme_preference: ThemePreference,
     theme_mode: ThemeMode,
+    capture_active: bool,
 ) -> Option<UiEvent> {
     let row = ui.horizontal(|ui| {
         // Keep the control at the trailing edge without introducing a second
@@ -72,21 +73,40 @@ fn render_header(
                         ),
                         search_rect.max,
                     );
-                    let text = if query.is_empty() {
-                        egui::RichText::new("点击后输入以筛选路径…")
-                            .size(SEARCH_TEXT_SIZE)
-                            .weak()
-                    } else {
-                        egui::RichText::new(format!("{query}▏"))
-                            .size(SEARCH_TEXT_SIZE)
-                            .strong()
-                    };
                     let mut content_ui = ui.new_child(
                         egui::UiBuilder::new()
                             .max_rect(text_rect)
                             .layout(egui::Layout::left_to_right(egui::Align::Center)),
                     );
-                    content_ui.add(egui::Label::new(text).sense(egui::Sense::empty()));
+                    if query.is_empty() {
+                        if capture_active {
+                            content_ui.add(
+                                egui::Label::new(
+                                    egui::RichText::new("▏")
+                                        .size(SEARCH_TEXT_SIZE)
+                                        .color(crate::ui::theme::accent(ui.ctx())),
+                                )
+                                .sense(egui::Sense::empty()),
+                            );
+                        }
+                        content_ui.add(
+                            egui::Label::new(
+                                egui::RichText::new("点击后输入以筛选路径…")
+                                    .size(SEARCH_TEXT_SIZE)
+                                    .weak(),
+                            )
+                            .sense(egui::Sense::empty()),
+                        );
+                    } else {
+                        content_ui.add(
+                            egui::Label::new(
+                                egui::RichText::new(format!("{query}▏"))
+                                    .size(SEARCH_TEXT_SIZE)
+                                    .strong(),
+                            )
+                            .sense(egui::Sense::empty()),
+                        );
+                    }
                     ui.interact(
                         search_rect,
                         ui.id().with("path_filter_search"),
@@ -104,7 +124,7 @@ fn render_header(
     let (frame_response, search_response, theme_event) = row.inner;
     // The Frame response includes its padding and stroke; use it for the
     // visible search-frame ring instead of the smaller clickable search rect.
-    let focused = search_response.has_focus();
+    let focused = capture_active || search_response.has_focus();
     if search_response.hovered() || focused {
         let stroke = if focused {
             Stroke::new(2.0, crate::ui::theme::focus(ui.ctx()))
@@ -262,6 +282,17 @@ pub fn render_with_theme(
     theme_preference: ThemePreference,
     theme_mode: ThemeMode,
 ) -> Option<UiEvent> {
+    render_with_theme_and_capture(root, controller, theme_preference, theme_mode, false)
+}
+
+/// Render the overlay with the non-activating window's explicit input-capture state.
+pub fn render_with_theme_and_capture(
+    root: &mut Ui,
+    controller: &Controller,
+    theme_preference: ThemePreference,
+    theme_mode: ThemeMode,
+    capture_active: bool,
+) -> Option<UiEvent> {
     let filtered = controller.filtered_paths();
     let selected = controller.selected_index();
     let mut event = None;
@@ -269,9 +300,13 @@ pub fn render_with_theme(
     egui::CentralPanel::default()
         .frame(crate::ui::theme::overlay_frame(root.ctx()))
         .show(root, |ui| {
-            if let Some(header_event) =
-                render_header(ui, controller.query(), theme_preference, theme_mode)
-            {
+            if let Some(header_event) = render_header(
+                ui,
+                controller.query(),
+                theme_preference,
+                theme_mode,
+                capture_active,
+            ) {
                 event = Some(header_event);
             }
             ui.add_space(4.0);
@@ -351,6 +386,28 @@ mod tests {
             )
     }
 
+    fn capture_harness_for(controller: Controller) -> Harness<'static, (Controller, bool)> {
+        Harness::builder()
+            .with_size(egui::vec2(420.0, 320.0))
+            .build_ui_state(
+                |ui, state: &mut (Controller, bool)| {
+                    if matches!(
+                        render_with_theme_and_capture(
+                            ui,
+                            &state.0,
+                            ThemePreference::Auto,
+                            ThemeMode::Dark,
+                            state.1,
+                        ),
+                        Some(UiEvent::Search)
+                    ) {
+                        state.1 = true;
+                    }
+                },
+                (controller, false),
+            )
+    }
+
     #[test]
     fn renders_only_filtered_paths() {
         let mut harness = harness_for(controller_with(&["C:\\Work", "D:\\Games"], "work"));
@@ -381,6 +438,21 @@ mod tests {
             .click();
         harness.run();
         assert_eq!(harness.state().1, Some(UiEvent::Search));
+    }
+
+    #[test]
+    fn captured_search_shows_caret_after_click() {
+        let mut harness = capture_harness_for(controller_with(&["C:\\Work"], ""));
+        harness.run();
+        harness
+            .query_by_label_contains("点击后输入以筛选")
+            .expect("search row placeholder")
+            .click();
+        harness.run();
+        assert!(
+            harness.query_by_label_contains("▏").is_some(),
+            "captured empty search must show its caret"
+        );
     }
 
     #[test]

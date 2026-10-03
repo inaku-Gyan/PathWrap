@@ -186,24 +186,28 @@ impl eframe::App for PathWarpApp {
 
         // 4. 可见时渲染，并把鼠标交互回喂控制器。
         if self.controller.is_visible()
-            && let Some(ui_event) = crate::ui::window::render_with_theme(
+            && let Some(ui_event) = crate::ui::window::render_with_theme_and_capture(
                 root,
                 &self.controller,
                 self.theme_preference,
                 self.theme_mode,
+                input_hook::capture_active(),
             )
         {
             let event = match ui_event {
                 UiEvent::Search => {
                     input_hook::set_capture_active(true);
+                    root.ctx().request_repaint();
                     None
                 }
                 UiEvent::Item(idx) => {
                     input_hook::set_capture_active(true);
+                    root.ctx().request_repaint();
                     Some(Event::ItemClicked(idx))
                 }
                 UiEvent::ItemDouble(idx) => {
                     input_hook::set_capture_active(true);
+                    root.ctx().request_repaint();
                     Some(Event::ItemDoubleClicked(idx))
                 }
                 UiEvent::Theme(action) => {
