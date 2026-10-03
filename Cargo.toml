@@ -8,56 +8,59 @@ default-run = "PathWarp"
 [dependencies]
 # glow (OpenGL) 渲染器：Windows 上经窗口自身 alpha + DWM 合成，支持真正的窗口透明；
 # 默认的 wgpu 渲染器对 HWND surface 只报告 Opaque alpha，透明区域会渲染成黑。
-eframe = { version = "0.35", default-features = false, features = [
-    "glow",
+eframe = {
+  version = "0.35",
+  default-features = false,
+  features = [
     "default_fonts",
     "accesskit",
-] }
+    "glow",
+  ]
+}
 egui = "0.35"
-raw-window-handle = "0.6"
-
-log = "0.4"
 env_logger = "0.11"
+log = "0.4"
+raw-window-handle = "0.6"
 url = "2.5.8"
+
+[dependencies.windows]
+version = "0.62"
+features = [
+  "Win32_Foundation",
+  "Win32_Graphics_Dwm",
+  "Win32_System_Com",
+  "Win32_System_LibraryLoader",
+  "Win32_System_Ole",
+  "Win32_System_Threading",
+  "Win32_System_Variant",
+  "Win32_UI_Accessibility",
+  "Win32_UI_HiDpi",
+  "Win32_UI_Input_KeyboardAndMouse",
+  "Win32_UI_Shell",
+  "Win32_UI_TextServices",
+  "Win32_UI_WindowsAndMessaging",
+  "Win32_Web_InternetExplorer",
+]
 
 [dev-dependencies]
 egui_kittest = "0.35"
 uiautomation = "0.25"
 
-[dependencies.windows]
-version = "0.62"
-features = [
-    "Win32_Foundation",
-    "Win32_Graphics_Dwm",
-    "Win32_System_Com",
-    "Win32_System_LibraryLoader",
-    "Win32_System_Threading",
-    "Win32_UI_HiDpi",
-    "Win32_UI_Accessibility",
-    "Win32_UI_WindowsAndMessaging",
-    "Win32_UI_Input_KeyboardAndMouse",
-    "Win32_UI_TextServices",
-    "Win32_UI_Shell",
-    "Win32_System_Ole",
-    "Win32_System_Variant",
-    "Win32_Web_InternetExplorer",
-]
-
 [lints.clippy]
+cast_lossless = "warn"  # 提示无损转换（例如 u8 -> u32 可能不需要转）
+cast_possible_truncation = "warn"  # 警告可能截断数据的转换（Windows 开发重要！）
+cast_ptr_alignment = "warn"  # 指针转换对齐问题 (FFI 常见)
+cast_sign_loss = "warn"  # 警告有符号转无符号
 unnecessary_cast = "warn"
-cast_lossless = "warn"            # 提示无损转换（例如 u8 -> u32 可能不需要转）
-cast_possible_truncation = "warn" # 警告可能截断数据的转换（Windows 开发重要！）
-cast_sign_loss = "warn"           # 警告有符号转无符号
-cast_ptr_alignment = "warn"       # 指针转换对齐问题 (FFI 常见)
 
-# 3. 代码卫生与生产环境
-unwrap_used = "warn"   # 警告 .unwrap()，GUI 程序 panic 会导致闪退
-expect_used = "warn"   # 警告 .expect()，建议更优雅的错误处理
-dbg_macro = "warn"     # 禁止提交 dbg!() 调试代码
+dbg_macro = "warn"  # 禁止提交 dbg!() 调试代码
+expect_used = "warn"  # 警告 .expect()，建议更优雅的错误处理
 print_stdout = "warn"  # 建议用日志库代替 println! (GUI 程序通常无控制台)
-todo = "warn"          # 禁止提交 TODO 标记
-unimplemented = "warn" # 禁止提交未实现代码
+todo = "warn"  # 禁止提交 TODO 标记
+unimplemented = "warn"  # 禁止提交未实现代码
+# 3. 代码卫生与生产环境
+unwrap_used = "warn"  # 警告 .unwrap()，GUI 程序 panic 会导致闪退
 
 # 4. 性能与最佳实践
-clone_on_copy = "warn"    # 警告对 Copy 类型调用 .clone()
-wildcard_imports = "warn" # 禁止 use crate::* (保持命名空间清晰)
+clone_on_copy = "warn"  # 警告对 Copy 类型调用 .clone()
+wildcard_imports = "warn"  # 禁止 use crate::* (保持命名空间清晰)
