@@ -25,11 +25,32 @@ pub enum ThemePreference {
     Light,
 }
 
+impl ThemePreference {
+    /// Stable user-facing label used by the compact theme menu and assistive text.
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::Auto => "跟随系统",
+            Self::Dark => "深色",
+            Self::Light => "浅色",
+        }
+    }
+}
+
 /// A concrete palette mode after resolving [`ThemePreference::Auto`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ThemeMode {
     Dark,
     Light,
+}
+
+impl ThemeMode {
+    /// Stable label for the currently resolved visual mode.
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::Dark => "深色",
+            Self::Light => "浅色",
+        }
+    }
 }
 
 impl ThemePreference {

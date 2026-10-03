@@ -4,8 +4,16 @@
 //! 键盘输入不经此处——非激活窗口拿不到键盘焦点；用户点击搜索行或列表后，
 //! 打字/导航由全局钩子驱动控制器（见 [`crate::os::input_hook`] 与 [`Controller`]）。
 
+use crate::config::{ThemeMode, ThemePreference};
 use crate::core::controller::Controller;
-use egui::Ui;
+use egui::{CornerRadius, Stroke, StrokeKind, Ui};
+
+const SEARCH_CONTROL_HEIGHT: f32 = 32.0;
+const SEARCH_ICON_SIZE: f32 = 18.0;
+const SEARCH_ICON_GAP: f32 = 10.0;
+const SEARCH_TEXT_SIZE: f32 = 16.0;
+const THEME_BUTTON_WIDTH: f32 = 30.0;
+const THEME_ICON_SIZE: f32 = 18.0;
 
 /// 本帧产生的一次鼠标交互（下标为过滤后列表中的位置）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -14,25 +22,246 @@ pub enum UiEvent {
     Search,
     Item(usize),
     ItemDouble(usize),
+    Theme(ThemeAction),
 }
 
-/// 渲染搜索行（纯展示胶囊：放大镜 + 查询文本/占位符 + 光标）。
-fn render_search_row(ui: &mut Ui, query: &str) -> bool {
-    let response = crate::ui::theme::search_frame(ui.ctx()).show(ui, |ui| {
-        ui.horizontal(|ui| {
-            ui.label(egui::RichText::new("🔎").color(crate::ui::theme::accent(ui.ctx())));
-            if query.is_empty() {
-                ui.label(egui::RichText::new("点击后输入以筛选路径…").weak());
-            } else {
-                ui.label(egui::RichText::new(format!("{query}▏")).strong());
-            }
-        });
+/// A theme interaction emitted by the compact header control.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ThemeAction {
+    /// Switch between the two explicit palettes.
+    Toggle,
+    /// Select one of the persisted theme preferences from the context menu.
+    Set(ThemePreference),
+}
+
+/// Render the search row and the compact theme control in one visual header.
+fn render_header(
+    ui: &mut Ui,
+    query: &str,
+    theme_preference: ThemePreference,
+    theme_mode: ThemeMode,
+) -> Option<UiEvent> {
+    let row = ui.horizontal(|ui| {
+        // Keep the control at the trailing edge without introducing a second
+        // toolbar row or changing the overlay's fixed height. The search frame
+        // is allocated separately so the theme button no longer sits inside its
+        // large rounded border.
+        let search_width =
+            (ui.available_width() - THEME_BUTTON_WIDTH - ui.spacing().item_spacing.x).max(0.0);
+        let search_frame = crate::ui::theme::search_frame(ui.ctx());
+        let frame_margin = search_frame.total_margin();
+        let search_frame_height = SEARCH_CONTROL_HEIGHT + frame_margin.top + frame_margin.bottom;
+        let search = ui.allocate_ui_with_layout(
+            egui::vec2(search_width, search_frame_height),
+            egui::Layout::left_to_right(egui::Align::Center),
+            |ui| {
+                let frame_response = search_frame.show(ui, |ui| {
+                    let (search_rect, _) = ui.allocate_exact_size(
+                        egui::vec2(ui.available_width(), SEARCH_CONTROL_HEIGHT),
+                        egui::Sense::empty(),
+                    );
+                    let icon_rect = egui::Rect::from_min_size(
+                        search_rect.min,
+                        egui::vec2(SEARCH_ICON_SIZE, search_rect.height()),
+                    );
+                    paint_search_icon(ui, icon_rect);
+                    let text_rect = egui::Rect::from_min_max(
+                        egui::pos2(
+                            search_rect.left() + SEARCH_ICON_SIZE + SEARCH_ICON_GAP,
+                            search_rect.top(),
+                        ),
+                        search_rect.max,
+                    );
+                    let text = if query.is_empty() {
+                        egui::RichText::new("点击后输入以筛选路径…")
+                            .size(SEARCH_TEXT_SIZE)
+                            .weak()
+                    } else {
+                        egui::RichText::new(format!("{query}▏"))
+                            .size(SEARCH_TEXT_SIZE)
+                            .strong()
+                    };
+                    let mut content_ui = ui.new_child(
+                        egui::UiBuilder::new()
+                            .max_rect(text_rect)
+                            .layout(egui::Layout::left_to_right(egui::Align::Center)),
+                    );
+                    content_ui.add(egui::Label::new(text).sense(egui::Sense::empty()));
+                    ui.interact(
+                        search_rect,
+                        ui.id().with("path_filter_search"),
+                        egui::Sense::click(),
+                    )
+                });
+                (frame_response.response, frame_response.inner)
+            },
+        );
+        let theme_event = render_theme_button(ui, theme_preference, theme_mode);
+        let (frame_response, search_response) = search.inner;
+        (frame_response, search_response, theme_event)
     });
-    response.response.interact(egui::Sense::click()).clicked()
+
+    let (frame_response, search_response, theme_event) = row.inner;
+    // The Frame response includes its padding and stroke; use it for the
+    // visible search-frame ring instead of the smaller clickable search rect.
+    let focused = search_response.has_focus();
+    if search_response.hovered() || focused {
+        let stroke = if focused {
+            Stroke::new(2.0, crate::ui::theme::focus(ui.ctx()))
+        } else {
+            Stroke::new(1.0, crate::ui::theme::focus(ui.ctx()).gamma_multiply(0.55))
+        };
+        ui.painter().rect_stroke(
+            frame_response.rect,
+            CornerRadius::same(6),
+            stroke,
+            StrokeKind::Inside,
+        );
+    }
+
+    theme_event.or_else(|| search_response.clicked().then_some(UiEvent::Search))
+}
+
+fn render_theme_button(
+    ui: &mut Ui,
+    theme_preference: ThemePreference,
+    theme_mode: ThemeMode,
+) -> Option<UiEvent> {
+    let description = match theme_preference {
+        ThemePreference::Auto => format!(
+            "跟随系统（当前{}）。左键切换浅色/深色，右键选择主题",
+            theme_mode.label()
+        ),
+        preference => format!(
+            "{}模式。左键切换浅色/深色，右键选择主题",
+            preference.label()
+        ),
+    };
+
+    let response = ui
+        .add(egui::Button::new("").min_size(egui::vec2(THEME_BUTTON_WIDTH, 28.0)))
+        .on_hover_text(description.clone());
+    paint_theme_icon(ui, response.rect, theme_mode);
+    response.widget_info(|| {
+        egui::WidgetInfo::labeled(egui::WidgetType::Button, true, description.clone())
+    });
+
+    let mut action = response
+        .clicked()
+        .then_some(UiEvent::Theme(ThemeAction::Toggle));
+    response.context_menu(|ui| {
+        ui.set_min_width(132.0);
+        ui.label("主题");
+        for preference in [
+            ThemePreference::Auto,
+            ThemePreference::Light,
+            ThemePreference::Dark,
+        ] {
+            if ui
+                .selectable_label(theme_preference == preference, preference.label())
+                .clicked()
+            {
+                action = Some(UiEvent::Theme(ThemeAction::Set(preference)));
+                ui.close();
+            }
+        }
+    });
+
+    if response.hovered() || response.has_focus() || response.context_menu_opened() {
+        ui.painter().rect_stroke(
+            response.rect,
+            CornerRadius::same(6),
+            Stroke::new(1.0, crate::ui::theme::focus(ui.ctx())),
+            StrokeKind::Inside,
+        );
+    }
+    action
+}
+
+fn paint_search_icon(ui: &Ui, rect: egui::Rect) {
+    let center = rect.center() + egui::vec2(-1.5, -1.5);
+    let stroke = Stroke::new(1.8, crate::ui::theme::accent(ui.ctx()));
+    ui.painter().circle_stroke(center, 5.0, stroke);
+    ui.painter().line_segment(
+        [center + egui::vec2(3.5, 3.5), center + egui::vec2(8.0, 8.0)],
+        stroke,
+    );
+}
+
+fn paint_theme_icon(ui: &Ui, rect: egui::Rect, mode: ThemeMode) {
+    let center = rect.center();
+    let stroke = Stroke::new(1.5, crate::ui::theme::accent(ui.ctx()));
+    let radius = THEME_ICON_SIZE * 0.39;
+    match mode {
+        ThemeMode::Light => {
+            ui.painter().circle_stroke(center, radius * 0.57, stroke);
+            for index in 0..8 {
+                let angle = index as f32 * std::f32::consts::TAU / 8.0;
+                let direction = egui::Vec2::angled(angle);
+                ui.painter().line_segment(
+                    [
+                        center + direction * radius,
+                        center + direction * (radius * 1.36),
+                    ],
+                    stroke,
+                );
+            }
+        }
+        ThemeMode::Dark => {
+            let outer = arc_points(
+                center,
+                radius,
+                -std::f32::consts::FRAC_PI_2,
+                -3.0 * std::f32::consts::FRAC_PI_2,
+                16,
+            );
+            let inner_center = center + egui::vec2(radius * 0.43, -0.5);
+            let inner = arc_points(
+                inner_center,
+                radius * 0.79,
+                std::f32::consts::FRAC_PI_2,
+                -std::f32::consts::FRAC_PI_2,
+                16,
+            );
+            ui.painter().add(egui::Shape::line(outer.clone(), stroke));
+            ui.painter().add(egui::Shape::line(inner.clone(), stroke));
+            ui.painter()
+                .line_segment([outer[0], inner[inner.len() - 1]], stroke);
+            ui.painter()
+                .line_segment([outer[outer.len() - 1], inner[0]], stroke);
+        }
+    }
+}
+
+fn arc_points(
+    center: egui::Pos2,
+    radius: f32,
+    start_angle: f32,
+    end_angle: f32,
+    segments: usize,
+) -> Vec<egui::Pos2> {
+    (0..=segments)
+        .map(|index| {
+            let progress = index as f32 / segments as f32;
+            let angle = start_angle + (end_angle - start_angle) * progress;
+            center + egui::Vec2::angled(angle) * radius
+        })
+        .collect()
 }
 
 /// 渲染悬浮条。返回本帧发生的鼠标交互（若有）。
+#[allow(dead_code)]
 pub fn render(root: &mut Ui, controller: &Controller) -> Option<UiEvent> {
+    render_with_theme(root, controller, ThemePreference::Auto, ThemeMode::Dark)
+}
+
+/// Render the overlay using the preference and resolved mode owned by the app shell.
+pub fn render_with_theme(
+    root: &mut Ui,
+    controller: &Controller,
+    theme_preference: ThemePreference,
+    theme_mode: ThemeMode,
+) -> Option<UiEvent> {
     let filtered = controller.filtered_paths();
     let selected = controller.selected_index();
     let mut event = None;
@@ -40,8 +269,10 @@ pub fn render(root: &mut Ui, controller: &Controller) -> Option<UiEvent> {
     egui::CentralPanel::default()
         .frame(crate::ui::theme::overlay_frame(root.ctx()))
         .show(root, |ui| {
-            if render_search_row(ui, controller.query()) {
-                event = Some(UiEvent::Search);
+            if let Some(header_event) =
+                render_header(ui, controller.query(), theme_preference, theme_mode)
+            {
+                event = Some(header_event);
             }
             ui.add_space(4.0);
 
@@ -50,6 +281,24 @@ pub fn render(root: &mut Ui, controller: &Controller) -> Option<UiEvent> {
                     for (idx, path) in filtered.iter().enumerate() {
                         let is_selected = idx == selected;
                         let response = ui.add(egui::Button::selectable(is_selected, path.as_str()));
+                        if is_selected {
+                            let rect = response.rect;
+                            let accent = crate::ui::theme::selection_stroke(ui.ctx());
+                            ui.painter().rect_stroke(
+                                rect,
+                                CornerRadius::same(6),
+                                Stroke::new(1.0, accent),
+                                StrokeKind::Inside,
+                            );
+                            ui.painter().rect_filled(
+                                egui::Rect::from_min_max(
+                                    egui::pos2(rect.left(), rect.top() + 4.0),
+                                    egui::pos2(rect.left() + 3.0, rect.bottom() - 4.0),
+                                ),
+                                CornerRadius::same(2),
+                                accent,
+                            );
+                        }
                         // 双击也会触发 clicked()，故先判双击。
                         if response.double_clicked() {
                             event = Some(UiEvent::ItemDouble(idx));
@@ -132,6 +381,35 @@ mod tests {
             .click();
         harness.run();
         assert_eq!(harness.state().1, Some(UiEvent::Search));
+    }
+
+    #[test]
+    fn clicking_theme_button_emits_toggle() {
+        let mut harness = harness_for(controller_with(&["C:\\Work"], ""));
+        harness.run();
+        let theme = harness
+            .query_by_label_contains("跟随系统（当前深色）")
+            .expect("theme button accessibility label");
+        theme.click();
+        harness.run();
+        assert_eq!(harness.state().1, Some(UiEvent::Theme(ThemeAction::Toggle)));
+    }
+
+    #[test]
+    fn theme_context_menu_can_select_light_mode() {
+        let mut harness = harness_for(controller_with(&["C:\\Work"], ""));
+        harness.run();
+        harness
+            .query_by_label_contains("跟随系统（当前深色）")
+            .expect("theme button accessibility label")
+            .click_secondary();
+        harness.run();
+        harness.get_by_label("浅色").click();
+        harness.run();
+        assert_eq!(
+            harness.state().1,
+            Some(UiEvent::Theme(ThemeAction::Set(ThemePreference::Light)))
+        );
     }
 
     #[test]

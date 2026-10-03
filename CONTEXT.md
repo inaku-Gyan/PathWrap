@@ -19,3 +19,22 @@ of truth for plans, decisions, dependencies, and the product backlog.
   closed.
 - **Resolution:** the answer comment, closure, and one-line pointer appended
   to the map. A human confirmation is part of resolving a HITL ticket.
+
+## Theme terms
+
+- **Theme preference:** the user's appearance policy: follow the Windows system
+  theme, always use light, or always use dark. _Avoid_: resolved theme when
+  referring to the user's choice.
+- **Resolved theme:** the concrete light or dark appearance currently applied
+  after resolving a theme preference against the Windows system setting.
+  _Avoid_: theme preference when referring to the appearance on screen.
+
+## Overlay header terms
+
+- **Search frame:** the larger rounded boundary around the filter input. Its
+  border carries the search hover/focus feedback.
+- **Search control:** the clickable region inside the search frame containing
+  the magnifier, query text, and caret. It has no separate hover border.
+- **Theme control:** the compact sun/moon button beside the search frame. It
+  keeps its own hover/focus feedback and context menu independently of the
+  search frame.

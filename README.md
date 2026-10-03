@@ -10,8 +10,10 @@ The current code implements the core flow: Explorer path collection, foreground 
 
 - Detects system Open/Save file dialogs and docks a lightweight overlay flush beneath them
 - Reads active Explorer window paths and displays them as selectable items
-- Click the search row to type-to-filter, use up/down selection, and press Enter or double-click
-  to jump the dialog to that folder
+- Click the search control to type-to-filter, use up/down selection, and press Enter or double-click
+  to jump the dialog to that folder; its rounded frame highlights on hover and keyboard focus
+- Use the sun/moon control beside the search frame to switch between light and dark palettes;
+  right-click it to follow the Windows theme or choose a fixed palette
 - Non-intrusive: the overlay never steals focus from the dialog
 - Built with Rust + egui/eframe + windows-rs
 

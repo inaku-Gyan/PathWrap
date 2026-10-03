@@ -2,12 +2,12 @@
 //! 控制器 [`crate::core::controller::Controller`]，并执行控制器返回的 [`Effect`]。
 //! 本文件不含任何显隐/停靠/注入/去抖判断——那些全在控制器里，可被单测覆盖。
 
-use crate::config::{ThemeMode, ThemePreference};
+use crate::config::{AppConfig, ThemeMode, ThemePreference};
 use crate::core::controller::{Controller, Effect, Env, Event};
 use crate::os::input_hook::{self, KeyAction};
 use crate::os::monitor::{self, DialogInfo};
 use crate::os::{explorer, window_ext};
-use crate::ui::window::UiEvent;
+use crate::ui::window::{ThemeAction, UiEvent};
 use raw_window_handle::{HasWindowHandle, RawWindowHandle};
 use std::sync::mpsc::Receiver;
 use std::time::{Duration, Instant};
@@ -117,6 +117,26 @@ impl PathWarpApp {
         }
     }
 
+    /// Apply and persist a theme choice made from the compact header control.
+    fn set_theme_preference(&mut self, ctx: &egui::Context, preference: ThemePreference) {
+        let mode = preference.resolve(crate::ui::theme::system_theme());
+        crate::ui::theme::apply_theme(ctx, mode);
+        self.theme_preference = preference;
+        self.theme_mode = mode;
+
+        let config = AppConfig { theme: preference };
+        if let Err(error) = config.save() {
+            log::warn!("could not persist theme preference: {error}");
+        }
+    }
+
+    fn toggle_theme_preference(&mut self) -> ThemePreference {
+        match self.theme_mode {
+            ThemeMode::Light => ThemePreference::Dark,
+            ThemeMode::Dark => ThemePreference::Light,
+        }
+    }
+
     /// 执行控制器返回的一批副作用。
     fn apply_effects(&mut self, effects: Vec<Effect>) {
         for effect in effects {
@@ -166,7 +186,12 @@ impl eframe::App for PathWarpApp {
 
         // 4. 可见时渲染，并把鼠标交互回喂控制器。
         if self.controller.is_visible()
-            && let Some(ui_event) = crate::ui::window::render(root, &self.controller)
+            && let Some(ui_event) = crate::ui::window::render_with_theme(
+                root,
+                &self.controller,
+                self.theme_preference,
+                self.theme_mode,
+            )
         {
             let event = match ui_event {
                 UiEvent::Search => {
@@ -180,6 +205,14 @@ impl eframe::App for PathWarpApp {
                 UiEvent::ItemDouble(idx) => {
                     input_hook::set_capture_active(true);
                     Some(Event::ItemDoubleClicked(idx))
+                }
+                UiEvent::Theme(action) => {
+                    let preference = match action {
+                        ThemeAction::Toggle => self.toggle_theme_preference(),
+                        ThemeAction::Set(preference) => preference,
+                    };
+                    self.set_theme_preference(root.ctx(), preference);
+                    None
                 }
             };
             if let Some(event) = event {

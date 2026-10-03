@@ -13,36 +13,45 @@ use egui::{
 pub struct ThemePalette {
     pub background: Color32,
     pub text: Color32,
+    pub muted_text: Color32,
     pub border: Color32,
     pub hover: Color32,
     pub accent: Color32,
     pub selection: Color32,
-    pub accent_text: Color32,
+    pub selection_text: Color32,
+    pub selection_stroke: Color32,
     pub search_fill: Color32,
+    pub search_border: Color32,
 }
 
-// Zinc 调色板 + 蓝色强调。浅色模式保留同一套强调色，只调整背景、文字、
-// 边框和交互态，以便在两种模式间切换时仍有一致的层级关系。
+// 冷静蓝灰调色板。两种模式保留相同的语义关系：背景承载层级，靛蓝用于
+// 交互反馈，选中项使用低饱和蓝色表面而不是整块高亮色。
 const DARK_PALETTE: ThemePalette = ThemePalette {
-    background: Color32::from_rgb(24, 24, 27),
-    text: Color32::from_rgb(228, 228, 231),
-    border: Color32::from_rgb(63, 63, 70),
-    hover: Color32::from_rgb(39, 39, 42),
-    accent: Color32::from_rgb(96, 165, 250),
-    selection: Color32::from_rgb(37, 99, 235),
-    accent_text: Color32::WHITE,
-    search_fill: Color32::from_rgba_premultiplied(255, 255, 255, 10),
+    background: Color32::from_rgb(15, 23, 42),
+    text: Color32::from_rgb(226, 232, 240),
+    muted_text: Color32::from_rgb(148, 163, 184),
+    border: Color32::from_rgb(51, 65, 85),
+    hover: Color32::from_rgb(30, 41, 59),
+    accent: Color32::from_rgb(129, 140, 248),
+    selection: Color32::from_rgb(30, 58, 95),
+    selection_text: Color32::from_rgb(191, 219, 254),
+    selection_stroke: Color32::from_rgb(129, 140, 248),
+    search_fill: Color32::from_rgb(30, 41, 59),
+    search_border: Color32::from_rgb(71, 85, 105),
 };
 
 const LIGHT_PALETTE: ThemePalette = ThemePalette {
-    background: Color32::from_rgb(250, 250, 249),
-    text: Color32::from_rgb(24, 24, 27),
-    border: Color32::from_rgb(212, 212, 216),
-    hover: Color32::from_rgb(244, 244, 245),
-    accent: Color32::from_rgb(37, 99, 235),
-    selection: Color32::from_rgb(37, 99, 235),
-    accent_text: Color32::WHITE,
-    search_fill: Color32::from_rgba_premultiplied(0, 0, 0, 12),
+    background: Color32::from_rgb(248, 250, 252),
+    text: Color32::from_rgb(23, 32, 51),
+    muted_text: Color32::from_rgb(71, 85, 105),
+    border: Color32::from_rgb(203, 213, 225),
+    hover: Color32::from_rgb(238, 244, 255),
+    accent: Color32::from_rgb(79, 70, 229),
+    selection: Color32::from_rgb(219, 234, 254),
+    selection_text: Color32::from_rgb(30, 58, 138),
+    selection_stroke: Color32::from_rgb(79, 70, 229),
+    search_fill: Color32::from_rgb(238, 244, 250),
+    search_border: Color32::from_rgb(203, 213, 225),
 };
 
 /// Apply the default `auto` preference for callers that do not have a loaded
@@ -59,8 +68,8 @@ pub fn setup_theme_with_preference(ctx: &Context, preference: ThemePreference) {
     apply_theme(ctx, preference.resolve(system_theme()));
 }
 
-/// Apply a concrete palette mode.  This is the seam the future settings UI can
-/// call after changing a preference without touching window activation logic.
+/// Apply a concrete palette mode. This is the seam the compact theme control
+/// calls after changing a preference without touching window activation logic.
 pub fn apply_theme(ctx: &Context, mode: ThemeMode) {
     let palette = palette(mode);
     ctx.set_theme(match mode {
@@ -77,10 +86,12 @@ pub fn apply_theme(ctx: &Context, mode: ThemeMode) {
     visuals.window_fill = palette.background;
     visuals.window_stroke = Stroke::new(1.0, palette.border);
     visuals.override_text_color = Some(palette.text);
+    visuals.weak_text_color = Some(palette.muted_text);
     visuals.faint_bg_color = palette.search_fill;
     visuals.extreme_bg_color = palette.background;
     visuals.text_edit_bg_color = Some(palette.background);
     visuals.hyperlink_color = palette.accent;
+    visuals.disabled_alpha = 0.55;
     visuals.window_shadow = Shadow {
         offset: [0, 2],
         blur: 12,
@@ -92,11 +103,11 @@ pub fn apply_theme(ctx: &Context, mode: ThemeMode) {
         }),
     };
 
-    // 选中项：蓝色强调，白色文字在两种模式下都保持可读。
+    // 选中项：柔和蓝色表面配同色系正文，避免出现大块纯蓝。
     visuals.selection.bg_fill = palette.selection;
-    visuals.selection.stroke = Stroke::new(1.0, palette.accent_text);
+    visuals.selection.stroke = Stroke::new(1.0, palette.selection_text);
 
-    // 悬停、按下和普通按钮态共享同一套边框/文字对比度。
+    // 悬停、按下和普通按钮态共享语义化边框；选中项的左侧强调线由渲染器补充。
     for widget in [
         &mut visuals.widgets.noninteractive,
         &mut visuals.widgets.inactive,
@@ -106,25 +117,21 @@ pub fn apply_theme(ctx: &Context, mode: ThemeMode) {
     ] {
         widget.bg_stroke = Stroke::new(1.0, palette.border);
         widget.fg_stroke = Stroke::new(1.0, palette.text);
+        widget.corner_radius = CornerRadius::same(6);
     }
     visuals.widgets.noninteractive.bg_fill = palette.background;
     visuals.widgets.noninteractive.weak_bg_fill = palette.search_fill;
+    visuals.widgets.inactive.bg_fill = palette.background;
     visuals.widgets.inactive.weak_bg_fill = Color32::TRANSPARENT;
     visuals.widgets.hovered.weak_bg_fill = palette.hover;
     visuals.widgets.hovered.bg_fill = palette.hover;
-    visuals.widgets.active.weak_bg_fill = palette.selection;
-    visuals.widgets.active.bg_fill = palette.selection;
-    visuals.widgets.active.fg_stroke = Stroke::new(1.0, palette.accent_text);
+    visuals.widgets.active.bg_stroke = Stroke::new(1.0, palette.accent);
+    visuals.widgets.active.weak_bg_fill = palette.hover;
+    visuals.widgets.active.bg_fill = palette.hover;
+    visuals.widgets.active.fg_stroke = Stroke::new(1.0, palette.text);
     visuals.widgets.open.weak_bg_fill = palette.hover;
     visuals.widgets.open.bg_fill = palette.hover;
-
-    // 统一圆角。
-    let corner_radius = CornerRadius::same(6);
-    visuals.widgets.noninteractive.corner_radius = corner_radius;
-    visuals.widgets.inactive.corner_radius = corner_radius;
-    visuals.widgets.hovered.corner_radius = corner_radius;
-    visuals.widgets.active.corner_radius = corner_radius;
-    visuals.widgets.open.corner_radius = corner_radius;
+    visuals.widgets.open.bg_stroke = Stroke::new(1.0, palette.accent);
 
     ctx.all_styles_mut(|style| {
         style.visuals = visuals.clone();
@@ -158,11 +165,33 @@ pub fn search_frame(ctx: &Context) -> Frame {
     Frame::NONE
         .fill(visuals.faint_bg_color)
         .corner_radius(CornerRadius::same(6))
-        .inner_margin(Margin::symmetric(8, 5))
+        .inner_margin(Margin::symmetric(10, 4))
+        .stroke(Stroke::new(
+            1.0,
+            palette_for_visuals(&visuals).search_border,
+        ))
 }
 
 pub fn accent(ctx: &Context) -> Color32 {
     current_visuals(ctx).hyperlink_color
+}
+
+/// Color used for the visible focus/hover ring around the search row and theme button.
+pub fn focus(ctx: &Context) -> Color32 {
+    current_visuals(ctx).hyperlink_color
+}
+
+/// Color used for the selected path's outline and leading indicator.
+pub fn selection_stroke(ctx: &Context) -> Color32 {
+    palette_for_visuals(&current_visuals(ctx)).selection_stroke
+}
+
+fn palette_for_visuals(visuals: &Visuals) -> ThemePalette {
+    if visuals.dark_mode {
+        DARK_PALETTE
+    } else {
+        LIGHT_PALETTE
+    }
 }
 
 fn current_visuals(ctx: &Context) -> Visuals {
@@ -263,6 +292,8 @@ mod tests {
         assert_ne!(dark.border, light.border);
         assert_ne!(dark.hover, light.hover);
         assert_ne!(dark.search_fill, light.search_fill);
+        assert_ne!(dark.search_border, light.search_border);
+        assert_ne!(dark.selection_text, light.selection_text);
     }
 
     #[test]
@@ -277,6 +308,7 @@ mod tests {
         assert_eq!(visuals.panel_fill, expected.background);
         assert_eq!(visuals.override_text_color, Some(expected.text));
         assert_eq!(visuals.selection.bg_fill, expected.selection);
+        assert_eq!(visuals.selection.stroke.color, expected.selection_text);
         assert_eq!(visuals.widgets.hovered.bg_fill, expected.hover);
         assert_eq!(visuals.window_stroke.color, expected.border);
         assert_eq!(visuals.faint_bg_color, expected.search_fill);
@@ -294,6 +326,38 @@ mod tests {
             search_frame(&ctx).fill,
             palette(ThemeMode::Light).search_fill
         );
+        assert_eq!(
+            search_frame(&ctx).stroke.color,
+            palette(ThemeMode::Light).search_border
+        );
         assert_eq!(accent(&ctx), palette(ThemeMode::Light).accent);
+    }
+
+    fn contrast_ratio(foreground: Color32, background: Color32) -> f32 {
+        fn channel(value: u8) -> f32 {
+            let value = f32::from(value) / 255.0;
+            if value <= 0.03928 {
+                value / 12.92
+            } else {
+                ((value + 0.055) / 1.055).powf(2.4)
+            }
+        }
+
+        let luminance = |color: Color32| {
+            0.2126 * channel(color.r()) + 0.7152 * channel(color.g()) + 0.0722 * channel(color.b())
+        };
+        let foreground = luminance(foreground);
+        let background = luminance(background);
+        (foreground.max(background) + 0.05) / (foreground.min(background) + 0.05)
+    }
+
+    #[test]
+    fn primary_and_selected_text_meet_wcag_aa() {
+        for mode in [ThemeMode::Light, ThemeMode::Dark] {
+            let palette = palette(mode);
+            assert!(contrast_ratio(palette.text, palette.background) >= 4.5);
+            assert!(contrast_ratio(palette.selection_text, palette.selection) >= 4.5);
+            assert!(contrast_ratio(palette.muted_text, palette.search_fill) >= 4.5);
+        }
     }
 }
