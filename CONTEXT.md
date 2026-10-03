@@ -40,8 +40,8 @@ of truth for plans, decisions, dependencies, and the product backlog.
   and no additional ZIP-structure or GUI smoke check is required.
 - **Release version:** the exact Cargo package version mirrored by a stable
   `vX.Y.Z` tag; the first formal release uses `v0.1.0`.
-- **Release notes:** GitHub-generated change notes followed by fixed run and
-  verification instructions; they are not a package file.
+- **Release notes:** GitHub-generated change notes only; runtime instructions
+  live in the README and are not a package file.
 - **Published release:** the public GitHub Release record. A draft may be
   repaired by a rerun, but published assets are never overwritten by the
   release workflow.
@@ -50,8 +50,8 @@ of truth for plans, decisions, dependencies, and the product backlog.
 - **Build provenance:** the commit, tag, toolchain, target, and runner
   metadata recorded in Actions and Release notes; it is not another package
   file or release asset.
-- **Manual acceptance gate:** the interactive Windows clean-desktop check that
-  must precede the first formal release but does not run inside CI.
+- **Interactive acceptance record:** optional evidence from the Windows
+  clean-desktop check; it does not block the release workflow.
 - **Release repair:** maintainer-only recovery for a bad published release;
   the workflow never deletes or overwrites public assets.
 
