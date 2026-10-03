@@ -10,7 +10,8 @@ The current code implements the core flow: Explorer path collection, foreground 
 
 - Detects system Open/Save file dialogs and docks a lightweight overlay flush beneath them
 - Reads active Explorer window paths and displays them as selectable items
-- Type-to-filter, up/down selection, Enter or double-click to jump the dialog to that folder
+- Click the search row to type-to-filter, use up/down selection, and press Enter or double-click
+  to jump the dialog to that folder
 - Non-intrusive: the overlay never steals focus from the dialog
 - Built with Rust + egui/eframe + windows-rs
 
@@ -44,10 +45,12 @@ decoupled by channels. Key design decisions:
   rounded corners and drop shadow. It also avoids noisy Vulkan-loader errors from unrelated
   third-party layers.
 - **Global keyboard hook** ([src/os/input_hook.rs](src/os/input_hook.rs)): because a
-  non-activating window can't hold keyboard focus, a `WH_KEYBOARD_LL` hook — gated to
-  "overlay visible AND dialog foreground" — intercepts typing/navigation keys and feeds them to
-  the controller; all other keys pass through to the dialog. egui is a pure renderer over
-  controller state (no `TextEdit`).
+  non-activating window can't hold keyboard focus, a `WH_KEYBOARD_LL` hook feeds the controller
+  only after the user clicks the overlay search/list. Before that click, and after the pointer
+  returns to the dialog, the hook is fail-open so filename editing, IME input, and system
+  shortcuts stay with the original foreground window. Ctrl/Alt/Win combinations and a missing
+  receiver are also always passed through. egui remains a pure renderer over controller state
+  (no `TextEdit`).
 - **UI Automation injection** ([src/os/dialog.rs](src/os/dialog.rs)): locates the filename edit
   and the default button via UIA, then `ValuePattern::SetValue` + `InvokePattern::Invoke`.
   If no suitable button is found, it falls back to sending Enter to the filename edit.
@@ -63,7 +66,9 @@ changes. A dialog is hidden only after three consecutive lost checks, while the 
 applies a 120 ms disappearance grace period and a 150 ms foreground-loss grace period.
 
 > Known limitation: the keyboard hook translates keys via `ToUnicodeEx`, so IME composition
-> (e.g. Chinese input) is not captured for filtering; ASCII/partial filtering is unaffected.
+> (e.g. Chinese input) is not captured for overlay filtering. When the overlay is not explicitly
+> armed, IME input stays with the file dialog; full IME filtering remains tracked in
+> [GitHub issue #34](https://github.com/inaku-Gyan/PathWrap/issues/34).
 
 ## Development
 

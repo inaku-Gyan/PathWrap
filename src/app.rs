@@ -76,6 +76,8 @@ impl PathWarpApp {
             return;
         }
 
+        input_hook::set_overlay_hwnd(hwnd);
+
         window_ext::apply_overlay_ex_styles(hwnd);
 
         if !self.subclassed {
@@ -142,11 +144,23 @@ impl eframe::App for PathWarpApp {
             && let Some(ui_event) = crate::ui::window::render(root, &self.controller)
         {
             let event = match ui_event {
-                UiEvent::ItemClicked(idx) => Event::ItemClicked(idx),
-                UiEvent::ItemDoubleClicked(idx) => Event::ItemDoubleClicked(idx),
+                UiEvent::Search => {
+                    input_hook::set_capture_active(true);
+                    None
+                }
+                UiEvent::Item(idx) => {
+                    input_hook::set_capture_active(true);
+                    Some(Event::ItemClicked(idx))
+                }
+                UiEvent::ItemDouble(idx) => {
+                    input_hook::set_capture_active(true);
+                    Some(Event::ItemDoubleClicked(idx))
+                }
             };
-            let fx = self.controller.step(env, event);
-            self.apply_effects(fx);
+            if let Some(event) = event {
+                let fx = self.controller.step(env, event);
+                self.apply_effects(fx);
+            }
         }
 
         // 会话进行期间持续心跳；空闲时停止重绘以省电（新对话框由 monitor 唤醒）。

@@ -1,8 +1,8 @@
 //! 悬浮条的纯渲染器：只读 [`Controller`] 的模型快照绘制界面，把鼠标交互
 //! 作为 [`UiEvent`] 回传给调用方（[`crate::app`]），自身不做任何状态决策。
 //!
-//! 键盘输入不经此处——非激活窗口拿不到键盘焦点，打字/导航由全局钩子驱动
-//! 控制器（见 [`crate::os::input_hook`] 与 [`Controller`]）。
+//! 键盘输入不经此处——非激活窗口拿不到键盘焦点；用户点击搜索行或列表后，
+//! 打字/导航由全局钩子驱动控制器（见 [`crate::os::input_hook`] 与 [`Controller`]）。
 
 use crate::core::controller::Controller;
 use egui::Ui;
@@ -10,22 +10,25 @@ use egui::Ui;
 /// 本帧产生的一次鼠标交互（下标为过滤后列表中的位置）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum UiEvent {
-    ItemClicked(usize),
-    ItemDoubleClicked(usize),
+    /// 用户点击搜索行，显式把后续键盘输入交给悬浮层筛选。
+    Search,
+    Item(usize),
+    ItemDouble(usize),
 }
 
 /// 渲染搜索行（纯展示胶囊：放大镜 + 查询文本/占位符 + 光标）。
-fn render_search_row(ui: &mut Ui, query: &str) {
-    crate::ui::theme::search_frame().show(ui, |ui| {
+fn render_search_row(ui: &mut Ui, query: &str) -> bool {
+    let response = crate::ui::theme::search_frame().show(ui, |ui| {
         ui.horizontal(|ui| {
             ui.label(egui::RichText::new("🔎").color(crate::ui::theme::accent()));
             if query.is_empty() {
-                ui.label(egui::RichText::new("输入以筛选路径…").weak());
+                ui.label(egui::RichText::new("点击后输入以筛选路径…").weak());
             } else {
                 ui.label(egui::RichText::new(format!("{query}▏")).strong());
             }
         });
     });
+    response.response.interact(egui::Sense::click()).clicked()
 }
 
 /// 渲染悬浮条。返回本帧发生的鼠标交互（若有）。
@@ -37,7 +40,9 @@ pub fn render(root: &mut Ui, controller: &Controller) -> Option<UiEvent> {
     egui::CentralPanel::default()
         .frame(crate::ui::theme::overlay_frame())
         .show(root, |ui| {
-            render_search_row(ui, controller.query());
+            if render_search_row(ui, controller.query()) {
+                event = Some(UiEvent::Search);
+            }
             ui.add_space(4.0);
 
             egui::ScrollArea::vertical().show(ui, |ui| {
@@ -47,9 +52,9 @@ pub fn render(root: &mut Ui, controller: &Controller) -> Option<UiEvent> {
                         let response = ui.add(egui::Button::selectable(is_selected, path.as_str()));
                         // 双击也会触发 clicked()，故先判双击。
                         if response.double_clicked() {
-                            event = Some(UiEvent::ItemDoubleClicked(idx));
+                            event = Some(UiEvent::ItemDouble(idx));
                         } else if response.clicked() {
-                            event = Some(UiEvent::ItemClicked(idx));
+                            event = Some(UiEvent::Item(idx));
                         }
                     }
                 });
@@ -114,7 +119,19 @@ mod tests {
         harness.run();
         harness.get_by_label("D:\\Games").click();
         harness.run();
-        assert_eq!(harness.state().1, Some(UiEvent::ItemClicked(1)));
+        assert_eq!(harness.state().1, Some(UiEvent::Item(1)));
+    }
+
+    #[test]
+    fn clicking_search_row_emits_search_clicked() {
+        let mut harness = harness_for(controller_with(&["C:\\Work"], ""));
+        harness.run();
+        harness
+            .query_by_label_contains("点击后输入以筛选")
+            .expect("search row placeholder")
+            .click();
+        harness.run();
+        assert_eq!(harness.state().1, Some(UiEvent::Search));
     }
 
     #[test]
@@ -122,7 +139,7 @@ mod tests {
         // 空查询：显示占位符。
         let mut empty = harness_for(controller_with(&["C:\\Work"], ""));
         empty.run();
-        assert!(empty.query_by_label_contains("输入以筛选").is_some());
+        assert!(empty.query_by_label_contains("点击后输入以筛选").is_some());
 
         // 有查询：回显查询文本（含合成光标）。
         let mut typed = harness_for(controller_with(&["C:\\Work"], "wo"));
