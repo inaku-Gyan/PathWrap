@@ -11,11 +11,9 @@ pub struct DialogInfo {
     pub dpi: u32,
 }
 
-/// 用户在悬浮条上产生的一次输入意图（由键盘钩子翻译得到）。
+/// 文本编辑器之外的键盘动作，由 UI 层转交给控制器。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum KeyAction {
-    Char(char),
-    Backspace,
     Up,
     Down,
     Enter,

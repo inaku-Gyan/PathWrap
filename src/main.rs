@@ -49,15 +49,7 @@ fn main() -> eframe::Result<()> {
                 os::monitor::start_monitor(tx, ctx_clone);
             });
 
-            // 安装全局键盘钩子，为非激活悬浮窗提供打字筛选输入。
-            let key_rx = os::input_hook::install(cc.egui_ctx.clone());
-
-            Ok(Box::new(app::PathWarpApp::new(
-                cc,
-                rx,
-                key_rx,
-                config.theme,
-            )))
+            Ok(Box::new(app::PathWarpApp::new(cc, rx, config.theme)))
         }),
     )
 }

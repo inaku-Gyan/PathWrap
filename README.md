@@ -4,17 +4,18 @@ PathWarp is a Windows desktop application for quickly switching target folders w
 
 The app listens to file dialog state and shows a lightweight overlay with paths from currently opened Explorer windows, reducing manual folder navigation.
 
-The current code implements the core flow: Explorer path collection, foreground file-dialog detection, a non-activating overlay, keyboard filtering, and UI Automation based folder injection. Windows interactive verification is still required for the real dialog and input-hook paths.
+The current code implements the core flow: Explorer path collection, foreground file-dialog detection, an activating overlay editor, and UI Automation based folder injection. Windows interactive verification is still required for the real dialog and focus hand-off paths.
 
 ## Features
 
 - Detects system Open/Save file dialogs and docks a lightweight overlay flush beneath them
 - Reads active Explorer window paths and displays them as selectable items
 - Click the search control to type-to-filter, use up/down selection, and press Enter or double-click
-  to jump the dialog to that folder; its rounded frame highlights on hover and keyboard focus
+  to jump the dialog to that folder; its rounded frame has a light hover accent and the editor
+  caret communicates keyboard focus
 - Use the sun/moon control beside the search frame to switch between light and dark palettes;
   right-click it to follow the Windows theme or choose a fixed palette
-- Non-intrusive: the overlay never steals focus from the dialog
+- Focus-aware: clicking the overlay makes it the foreground editor while the current file-dialog session remains visible and tracked
 - Built with Rust + egui/eframe + windows-rs
 
 ## Architecture
@@ -25,34 +26,31 @@ decoupled by channels. Key design decisions:
 
 - **Pure controller state machine** ([src/core/controller.rs](src/core/controller.rs)): a
   `Controller::step(env, event) -> Vec<Effect>` state machine owns **all** show/hide, docking,
-  injection, hook-gating, debounce and suppression decisions. Time and the foreground window
-  are injected via `Env`, so every timing rule is deterministically unit-testable. `app.rs`
-  only collects events (dialog channel, keyboard hook, egui mouse responses), calls `step`,
+  injection, debounce and suppression decisions. Time and the foreground window are injected
+  via `Env`, so every timing rule is deterministically unit-testable. `app.rs` only collects
+  events (dialog channel and egui input/mouse responses), calls `step`,
   and executes the returned `Effect`s — it contains no decision logic.
-- **Non-activating overlay** ([src/os/window_ext.rs](src/os/window_ext.rs)): the eframe window
-  carries `WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW | WS_EX_TOPMOST`, **re-asserted every frame** in
-  [src/app.rs](src/app.rs) — winit recomputes and rewrites `GWL_EXSTYLE` after our initial
-  apply (wiping `WS_EX_NOACTIVATE`), so a one-time set does not hold; the per-frame idempotent
-  re-assert is the load-bearing guarantee. The window procedure is additionally subclassed to
-  answer `WM_MOUSEACTIVATE` with `MA_NOACTIVATE` as a second line of defence. Together these
-  ensure clicking the overlay never activates it or moves foreground off the dialog. "Hiding"
-  moves the window off-screen while keeping it `WS_VISIBLE` (never `SW_HIDE`) — a hidden window
-  stops receiving paints and would starve eframe's event loop. Docking uses `SetWindowPos` in
-  **physical pixels** from the dialog's DWM frame bounds; the fixed overlay height is scaled
-  from logical pixels using the dialog DPI.
+- **Activating overlay** ([src/os/window_ext.rs](src/os/window_ext.rs)): the eframe window
+  carries `WS_EX_TOOLWINDOW | WS_EX_TOPMOST`, **re-asserted every frame** in [src/app.rs](src/app.rs).
+  Any stale `WS_EX_NOACTIVATE` bit is explicitly cleared, and no `WM_MOUSEACTIVATE` override
+  blocks activation. Clicking the overlay therefore gives the embedded `TextEdit` a real
+  Windows foreground/focus path. The controller treats the overlay as part of the tracked
+  dialog session while it is foreground, so the row stays visible. "Hiding" moves the window
+  off-screen while keeping it `WS_VISIBLE` (never `SW_HIDE`) — a hidden window stops receiving
+  paints and would starve eframe's event loop. Docking uses `SetWindowPos` in **physical pixels**
+  from the dialog's DWM frame bounds; the fixed overlay height is scaled from logical pixels
+  using the dialog DPI.
 - **glow renderer** ([src/main.rs](src/main.rs), `Cargo.toml`): eframe is pinned to the glow
   (OpenGL) backend instead of the default wgpu. wgpu's Windows HWND surface only advertises an
   opaque `CompositeAlphaMode`, so a transparent window renders its transparent pixels as black;
   glow composites transparency via the window's own alpha + DWM, giving the overlay real
   rounded corners and drop shadow. It also avoids noisy Vulkan-loader errors from unrelated
   third-party layers.
-- **Global keyboard hook** ([src/os/input_hook.rs](src/os/input_hook.rs)): because a
-  non-activating window can't hold keyboard focus, a `WH_KEYBOARD_LL` hook feeds the controller
-  only after the user clicks the overlay search/list. Before that click, and after the pointer
-  returns to the dialog, the hook is fail-open so filename editing, IME input, and system
-  shortcuts stay with the original foreground window. Ctrl/Alt/Win combinations and a missing
-  receiver are also always passed through. egui remains a pure renderer over controller state
-  (no `TextEdit`).
+- **Text editing** ([src/ui/window.rs](src/ui/window.rs)): the search row uses an egui
+  `TextEdit` bound directly to the controller query. The widget owns its blinking caret,
+  selection, clipboard, paste, backspace, and platform text/IME events; navigation, Enter, and
+  Escape are mapped to controller actions. There is no custom caret glyph and no global keyboard
+  hook competing with the focused editor.
 - **UI Automation injection** ([src/os/dialog.rs](src/os/dialog.rs)): locates the filename edit
   and the default button via UIA, then `ValuePattern::SetValue` + `InvokePattern::Invoke`.
   If no suitable button is found, it falls back to sending Enter to the filename edit.
@@ -65,12 +63,8 @@ decoupled by channels. Key design decisions:
 When no dialog is being tracked, the monitor polls at 30 ms. During tracking it polls at 8 ms,
 and WinEvent notifications wake it sooner when the foreground, focus, or window visibility
 changes. A dialog is hidden only after three consecutive lost checks, while the controller
-applies a 120 ms disappearance grace period and a 150 ms foreground-loss grace period.
-
-> Known limitation: the keyboard hook translates keys via `ToUnicodeEx`, so IME composition
-> (e.g. Chinese input) is not captured for overlay filtering. When the overlay is not explicitly
-> armed, IME input stays with the file dialog; full IME filtering remains tracked in
-> [GitHub issue #34](https://github.com/inaku-Gyan/PathWrap/issues/34).
+applies a 120 ms disappearance grace period and a 150 ms foreground-loss grace period. The
+foreground-loss rule treats the PathWarp overlay as a continuation of the tracked dialog session.
 
 ## Development
 

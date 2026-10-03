@@ -29,7 +29,7 @@ pub struct Env {
 pub enum Event {
     /// 监视线程上报的对话框状态（`Some` = 出现/更新，`None` = 疑似消失）。
     DialogUpdate(Option<DialogInfo>),
-    /// 键盘钩子送来的输入意图。
+    /// 文本编辑器之外的导航、确认和收起动作。
     Key(KeyAction),
     /// 列表项被单击（下标为过滤后列表中的位置）。
     ItemClicked(usize),
@@ -53,8 +53,6 @@ pub enum Effect {
     Park,
     /// 把 `path` 注入 `hwnd` 指向的对话框并确认。
     Inject { hwnd: isize, path: String },
-    /// 设置键盘钩子门控（是否截获打字/导航键）。
-    SetHookActive(bool),
     /// 重新读取已打开的 Explorer 路径列表。
     RefreshPaths,
 }
@@ -71,10 +69,12 @@ pub struct Controller {
 
     // ---- 已下发效果的去重基线 ----
     visible: bool,
-    hook_active: bool,
     last_dock: Option<(i32, i32, i32, i32)>,
     /// 新会话请求刷新路径，在下一次 reconcile 里发一次 `RefreshPaths`。
     pending_refresh: bool,
+    /// 悬浮层是否是当前 Windows 前台窗口。真实激活后，它仍属于当前对话框会话，
+    /// 不应被“对话框失去前台”的去抖逻辑隐藏。
+    overlay_focused: bool,
 
     // ---- 交互模型 ----
     paths: Vec<String>,
@@ -89,8 +89,26 @@ impl Controller {
 
     // ---- 供渲染层读取的模型快照 ----
 
+    #[cfg(test)]
     pub fn query(&self) -> &str {
         &self.query
+    }
+
+    /// Give the focused `TextEdit` direct ownership of the query buffer for this frame.
+    pub fn query_mut(&mut self) -> &mut String {
+        &mut self.query
+    }
+
+    /// Re-clamp the selected path after the text editor changes the query.
+    pub fn query_edited(&mut self) {
+        self.clamp_selection();
+    }
+
+    /// Tell the platform-independent state machine that the overlay is the current
+    /// foreground window. A real activating overlay still belongs to the tracked dialog
+    /// session, so it must not be hidden by the foreground-loss grace period.
+    pub fn set_overlay_focused(&mut self, focused: bool) {
+        self.overlay_focused = focused;
     }
 
     pub fn selected_index(&self) -> usize {
@@ -175,14 +193,6 @@ impl Controller {
 
     fn on_key(&mut self, key: KeyAction, fx: &mut Vec<Effect>) {
         match key {
-            KeyAction::Char(c) => {
-                self.query.push(c);
-                self.clamp_selection();
-            }
-            KeyAction::Backspace => {
-                self.query.pop();
-                self.clamp_selection();
-            }
             KeyAction::Up => self.move_selection(true, false),
             KeyAction::Down => self.move_selection(false, true),
             KeyAction::Enter => self.confirm(fx),
@@ -190,12 +200,8 @@ impl Controller {
         }
     }
 
-    /// 完成选择：先关钩子门控，再注入选中路径——**注入后保持停靠**，让用户可继续
-    /// 挑选/输入。收起悬浮条是 ESC 的职责，不在此处。
-    ///
-    /// 关钩子只是为了 UIA 同步调用期间不吞键：注入完成后，同一 `step` 的 `reconcile`
-    /// 见「目标仍在 + 对话框仍前台」会自动重新 `SetHookActive(true)`，故净效果为
-    /// `[SetHookActive(false), Inject, SetHookActive(true)]`，钩子随即恢复。
+    /// 完成选择：注入选中路径并保持停靠，让用户可继续挑选/输入。收起悬浮条是 ESC
+    /// 的职责，不在此处。
     fn confirm(&mut self, fx: &mut Vec<Effect>) {
         let Some(dialog) = self.target_dialog else {
             return;
@@ -203,11 +209,6 @@ impl Controller {
         let Some(path) = self.selected_path() else {
             return;
         };
-        // 注入前必须先关闭钩子门控，避免 UIA 同步调用期间仍在吞键。
-        if self.hook_active {
-            fx.push(Effect::SetHookActive(false));
-            self.hook_active = false;
-        }
         fx.push(Effect::Inject {
             hwnd: dialog.hwnd,
             path,
@@ -250,11 +251,11 @@ impl Controller {
             self.end_session();
         }
 
-        // 计算期望显隐：目标存在且（前台命中，或前台丢失仍在宽限内）。
+        // 计算期望显隐：目标存在且（目标对话框或悬浮层在前台，或前台丢失仍在宽限内）。
         let desired_visible = match self.target_dialog {
             None => false,
             Some(dialog) => {
-                if env.foreground_hwnd == dialog.hwnd {
+                if env.foreground_hwnd == dialog.hwnd || self.overlay_focused {
                     self.fg_lost_since = None;
                     true
                 } else {
@@ -276,17 +277,9 @@ impl Controller {
                     });
                     self.last_dock = Some(geom);
                 }
-                if !self.hook_active {
-                    fx.push(Effect::SetHookActive(true));
-                    self.hook_active = true;
-                }
                 self.visible = true;
             }
         } else if self.visible {
-            if self.hook_active {
-                fx.push(Effect::SetHookActive(false));
-                self.hook_active = false;
-            }
             fx.push(Effect::Park);
             self.visible = false;
             self.last_dock = None;
@@ -371,12 +364,6 @@ mod tests {
     fn has_park(fx: &[Effect]) -> bool {
         fx.iter().any(|e| matches!(e, Effect::Park))
     }
-    fn hook_set(fx: &[Effect]) -> Option<bool> {
-        fx.iter().rev().find_map(|e| match e {
-            Effect::SetHookActive(v) => Some(*v),
-            _ => None,
-        })
-    }
     fn inject_path(fx: &[Effect]) -> Option<String> {
         fx.iter().find_map(|e| match e {
             Effect::Inject { path, .. } => Some(path.clone()),
@@ -403,7 +390,7 @@ mod tests {
     }
 
     #[test]
-    fn dialog_appears_docks_activates_hook_refreshes() {
+    fn dialog_appears_docks_and_refreshes() {
         let mut c = Controller::new();
         let t = base();
         let fx = c.step(
@@ -414,7 +401,6 @@ mod tests {
             Event::DialogUpdate(Some(dialog(1))),
         );
         assert!(has_dock(&fx));
-        assert_eq!(hook_set(&fx), Some(true));
         assert!(fx.contains(&Effect::RefreshPaths));
         // 停靠几何：对话框正下方，宽度对齐。
         assert!(fx.contains(&Effect::Dock {
@@ -453,7 +439,42 @@ mod tests {
     }
 
     #[test]
-    fn sustained_foreground_loss_parks_and_deactivates_hook() {
+    fn overlay_focus_keeps_session_visible_after_dialog_yields_foreground() {
+        let mut c = Controller::new();
+        let t = dock_at(&mut c, 1);
+        c.set_overlay_focused(true);
+
+        let fx = c.step(
+            Env {
+                now: t + Duration::from_millis(300),
+                foreground_hwnd: 999,
+            },
+            Event::Tick,
+        );
+        assert!(!has_park(&fx));
+        assert!(c.is_visible());
+
+        c.set_overlay_focused(false);
+        c.step(
+            Env {
+                now: t + Duration::from_millis(700),
+                foreground_hwnd: 999,
+            },
+            Event::Tick,
+        );
+        let fx = c.step(
+            Env {
+                now: t + Duration::from_millis(900),
+                foreground_hwnd: 999,
+            },
+            Event::Tick,
+        );
+        assert!(has_park(&fx));
+        assert!(!c.is_visible());
+    }
+
+    #[test]
+    fn sustained_foreground_loss_parks() {
         let mut c = Controller::new();
         let t = dock_at(&mut c, 1);
 
@@ -467,7 +488,7 @@ mod tests {
         );
         assert!(!has_park(&fx));
 
-        // 持续丢失超过 150ms：Park + 关钩子。
+        // 持续丢失超过 150ms：Park。
         let fx = c.step(
             Env {
                 now: t + Duration::from_millis(200),
@@ -476,7 +497,6 @@ mod tests {
             Event::Tick,
         );
         assert!(has_park(&fx));
-        assert_eq!(hook_set(&fx), Some(false));
         assert!(!c.is_visible());
     }
 
@@ -509,7 +529,6 @@ mod tests {
             Event::Tick,
         );
         assert!(has_dock(&fx));
-        assert_eq!(hook_set(&fx), Some(true));
     }
 
     #[test]
@@ -525,7 +544,6 @@ mod tests {
             Event::Key(KeyAction::Escape),
         );
         assert!(has_park(&fx));
-        assert_eq!(hook_set(&fx), Some(false));
 
         // 同一对话框再次上报：不得重新 Dock。
         let fx = c.step(
@@ -565,13 +583,8 @@ mod tests {
         let mut c = Controller::new();
         let t = dock_at(&mut c, 1);
         c.set_paths(vec!["C:\\Work".into()]);
-        c.step(
-            Env {
-                now: t,
-                foreground_hwnd: 1,
-            },
-            Event::Key(KeyAction::Char('w')),
-        );
+        c.query_mut().push('w');
+        c.query_edited();
 
         // None 到达，起动去抖。
         c.step(
@@ -629,18 +642,16 @@ mod tests {
     #[test]
     fn typing_and_backspace_update_query() {
         let mut c = Controller::new();
-        let t = dock_at(&mut c, 1);
+        dock_at(&mut c, 1);
         c.set_paths(vec!["C:\\Work".into(), "D:\\Games".into()]);
 
-        let env = Env {
-            now: t,
-            foreground_hwnd: 1,
-        };
-        c.step(env, Event::Key(KeyAction::Char('w')));
+        c.query_mut().push('w');
+        c.query_edited();
         assert_eq!(c.query(), "w");
         assert_eq!(c.filtered_paths(), vec!["C:\\Work".to_string()]);
 
-        c.step(env, Event::Key(KeyAction::Backspace));
+        c.query_mut().pop();
+        c.query_edited();
         assert_eq!(c.query(), "");
         assert_eq!(c.filtered_paths().len(), 2);
     }
@@ -658,21 +669,11 @@ mod tests {
         c.step(env, Event::Key(KeyAction::Down)); // 选中第 2 项
         let fx = c.step(env, Event::Key(KeyAction::Enter));
 
-        // 顺序：SetHookActive(false) 必须在 Inject 之前（UIA 同步调用期间不吞键）。
-        let hook_idx = fx.iter().position(|e| e == &Effect::SetHookActive(false));
-        let inject_idx = fx.iter().position(|e| matches!(e, Effect::Inject { .. }));
-        assert!(hook_idx.is_some() && inject_idx.is_some());
-        assert!(hook_idx < inject_idx, "hook must be disabled before inject");
         assert_eq!(inject_path(&fx).as_deref(), Some("D:\\Games"));
 
-        // 注入后悬浮条保持停靠，且钩子门控在同帧内自动恢复。
+        // 注入后悬浮条保持停靠。
         assert!(!has_park(&fx), "overlay must stay docked after injection");
         assert!(c.is_visible());
-        assert_eq!(
-            hook_set(&fx),
-            Some(true),
-            "hook must be re-enabled after inject"
-        );
     }
 
     #[test]

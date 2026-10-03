@@ -32,13 +32,17 @@ of truth for plans, decisions, dependencies, and the product backlog.
 ## Overlay header terms
 
 - **Search frame:** the larger rounded boundary around the filter input. Its
-  border carries the search hover/focus feedback.
+  neutral border carries a subtle hover feedback; focus is represented by the
+  editor caret rather than a thick outer ring.
 - **Search control:** the clickable region inside the search frame containing
-  the magnifier, query text, and caret. It has no separate hover border.
+  the magnifier and the `egui::TextEdit` query editor. It has no separate hover
+  border and owns the query buffer used for path filtering.
 - **Theme control:** the compact sun/moon button beside the search frame. It
   keeps its own hover/focus feedback and context menu independently of the
-  search frame.
-- **Search capture state:** the explicit keyboard-capture state armed by a
-  search or list click. It is separate from OS/egui focus because the overlay
-  is intentionally non-activating; the renderer uses it for the active ring
-  and caret.
+  search frame; completing a theme action returns focus to the search editor.
+- **Overlay focus:** the real Windows foreground/focus state of the activating
+  overlay. Clicking the overlay makes it the foreground window; the controller
+  keeps the current file-dialog session visible while that focus is held.
+- **Search editor:** the focused `egui::TextEdit` bound directly to the
+  controller query. Its blinking caret, selection, clipboard, and text/IME
+  events are the input surface; no custom caret or global keyboard hook is used.

@@ -397,14 +397,15 @@ fn dump_windows() {
     dump(app_pid, "dialog closed");
 }
 
-/// 回归（核心）：点击悬浮条后，① 悬浮窗自身绝不能被激活，② 对话框必须仍是前台，
-/// ③ 悬浮条必须仍停靠可见——这正是用户报告“点击即消失”的根因场景。
+/// 回归（核心）：点击悬浮条后，① 悬浮窗获得真实前台焦点，② 原文件对话框仍被
+/// 当前会话跟踪，③ 悬浮条保持停靠可见。这个行为让 egui `TextEdit` 能接收系统编辑
+/// 事件和闪烁 caret。
 ///
-/// 需要干净桌面：其它会在文件对话框获焦时抢前台的工具（如 Listary）会抢走对话框的
-/// 前台从而使悬浮条被正常收起，导致 ②③ 误判。运行前请关闭此类工具。
+/// 需要干净桌面：其它会抢占前台的工具（如 Listary）会改变点击后的焦点归属，导致
+/// 断言不稳定。运行前请关闭此类工具。
 #[test]
 #[ignore = "requires a clean interactive desktop (close Listary etc.); run via `just e2e`"]
-fn clicking_overlay_keeps_it_docked_and_dialog_foreground() {
+fn clicking_overlay_activates_it_and_keeps_it_docked() {
     let (_app, app_pid) = spawn_pathwarp();
     let mut host = DialogHost::spawn();
 
@@ -420,14 +421,13 @@ fn clicking_overlay_keeps_it_docked_and_dialog_foreground() {
     std::thread::sleep(Duration::from_millis(600));
 
     let fg = unsafe { GetForegroundWindow().0 as isize };
-    assert_ne!(
+    assert_eq!(
         fg, overlay_hwnd,
-        "overlay window activated itself on click (WS_EX_NOACTIVATE / MA_NOACTIVATE regression)"
+        "overlay window did not become the foreground window after click"
     );
     assert!(
-        is_foreground(dialog),
-        "clicking the overlay stole foreground from the dialog; fg_class='{}'",
-        class_of(fg),
+        !is_foreground(dialog),
+        "file dialog should yield focus to the overlay"
     );
     assert!(
         overlay_onscreen(app_pid).is_some(),

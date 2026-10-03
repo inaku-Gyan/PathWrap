@@ -1,12 +1,11 @@
-//! 悬浮条的纯渲染器：只读 [`Controller`] 的模型快照绘制界面，把鼠标交互
-//! 作为 [`UiEvent`] 回传给调用方（[`crate::app`]），自身不做任何状态决策。
-//!
-//! 键盘输入不经此处——非激活窗口拿不到键盘焦点；用户点击搜索行或列表后，
-//! 打字/导航由全局钩子驱动控制器（见 [`crate::os::input_hook`] 与 [`Controller`]）。
+//! 悬浮条渲染器：把查询直接绑定到 [`Controller`] 的编辑缓冲区，把鼠标和导航
+//! 交互作为 [`UiEvent`] 回传给调用方（[`crate::app`]）。窗口允许正常激活，
+//! 因而 `egui::TextEdit` 负责系统输入事件、选区、剪贴板、输入法和闪烁 caret。
 
 use crate::config::{ThemeMode, ThemePreference};
 use crate::core::controller::Controller;
-use egui::{CornerRadius, Stroke, StrokeKind, Ui};
+use crate::core::types::KeyAction;
+use egui::{Align, CornerRadius, FontId, Margin, Stroke, StrokeKind, Ui};
 
 const SEARCH_CONTROL_HEIGHT: f32 = 32.0;
 const SEARCH_ICON_SIZE: f32 = 18.0;
@@ -18,8 +17,10 @@ const THEME_ICON_SIZE: f32 = 18.0;
 /// 本帧产生的一次鼠标交互（下标为过滤后列表中的位置）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum UiEvent {
-    /// 用户点击搜索行，显式把后续键盘输入交给悬浮层筛选。
+    /// 用户点击搜索行，确保搜索框获得 egui 焦点。
     Search,
+    /// 文本编辑控件产生的导航/确认/收起动作。
+    Key(KeyAction),
     Item(usize),
     ItemDouble(usize),
     Theme(ThemeAction),
@@ -37,10 +38,10 @@ pub enum ThemeAction {
 /// Render the search row and the compact theme control in one visual header.
 fn render_header(
     ui: &mut Ui,
-    query: &str,
+    query: &mut String,
     theme_preference: ThemePreference,
     theme_mode: ThemeMode,
-    capture_active: bool,
+    editor_id: &mut Option<egui::Id>,
 ) -> Option<UiEvent> {
     let row = ui.horizontal(|ui| {
         // Keep the control at the trailing edge without introducing a second
@@ -78,40 +79,27 @@ fn render_header(
                             .max_rect(text_rect)
                             .layout(egui::Layout::left_to_right(egui::Align::Center)),
                     );
-                    if query.is_empty() {
-                        if capture_active {
-                            content_ui.add(
-                                egui::Label::new(
-                                    egui::RichText::new("▏")
-                                        .size(SEARCH_TEXT_SIZE)
-                                        .color(crate::ui::theme::accent(ui.ctx())),
-                                )
-                                .sense(egui::Sense::empty()),
-                            );
-                        }
-                        content_ui.add(
-                            egui::Label::new(
-                                egui::RichText::new("点击后输入以筛选路径…")
-                                    .size(SEARCH_TEXT_SIZE)
-                                    .weak(),
-                            )
-                            .sense(egui::Sense::empty()),
-                        );
-                    } else {
-                        content_ui.add(
-                            egui::Label::new(
-                                egui::RichText::new(format!("{query}▏"))
-                                    .size(SEARCH_TEXT_SIZE)
-                                    .strong(),
-                            )
-                            .sense(egui::Sense::empty()),
-                        );
-                    }
-                    ui.interact(
+                    let edit_response = content_ui.add_sized(
+                        text_rect.size(),
+                        egui::TextEdit::singleline(query)
+                            .id_salt("path_filter_edit")
+                            .font(FontId::proportional(SEARCH_TEXT_SIZE))
+                            .text_color(ui.visuals().text_color())
+                            .hint_text("点击后输入以筛选路径…")
+                            .frame(egui::Frame::NONE)
+                            .margin(Margin::ZERO)
+                            .vertical_align(Align::Center)
+                            .return_key(None),
+                    );
+                    let search_response = ui.interact(
                         search_rect,
                         ui.id().with("path_filter_search"),
                         egui::Sense::click(),
-                    )
+                    );
+                    if search_response.clicked() {
+                        edit_response.request_focus();
+                    }
+                    (search_response, edit_response)
                 });
                 (frame_response.response, frame_response.inner)
             },
@@ -122,24 +110,44 @@ fn render_header(
     });
 
     let (frame_response, search_response, theme_event) = row.inner;
-    // The Frame response includes its padding and stroke; use it for the
-    // visible search-frame ring instead of the smaller clickable search rect.
-    let focused = capture_active || search_response.has_focus();
-    if search_response.hovered() || focused {
-        let stroke = if focused {
-            Stroke::new(2.0, crate::ui::theme::focus(ui.ctx()))
-        } else {
-            Stroke::new(1.0, crate::ui::theme::focus(ui.ctx()).gamma_multiply(0.55))
-        };
+    *editor_id = Some(search_response.1.id);
+    // The base frame remains neutral. Hovering the search area adds a subtle one-pixel
+    // accent; focus is expressed by TextEdit's blinking caret instead of a thick outer ring.
+    if search_response.0.hovered() {
         ui.painter().rect_stroke(
             frame_response.rect,
             CornerRadius::same(6),
-            stroke,
+            Stroke::new(1.0, crate::ui::theme::focus(ui.ctx()).gamma_multiply(0.55)),
             StrokeKind::Inside,
         );
     }
 
-    theme_event.or_else(|| search_response.clicked().then_some(UiEvent::Search))
+    let key_event = search_response.1.has_focus().then(|| {
+        ui.input(|input| {
+            if input.key_pressed(egui::Key::Escape) {
+                Some(UiEvent::Key(KeyAction::Escape))
+            } else if input.key_pressed(egui::Key::Enter) {
+                Some(UiEvent::Key(KeyAction::Enter))
+            } else if input.key_pressed(egui::Key::ArrowUp) {
+                Some(UiEvent::Key(KeyAction::Up))
+            } else if input.key_pressed(egui::Key::ArrowDown) {
+                Some(UiEvent::Key(KeyAction::Down))
+            } else {
+                None
+            }
+        })
+    });
+    let key_event = key_event.flatten();
+
+    // Theme changes are still a search interaction: after a button/menu action, put the
+    // caret back into the editor so typing can continue without a second click.
+    if theme_event.is_some() {
+        search_response.1.request_focus();
+    }
+
+    theme_event
+        .or(key_event)
+        .or_else(|| search_response.0.clicked().then_some(UiEvent::Search))
 }
 
 fn render_theme_button(
@@ -271,44 +279,37 @@ fn arc_points(
 
 /// 渲染悬浮条。返回本帧发生的鼠标交互（若有）。
 #[allow(dead_code)]
-pub fn render(root: &mut Ui, controller: &Controller) -> Option<UiEvent> {
+pub fn render(root: &mut Ui, controller: &mut Controller) -> Option<UiEvent> {
     render_with_theme(root, controller, ThemePreference::Auto, ThemeMode::Dark)
 }
 
 /// Render the overlay using the preference and resolved mode owned by the app shell.
 pub fn render_with_theme(
     root: &mut Ui,
-    controller: &Controller,
+    controller: &mut Controller,
     theme_preference: ThemePreference,
     theme_mode: ThemeMode,
 ) -> Option<UiEvent> {
-    render_with_theme_and_capture(root, controller, theme_preference, theme_mode, false)
-}
-
-/// Render the overlay with the non-activating window's explicit input-capture state.
-pub fn render_with_theme_and_capture(
-    root: &mut Ui,
-    controller: &Controller,
-    theme_preference: ThemePreference,
-    theme_mode: ThemeMode,
-    capture_active: bool,
-) -> Option<UiEvent> {
-    let filtered = controller.filtered_paths();
-    let selected = controller.selected_index();
     let mut event = None;
+    let mut editor_id = None;
 
     egui::CentralPanel::default()
         .frame(crate::ui::theme::overlay_frame(root.ctx()))
         .show(root, |ui| {
             if let Some(header_event) = render_header(
                 ui,
-                controller.query(),
+                controller.query_mut(),
                 theme_preference,
                 theme_mode,
-                capture_active,
+                &mut editor_id,
             ) {
                 event = Some(header_event);
             }
+            // TextEdit mutates the controller's source buffer directly. Re-clamp the selected
+            // row before laying out the filtered list so edits take effect in the same frame.
+            controller.query_edited();
+            let filtered = controller.filtered_paths();
+            let selected = controller.selected_index();
             ui.add_space(4.0);
 
             egui::ScrollArea::vertical().show(ui, |ui| {
@@ -345,6 +346,13 @@ pub fn render_with_theme_and_capture(
             });
         });
 
+    if matches!(event, Some(UiEvent::Item(_) | UiEvent::ItemDouble(_)))
+        && let Some(editor_id) = editor_id
+    {
+        root.ctx()
+            .memory_mut(|memory| memory.request_focus(editor_id));
+    }
+
     event
 }
 
@@ -352,23 +360,16 @@ pub fn render_with_theme_and_capture(
 #[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests {
     use super::*;
-    use crate::core::controller::{Controller, Env, Event};
-    use crate::core::types::KeyAction;
+    use crate::core::controller::Controller;
     use egui_kittest::Harness;
     use egui_kittest::kittest::Queryable;
-    use std::time::Instant;
 
     /// 构造一个带路径、可选已输入查询的控制器（用于喂给纯渲染器）。
     fn controller_with(paths: &[&str], query: &str) -> Controller {
         let mut controller = Controller::new();
         controller.set_paths(paths.iter().map(|s| (*s).to_string()).collect());
-        let env = Env {
-            now: Instant::now(),
-            foreground_hwnd: 1,
-        };
-        for ch in query.chars() {
-            controller.step(env, Event::Key(KeyAction::Char(ch)));
-        }
+        controller.query_mut().push_str(query);
+        controller.query_edited();
         controller
     }
 
@@ -378,33 +379,11 @@ mod tests {
             .build_ui_state(
                 |ui, state: &mut (Controller, Option<UiEvent>)| {
                     // 点击在某一帧被消费，后续帧 render 返回 None；这里latch住首个非空事件。
-                    if let Some(event) = render(ui, &state.0) {
+                    if let Some(event) = render(ui, &mut state.0) {
                         state.1 = Some(event);
                     }
                 },
                 (controller, None),
-            )
-    }
-
-    fn capture_harness_for(controller: Controller) -> Harness<'static, (Controller, bool)> {
-        Harness::builder()
-            .with_size(egui::vec2(420.0, 320.0))
-            .build_ui_state(
-                |ui, state: &mut (Controller, bool)| {
-                    if matches!(
-                        render_with_theme_and_capture(
-                            ui,
-                            &state.0,
-                            ThemePreference::Auto,
-                            ThemeMode::Dark,
-                            state.1,
-                        ),
-                        Some(UiEvent::Search)
-                    ) {
-                        state.1 = true;
-                    }
-                },
-                (controller, false),
             )
     }
 
@@ -433,25 +412,22 @@ mod tests {
         let mut harness = harness_for(controller_with(&["C:\\Work"], ""));
         harness.run();
         harness
-            .query_by_label_contains("点击后输入以筛选")
-            .expect("search row placeholder")
+            .get_by_role(egui::accesskit::Role::TextInput)
             .click();
         harness.run();
         assert_eq!(harness.state().1, Some(UiEvent::Search));
     }
 
     #[test]
-    fn captured_search_shows_caret_after_click() {
-        let mut harness = capture_harness_for(controller_with(&["C:\\Work"], ""));
+    fn search_uses_text_edit_without_custom_caret() {
+        let mut harness = harness_for(controller_with(&["C:\\Work"], ""));
         harness.run();
-        harness
-            .query_by_label_contains("点击后输入以筛选")
-            .expect("search row placeholder")
-            .click();
+        let edit = harness.get_by_role(egui::accesskit::Role::TextInput);
+        edit.click();
         harness.run();
         assert!(
-            harness.query_by_label_contains("▏").is_some(),
-            "captured empty search must show its caret"
+            harness.query_by_label_contains("▏").is_none(),
+            "the old hand-drawn caret must not be rendered"
         );
     }
 
@@ -489,11 +465,17 @@ mod tests {
         // 空查询：显示占位符。
         let mut empty = harness_for(controller_with(&["C:\\Work"], ""));
         empty.run();
-        assert!(empty.query_by_label_contains("点击后输入以筛选").is_some());
+        assert_eq!(
+            empty.get_by_role(egui::accesskit::Role::TextInput).value(),
+            Some(String::new())
+        );
 
-        // 有查询：回显查询文本（含合成光标）。
+        // 有查询：TextEdit 的可访问值回显查询文本。
         let mut typed = harness_for(controller_with(&["C:\\Work"], "wo"));
         typed.run();
-        assert!(typed.query_by_label_contains("wo").is_some());
+        assert_eq!(
+            typed.get_by_role(egui::accesskit::Role::TextInput).value(),
+            Some("wo".to_string())
+        );
     }
 }

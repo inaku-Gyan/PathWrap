@@ -2,6 +2,10 @@
 
 研究日期：2026-10-03
 
+> 历史记录：2026-10-04 起，PathWarp 改为允许悬浮层获得真实 Windows 焦点，并使用
+> `egui::TextEdit` 作为查询数据源。下文保留当时对非激活窗口与低层钩子方案的分析，
+> 不再描述当前运行时输入链路。
+
 本记录对应 GitHub Issue [IME 组字路径过滤研究](https://github.com/inaku-Gyan/PathWrap/issues/33)。目标是在不让非激活悬浮层抢走文件对话框焦点的前提下，判断中文、日文、韩文输入法的预编辑、提交、取消和输入法切换能否安全接入路径过滤。
 
 ## 结论
@@ -17,9 +21,9 @@ PathWarp 当前由非激活 egui 悬浮层和跨进程 WH_KEYBOARD_LL 组成。�
 
 ## 当前代码事实
 
-- [src/os/input_hook.rs](../../src/os/input_hook.rs) 安装 WH_KEYBOARD_LL。translate_char 调用 ToUnicodeEx；keyboard_proc 只有在显式捕获、鼠标仍在悬浮层内且动作已送达 UI 时，才对消费的 WM_KEYDOWN/WM_SYSKEYDOWN 返回 LRESULT(1)，其余事件调用 CallNextHookEx。
-- [src/app.rs](../../src/app.rs) 只在悬浮层可见且文件对话框前台时打开会话门控；搜索/列表的鼠标事件另行打开键盘捕获，返回对话框或会话结束时自动 fail-open。
-- [README.md](../../README.md) 已把 ToUnicodeEx 无法表达 IME 组字列为已知限制。
+- 历史版本的 `src/os/input_hook.rs` 曾安装 WH_KEYBOARD_LL，并用 ToUnicodeEx 翻译直接布局字符；该文件已随真实焦点编辑方案移除。
+- 当前 [src/ui/window.rs](../../src/ui/window.rs) 将查询直接绑定到 `egui::TextEdit`，由 egui 接收文本、选区、剪贴板和 IME 事件。
+- [README.md](../../README.md) 记录当前激活窗口和 TextEdit 输入边界。
 - Cargo.toml 已启用 Win32_UI_TextServices、Win32_UI_WindowsAndMessaging 和 COM。IMM32 的 Rust 模块还需要 Win32_UI_Input_Ime。
 
 ## 事件来源与线程模型
