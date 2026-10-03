@@ -31,6 +31,8 @@ jobs:
       RELEASE_TARGET: x86_64-pc-windows-msvc
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - name: Validate release preparation helpers
         shell: pwsh
@@ -80,3 +82,40 @@ jobs:
             ${{ runner.temp }}/pathwarp-release-artifacts/*.zip
             ${{ runner.temp }}/pathwarp-release-artifacts/*.sha256
           if-no-files-found: error
+
+  release:
+    name: Publish GitHub Release
+    needs: preflight
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    env:
+      RELEASE_ARTIFACT_DIR: ${{ runner.temp }}\pathwarp-release-artifacts
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Download verified candidate artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: PathWarp-${{ github.ref_name }}-windows-x64
+          path: ${{ runner.temp }}/pathwarp-release-artifacts
+
+      - name: Validate release publication helpers
+        shell: pwsh
+        run: ./scripts/release/publish.ps1 -Mode SelfTest
+
+      - name: Verify candidate checksum
+        shell: pwsh
+        run: |
+          $zipName = "PathWarp-$env:GITHUB_REF_NAME-windows-x64.zip"
+          ./scripts/release/prepare.ps1 -Mode Verify `
+            -ZipPath (Join-Path $env:RELEASE_ARTIFACT_DIR $zipName) `
+            -ChecksumPath (Join-Path $env:RELEASE_ARTIFACT_DIR "$zipName.sha256")
+
+      - name: Publish GitHub Release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: ./scripts/release/publish.ps1 -Mode Publish -Tag $env:GITHUB_REF_NAME -Repository $env:GITHUB_REPOSITORY -Commit $env:GITHUB_SHA -ArtifactDirectory $env:RELEASE_ARTIFACT_DIR

@@ -1,10 +1,12 @@
 [CmdletBinding()]
 param(
-    [ValidateSet('Validate', 'Package', 'SelfTest')]
+    [ValidateSet('Validate', 'Package', 'Verify', 'SelfTest')]
     [string]$Mode = 'Validate',
     [string]$Tag,
     [string]$TargetDirectory,
-    [string]$OutputDirectory
+    [string]$OutputDirectory,
+    [string]$ZipPath,
+    [string]$ChecksumPath
 )
 
 Set-StrictMode -Version Latest
@@ -184,6 +186,19 @@ function Invoke-SelfTest {
 
 if ($Mode -eq 'SelfTest') {
     Invoke-SelfTest
+    exit 0
+}
+
+if ($Mode -eq 'Verify') {
+    if ([string]::IsNullOrWhiteSpace($ZipPath)) {
+        throw '-ZipPath is required when verifying an artifact.'
+    }
+    if ([string]::IsNullOrWhiteSpace($ChecksumPath)) {
+        throw '-ChecksumPath is required when verifying an artifact.'
+    }
+
+    Assert-ChecksumFile -ZipPath $ZipPath -ChecksumPath $ChecksumPath
+    Write-Output "Checksum verified for '$([IO.Path]::GetFileName($ZipPath))'."
     exit 0
 }
 
