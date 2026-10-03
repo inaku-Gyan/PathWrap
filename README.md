@@ -16,7 +16,7 @@ Download the latest Windows release from [GitHub Releases](https://github.com/in
 
 ### Upgrade
 
-Close PathWarp, extract the new ZIP, and replace the existing program directory with the new same-named directory. The user configuration is stored outside that directory at `%APPDATA%\PathWarp\config.json`, so replacing the program files keeps the saved theme and other preferences. If Windows does not provide `%APPDATA%`, PathWarp falls back to `%LOCALAPPDATA%\PathWarp\config.json`.
+Close PathWarp, extract the new ZIP, and replace the existing program directory with the new same-named directory. The user configuration is stored outside that directory at `%APPDATA%\PathWarp\config.json`, so replacing the program files keeps the saved theme preference and other settings. If Windows does not provide `%APPDATA%`, PathWarp falls back to `%LOCALAPPDATA%\PathWarp\config.json`.
 
 ### Download and run problems
 
@@ -110,10 +110,10 @@ repository entry points and issue operations.
 ### Maintainer release flow
 
 1. Update the Cargo package version and let the ordinary CI checks pass on `main`.
-2. Create the protected stable tag for that version; the first formal release uses `v0.1.0`.
+2. Create and push the protected stable tag for that version; the first formal release uses `v0.1.0`.
 3. Observe the release workflow and the GitHub Release it creates.
 
-The workflow builds and uploads the release assets itself. Maintainers do not manually upload assets or add a separate business-behavior acceptance gate. Release notes use GitHub's automatically generated change list; runtime instructions stay in this README.
+The workflow builds and uploads the release assets itself. Maintainers do not manually upload assets or require a separate interactive acceptance record as a release gate. Release notes use GitHub's automatically generated change list; runtime instructions stay in this README.
 
 ### Script Commands (Justfile)
 
