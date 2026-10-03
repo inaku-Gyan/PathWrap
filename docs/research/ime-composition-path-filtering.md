@@ -8,7 +8,7 @@
 
 Windows 的 IME 组字数据不在逐键虚拟键翻译层产生。传统 IMM32 应用从拥有输入上下文的目标窗口收到 WM_IME_STARTCOMPOSITION、WM_IME_COMPOSITION 和 WM_IME_ENDCOMPOSITION；TSF 应用从自己的文本上下文收到组合事件。两者都能区分预编辑和最终提交，但都要求事件在对应的窗口线程或 TSF 文本上下文中处理。
 
-PathWarp 当前由非激活 egui 悬浮层和跨进程 WH_KEYBOARD_LL 组成。低层钩子在键盘事件进入目标线程队列前运行，当前代码用 ToUnicodeEx 生成字符并在成功分类后返回非零值吞掉按键。这条路径没有预编辑、候选提交或组字取消信息；吞掉拼音、假名或韩文物理按键还会阻止文件对话框的 IME 收到它们。因此，现有进程内 API 没有一个安全的 IMM32 旁路可以同时保留非激活窗口、拿到外部对话框的预编辑并阻止文本泄漏。
+PathWarp 当前由非激活 egui 悬浮层和跨进程 WH_KEYBOARD_LL 组成。低层钩子在键盘事件进入目标线程队列前运行；只有用户点击悬浮层搜索/列表、鼠标仍在悬浮层内、修饰键组合未触发且 UI 通道可用时，当前代码才用 ToUnicodeEx 生成字符并返回非零值吞掉按键。未进入捕获态、鼠标回到对话框、Ctrl/Alt/Win 组合或通道不可用时会调用 CallNextHookEx。这条路径没有预编辑、候选提交或组字取消信息；在捕获态吞掉拼音、假名或韩文物理按键仍会阻止文件对话框的 IME 收到它们。因此，现有进程内 API 没有一个安全的 IMM32 旁路可以同时保留非激活窗口、拿到外部对话框的预编辑并阻止文本泄漏。
 
 推荐分两步：
 
@@ -17,8 +17,8 @@ PathWarp 当前由非激活 egui 悬浮层和跨进程 WH_KEYBOARD_LL 组成。�
 
 ## 当前代码事实
 
-- [src/os/input_hook.rs](../../src/os/input_hook.rs) 安装 WH_KEYBOARD_LL。translate_char 调用 ToUnicodeEx，keyboard_proc 对消费的 WM_KEYDOWN/WM_SYSKEYDOWN 返回 LRESULT(1)；其余事件调用 CallNextHookEx。
-- [src/app.rs](../../src/app.rs) 只在悬浮层可见且文件对话框前台时启用消费钩子。
+- [src/os/input_hook.rs](../../src/os/input_hook.rs) 安装 WH_KEYBOARD_LL。translate_char 调用 ToUnicodeEx；keyboard_proc 只有在显式捕获、鼠标仍在悬浮层内且动作已送达 UI 时，才对消费的 WM_KEYDOWN/WM_SYSKEYDOWN 返回 LRESULT(1)，其余事件调用 CallNextHookEx。
+- [src/app.rs](../../src/app.rs) 只在悬浮层可见且文件对话框前台时打开会话门控；搜索/列表的鼠标事件另行打开键盘捕获，返回对话框或会话结束时自动 fail-open。
 - [README.md](../../README.md) 已把 ToUnicodeEx 无法表达 IME 组字列为已知限制。
 - Cargo.toml 已启用 Win32_UI_TextServices、Win32_UI_WindowsAndMessaging 和 COM。IMM32 的 Rust 模块还需要 Win32_UI_Input_Ime。
 
