@@ -1,0 +1,36 @@
+name: Quality
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    name: Format / Lint / Build / Test
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    env:
+      RUSTFLAGS: -D warnings
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Cache Cargo registry and git dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          cache-targets: false
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+      - name: Run clippy (deny warnings)
+        run: cargo clippy --all-targets --all-features -- -D warnings
+
+      - name: Build
+        run: cargo build --all-targets --verbose
+
+      # 单元测试（控制器状态机 + 窗口子类化 + egui_kittest 渲染）。
+      - name: Run tests
+        run: cargo test --all-features --verbose
