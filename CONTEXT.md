@@ -35,9 +35,9 @@ of truth for plans, decisions, dependencies, and the product backlog.
   `README.md`.
 - **Release asset:** an individual file attached to a GitHub Release. The
   portable package and its `.sha256` checksum are separate release assets.
-- **Package verification:** structural checks for the expected files, paths,
-  architecture label, and extraction; byte-level ZIP reproducibility is not
-  required.
+- **Package verification:** for the personal-use first release, generation and
+  readback of the ZIP's SHA-256; the package contract is documented separately
+  and no additional ZIP-structure or GUI smoke check is required.
 - **Release version:** the exact Cargo package version mirrored by a stable
   `vX.Y.Z` tag; the first formal release uses `v0.1.0`.
 - **Release notes:** GitHub-generated change notes followed by fixed run and
@@ -50,6 +50,10 @@ of truth for plans, decisions, dependencies, and the product backlog.
 - **Build provenance:** the commit, tag, toolchain, target, and runner
   metadata recorded in Actions and Release notes; it is not another package
   file or release asset.
+- **Manual acceptance gate:** the interactive Windows clean-desktop check that
+  must precede the first formal release but does not run inside CI.
+- **Release repair:** maintainer-only recovery for a bad published release;
+  the workflow never deletes or overwrites public assets.
 
 ## Theme terms
 
