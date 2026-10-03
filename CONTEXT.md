@@ -28,6 +28,17 @@ of truth for plans, decisions, dependencies, and the product backlog.
 - **Protected release tag:** a repository-governed `vX.Y.Z` reference accepted
   as the trigger for a formal release.
 
+## Distribution terms
+
+- **Portable package:** the user-facing `PathWarp-vX.Y.Z-windows-x64.zip`
+  with a same-named root directory and exactly `PathWarp.exe`, `LICENSE`, and
+  `README.md`.
+- **Release asset:** an individual file attached to a GitHub Release. The
+  portable package and its `.sha256` checksum are separate release assets.
+- **Package verification:** structural checks for the expected files, paths,
+  architecture label, and extraction; byte-level ZIP reproducibility is not
+  required.
+
 ## Theme terms
 
 - **Theme preference:** the user's appearance policy: follow the Windows system
