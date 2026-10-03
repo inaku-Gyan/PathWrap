@@ -11,7 +11,7 @@ The current code implements the core flow: Explorer path collection, foreground 
 Download the latest Windows release from [GitHub Releases](https://github.com/inaku-Gyan/PathWrap/releases). PathWarp is distributed as a portable Windows 10/11 x64 ZIP; it does not require an installer or administrator permission.
 
 1. Download `PathWarp-vX.Y.Z-windows-x64.zip` from the release you want.
-2. Extract it into a directory of your choice. The archive contains a same-named root directory.
+2. Extract it into a directory of your choice. The archive contains a same-named root directory, `PathWarp-vX.Y.Z-windows-x64`.
 3. Open that directory and run `PathWarp.exe`.
 
 ### Upgrade
@@ -110,10 +110,10 @@ repository entry points and issue operations.
 ### Maintainer release flow
 
 1. Update the Cargo package version and let the ordinary CI checks pass on `main`.
-2. Create and push the protected stable tag for that version; the first formal release uses `v0.1.0`.
+2. Create and push the protected release tag for that version; the first formal release uses `v0.1.0`.
 3. Observe the release workflow and the GitHub Release it creates.
 
-The workflow builds and uploads the release assets itself. Maintainers do not manually upload assets or require a separate interactive acceptance record as a release gate. Release notes use GitHub's automatically generated change list; runtime instructions stay in this README.
+When a formal release is ready, the release workflow builds and uploads the release assets itself. Maintainers do not manually upload assets or require a separate interactive acceptance record as a release gate. Release notes use GitHub's automatically generated change list; runtime instructions stay in this README.
 
 ### Script Commands (Justfile)
 
