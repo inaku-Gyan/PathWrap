@@ -67,6 +67,15 @@ applies a 120 ms disappearance grace period and a 150 ms foreground-loss grace p
 
 ## Development
 
+### Planning and issue tracking
+
+Project planning, decisions, dependencies, and the product backlog live in
+[GitHub Issues](https://github.com/inaku-Gyan/PathWrap/issues). The
+[Wayfinder migration map](https://github.com/inaku-Gyan/PathWrap/issues/22)
+indexes the workflow migration and its decisions; `AGENTS.md` and
+[`docs/agents/issue-tracker.md`](docs/agents/issue-tracker.md) describe the
+repository entry points and issue operations.
+
 ### Environment
 
 - Rust stable (recommended via `rustup`)
@@ -112,11 +121,13 @@ The suite is a three-layer pyramid:
    real `IFileOpenDialog` (via [src/bin/dialog_host.rs](src/bin/dialog_host.rs)) and asserts
    docking/foreground/reopen behavior with Win32 probes. These are `#[ignore]`d (need an
    interactive desktop and are sensitive to other foreground-grabbing tools) and run locally via
-   `just e2e`. The repository currently has no scheduled or manual E2E workflow; `.github/workflows/ci.yml`
-   runs formatting, Clippy, build, and the non-ignored test suite.
+   `just e2e`. The GitHub CI workflow covers formatting, Clippy, build, and
+   the non-ignored test suite; it does not run E2E.
 
-Run layers 1–2 with `cargo test` (or `just test`); layer 3 with `just e2e`. CI runs the
-non-ignored suite on pushes to `main` and pull requests that touch the configured paths.
+Run layers 1–2 with `cargo test` (or `just test`); run layer 3 manually with
+`just e2e`. The GitHub CI workflow does not run E2E: it runs formatting,
+Clippy, build, and the non-ignored test suite on pushes to `main` and pull
+requests that touch the configured paths.
 
 [`egui_kittest`]: https://docs.rs/egui_kittest/
 

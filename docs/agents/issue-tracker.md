@@ -43,9 +43,9 @@ the decision. Research may be resolved by an agent. If a ticket is outside
 the map's destination, close it and record it under `Out of scope` rather than
 under `Decisions so far`.
 
-`PLAN.md` is retired as a planning source. Do not add new execution items to
-it; the GitHub map and Issues are canonical. Its removal and the final local
-entry-point cleanup are tracked by the local-entry task on the migration map.
+The former `PLAN.md` was retired and removed during the migration. Do not
+recreate it or add planning items to another local markdown file; the GitHub
+map and Issues are canonical.
 
 For native sub-issues and dependencies, use `gh api` against the repository's
 sub-issues and issue-dependencies endpoints.
