@@ -38,6 +38,13 @@ of truth for plans, decisions, dependencies, and the product backlog.
 - **Package verification:** structural checks for the expected files, paths,
   architecture label, and extraction; byte-level ZIP reproducibility is not
   required.
+- **Release version:** the exact Cargo package version mirrored by a stable
+  `vX.Y.Z` tag; the first formal release uses `v0.1.0`.
+- **Release notes:** GitHub-generated change notes followed by fixed run and
+  verification instructions; they are not a package file.
+- **Published release:** the public GitHub Release record. A draft may be
+  repaired by a rerun, but published assets are never overwritten by the
+  release workflow.
 
 ## Theme terms
 
