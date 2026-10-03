@@ -139,9 +139,12 @@ fn render_header(
     });
     let key_event = key_event.flatten();
 
-    // Theme changes are still a search interaction: after a button/menu action, put the
-    // caret back into the editor so typing can continue without a second click.
-    if theme_event.is_some() {
+    // The overlay can receive focus even when the pointer lands on its blank background or
+    // another custom-painted region. Keep the editor as the logical keyboard target for the
+    // whole focused viewport; when focus leaves the native window, egui's `InputState::focused`
+    // becomes false and we stop requesting it.
+    let viewport_focused = ui.input(|input| input.focused);
+    if viewport_focused || theme_event.is_some() {
         search_response.1.request_focus();
     }
 
@@ -428,6 +431,20 @@ mod tests {
         assert!(
             harness.query_by_label_contains("▏").is_none(),
             "the old hand-drawn caret must not be rendered"
+        );
+    }
+
+    #[test]
+    fn focused_overlay_keeps_editor_focus_over_background_clicks() {
+        let mut harness = harness_for(controller_with(&["C:\\Work"], ""));
+        harness.ctx.input_mut(|input| input.focused = true);
+        harness.run();
+
+        assert!(
+            harness
+                .get_by_role(egui::accesskit::Role::TextInput)
+                .is_focused(),
+            "a focused overlay must keep its TextEdit as the keyboard target"
         );
     }
 
