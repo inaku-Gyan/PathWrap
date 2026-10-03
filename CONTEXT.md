@@ -19,6 +19,14 @@ of truth for plans, decisions, dependencies, and the product backlog.
   closed.
 - **Resolution:** the answer comment, closure, and one-line pointer appended
   to the map. A human confirmation is part of resolving a HITL ticket.
+- **Quality workflow:** read-only automation that verifies a source revision;
+  it never publishes a release.
+- **Release workflow:** tag-driven automation that invokes the quality
+  workflow, prepares a release artifact, and coordinates its publication.
+- **Release job:** the isolated publication step with write authority for the
+  GitHub Release; ordinary quality runs do not have that authority.
+- **Protected release tag:** a repository-governed `vX.Y.Z` reference accepted
+  as the trigger for a formal release.
 
 ## Theme terms
 
