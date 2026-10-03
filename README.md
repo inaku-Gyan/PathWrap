@@ -6,6 +6,22 @@ The app listens to file dialog state and shows a lightweight overlay with paths 
 
 The current code implements the core flow: Explorer path collection, foreground file-dialog detection, an activating overlay editor, and UI Automation based folder injection. Windows interactive verification is still required for the real dialog and focus hand-off paths.
 
+## Download and run
+
+Download the latest Windows release from [GitHub Releases](https://github.com/inaku-Gyan/PathWrap/releases). PathWarp is distributed as a portable Windows 10/11 x64 ZIP; it does not require an installer or administrator permission.
+
+1. Download `PathWarp-vX.Y.Z-windows-x64.zip` from the release you want.
+2. Extract it into a directory of your choice. The archive contains a same-named root directory.
+3. Open that directory and run `PathWarp.exe`.
+
+### Upgrade
+
+Close PathWarp, extract the new ZIP, and replace the existing program directory with the new same-named directory. The user configuration is stored outside that directory at `%APPDATA%\PathWarp\config.json`, so replacing the program files keeps the saved theme and other preferences. If Windows does not provide `%APPDATA%`, PathWarp falls back to `%LOCALAPPDATA%\PathWarp\config.json`.
+
+### Download and run problems
+
+If a download is incomplete, download the ZIP again from [GitHub Releases](https://github.com/inaku-Gyan/PathWrap/releases) and extract it fully before starting `PathWarp.exe`. For other problems, open an [issue](https://github.com/inaku-Gyan/PathWrap/issues) with the release version and a short description of what happened.
+
 ## Features
 
 - Detects system Open/Save file dialogs and docks a lightweight overlay flush beneath them
@@ -90,6 +106,14 @@ repository entry points and issue operations.
 2. Clone the repository and enter the project directory
 3. Run formatting, linting, and build-related commands as needed
 4. Run and verify behavior in a Windows environment
+
+### Maintainer release flow
+
+1. Update the Cargo package version and let the ordinary CI checks pass on `main`.
+2. Create the protected stable tag for that version; the first formal release uses `v0.1.0`.
+3. Observe the release workflow and the GitHub Release it creates.
+
+The workflow builds and uploads the release assets itself. Maintainers do not manually upload assets or add a separate business-behavior acceptance gate. Release notes use GitHub's automatically generated change list; runtime instructions stay in this README.
 
 ### Script Commands (Justfile)
 
