@@ -2,9 +2,10 @@
 //!
 //! 相比旧实现（CDM 消息 / WM_SETTEXT / 逐字符键盘模拟 + 硬 sleep），UIA 方案：
 //! - 直接定位文件名输入框并 `ValuePattern::SetValue` 写入完整路径；
-//! - 再 `InvokePattern::Invoke` 点击默认「打开/保存」按钮；
-//! - 全程同步的跨进程 COM 调用，无 sleep、无按键模拟、不抢焦点，对现代
-//!   `IFileDialog` 稳定可靠。
+//! - 再 `InvokePattern::Invoke` 点击默认「打开/保存」按钮；找不到合适按钮时，回退为向
+//!   文件名编辑框发送 Enter；
+//! - 主路径是同步的跨进程 COM 调用且无 sleep，目标是不抢焦点；具体兼容性仍需在
+//!   Windows 实机验证。
 
 use log::{error, info, warn};
 use std::cell::RefCell;

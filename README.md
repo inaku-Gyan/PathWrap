@@ -4,6 +4,8 @@ PathWarp is a Windows desktop application for quickly switching target folders w
 
 The app listens to file dialog state and shows a lightweight overlay with paths from currently opened Explorer windows, reducing manual folder navigation.
 
+The current code implements the core flow: Explorer path collection, foreground file-dialog detection, a non-activating overlay, keyboard filtering, and UI Automation based folder injection. Windows interactive verification is still required for the real dialog and input-hook paths.
+
 ## Features
 
 - Detects system Open/Save file dialogs and docks a lightweight overlay flush beneath them
@@ -33,7 +35,8 @@ decoupled by channels. Key design decisions:
   ensure clicking the overlay never activates it or moves foreground off the dialog. "Hiding"
   moves the window off-screen while keeping it `WS_VISIBLE` (never `SW_HIDE`) — a hidden window
   stops receiving paints and would starve eframe's event loop. Docking uses `SetWindowPos` in
-  **physical pixels** matched to the dialog's DWM frame bounds — no DPI conversion, no seam.
+  **physical pixels** from the dialog's DWM frame bounds; the fixed overlay height is scaled
+  from logical pixels using the dialog DPI.
 - **glow renderer** ([src/main.rs](src/main.rs), `Cargo.toml`): eframe is pinned to the glow
   (OpenGL) backend instead of the default wgpu. wgpu's Windows HWND surface only advertises an
   opaque `CompositeAlphaMode`, so a transparent window renders its transparent pixels as black;
@@ -47,11 +50,17 @@ decoupled by channels. Key design decisions:
   controller state (no `TextEdit`).
 - **UI Automation injection** ([src/os/dialog.rs](src/os/dialog.rs)): locates the filename edit
   and the default button via UIA, then `ValuePattern::SetValue` + `InvokePattern::Invoke`.
-  Synchronous, no sleeps, no synthetic keystrokes, no focus theft; works on modern
-  `IFileDialog`.
+  If no suitable button is found, it falls back to sending Enter to the filename edit.
+  The operation is synchronous, has no sleeps, and does not intentionally take focus on
+  modern `IFileDialog` dialogs.
 - **Dialog detection** ([src/os/monitor.rs](src/os/monitor.rs)): `SetWinEventHook` wakeups +
   adaptive polling, matching class `#32770` plus structural child-class evidence to avoid
   false positives on generic message boxes.
+
+When no dialog is being tracked, the monitor polls at 30 ms. During tracking it polls at 8 ms,
+and WinEvent notifications wake it sooner when the foreground, focus, or window visibility
+changes. A dialog is hidden only after three consecutive lost checks, while the controller
+applies a 120 ms disappearance grace period and a 150 ms foreground-loss grace period.
 
 > Known limitation: the keyboard hook translates keys via `ToUnicodeEx`, so IME composition
 > (e.g. Chinese input) is not captured for filtering; ASCII/partial filtering is unaffected.
@@ -102,11 +111,12 @@ The suite is a three-layer pyramid:
 3. **Windows E2E** ([tests/e2e.rs](tests/e2e.rs)): launches the real PathWarp binary against a
    real `IFileOpenDialog` (via [src/bin/dialog_host.rs](src/bin/dialog_host.rs)) and asserts
    docking/foreground/reopen behavior with Win32 probes. These are `#[ignore]`d (need an
-   interactive desktop and are sensitive to other foreground-grabbing tools) and run via
-   `just e2e`.
+   interactive desktop and are sensitive to other foreground-grabbing tools) and run locally via
+   `just e2e`. The repository currently has no scheduled or manual E2E workflow; `.github/workflows/ci.yml`
+   runs formatting, Clippy, build, and the non-ignored test suite.
 
-Run layers 1–2 with `cargo test` (or `just test`); layer 3 with `just e2e`. CI runs layers
-1–2 on every push; E2E runs on a schedule / manual dispatch (see `.github/workflows/e2e.yml`).
+Run layers 1–2 with `cargo test` (or `just test`); layer 3 with `just e2e`. CI runs the
+non-ignored suite on pushes to `main` and pull requests that touch the configured paths.
 
 [`egui_kittest`]: https://docs.rs/egui_kittest/
 

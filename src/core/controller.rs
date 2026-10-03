@@ -66,7 +66,7 @@ pub struct Controller {
     session_hwnd: Option<isize>,
     pending_none_since: Option<Instant>,
     fg_lost_since: Option<Instant>,
-    /// 用户按 ESC / 完成注入后被抑制的对话框，避免同一会话立即被重新拉起。
+    /// 用户按 ESC 后被抑制的对话框，避免同一会话立即被重新拉起。
     user_hidden_hwnd: Option<isize>,
 
     // ---- 已下发效果的去重基线 ----
