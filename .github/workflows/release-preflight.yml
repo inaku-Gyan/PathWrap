@@ -26,8 +26,6 @@ jobs:
     permissions:
       contents: read
     env:
-      CARGO_TARGET_DIR: ${{ runner.temp }}\pathwarp-release-target
-      RELEASE_ARTIFACT_DIR: ${{ runner.temp }}\pathwarp-release-artifacts
       RELEASE_TARGET: x86_64-pc-windows-msvc
     steps:
       - uses: actions/checkout@v7
@@ -45,9 +43,11 @@ jobs:
       - name: Build release binary
         shell: pwsh
         run: |
-          if (Test-Path -LiteralPath $env:CARGO_TARGET_DIR) {
-            Remove-Item -LiteralPath $env:CARGO_TARGET_DIR -Recurse -Force
+          $targetDirectory = Join-Path $env:RUNNER_TEMP 'pathwarp-release-target'
+          if (Test-Path -LiteralPath $targetDirectory) {
+            Remove-Item -LiteralPath $targetDirectory -Recurse -Force
           }
+          $env:CARGO_TARGET_DIR = $targetDirectory
           cargo build --locked --release --bin PathWarp
           if ($LASTEXITCODE -ne 0) {
             exit $LASTEXITCODE
@@ -55,7 +55,10 @@ jobs:
 
       - name: Stage portable package and checksum
         shell: pwsh
-        run: ./scripts/release/prepare.ps1 -Mode Package -Tag $env:GITHUB_REF_NAME -TargetDirectory $env:CARGO_TARGET_DIR -OutputDirectory $env:RELEASE_ARTIFACT_DIR
+        run: |
+          $targetDirectory = Join-Path $env:RUNNER_TEMP 'pathwarp-release-target'
+          $artifactDirectory = Join-Path $env:RUNNER_TEMP 'pathwarp-release-artifacts'
+          ./scripts/release/prepare.ps1 -Mode Package -Tag $env:GITHUB_REF_NAME -TargetDirectory $targetDirectory -OutputDirectory $artifactDirectory
 
       - name: Record build provenance
         shell: pwsh
@@ -89,8 +92,6 @@ jobs:
     runs-on: windows-latest
     permissions:
       contents: write
-    env:
-      RELEASE_ARTIFACT_DIR: ${{ runner.temp }}\pathwarp-release-artifacts
     steps:
       - uses: actions/checkout@v7
         with:
@@ -109,13 +110,16 @@ jobs:
       - name: Verify candidate checksum
         shell: pwsh
         run: |
+          $artifactDirectory = Join-Path $env:RUNNER_TEMP 'pathwarp-release-artifacts'
           $zipName = "PathWarp-$env:GITHUB_REF_NAME-windows-x64.zip"
           ./scripts/release/prepare.ps1 -Mode Verify `
-            -ZipPath (Join-Path $env:RELEASE_ARTIFACT_DIR $zipName) `
-            -ChecksumPath (Join-Path $env:RELEASE_ARTIFACT_DIR "$zipName.sha256")
+            -ZipPath (Join-Path $artifactDirectory $zipName) `
+            -ChecksumPath (Join-Path $artifactDirectory "$zipName.sha256")
 
       - name: Publish GitHub Release
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
-        run: ./scripts/release/publish.ps1 -Mode Publish -Tag $env:GITHUB_REF_NAME -Repository $env:GITHUB_REPOSITORY -Commit $env:GITHUB_SHA -ArtifactDirectory $env:RELEASE_ARTIFACT_DIR
+        run: |
+          $artifactDirectory = Join-Path $env:RUNNER_TEMP 'pathwarp-release-artifacts'
+          ./scripts/release/publish.ps1 -Mode Publish -Tag $env:GITHUB_REF_NAME -Repository $env:GITHUB_REPOSITORY -Commit $env:GITHUB_SHA -ArtifactDirectory $artifactDirectory
