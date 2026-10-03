@@ -45,6 +45,11 @@ of truth for plans, decisions, dependencies, and the product backlog.
 - **Published release:** the public GitHub Release record. A draft may be
   repaired by a rerun, but published assets are never overwritten by the
   release workflow.
+- **Release build:** the locked `PathWarp` binary built from the pinned Rust
+  toolchain and x64 MSVC target with Cargo's default release profile.
+- **Build provenance:** the commit, tag, toolchain, target, and runner
+  metadata recorded in Actions and Release notes; it is not another package
+  file or release asset.
 
 ## Theme terms
 
