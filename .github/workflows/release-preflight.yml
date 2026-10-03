@@ -1,0 +1,82 @@
+name: Release preflight
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  quality:
+    name: Shared quality checks
+    uses: ./.github/workflows/quality.yml
+    permissions:
+      contents: read
+
+  preflight:
+    name: Build and stage portable package
+    needs: quality
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    env:
+      CARGO_TARGET_DIR: ${{ runner.temp }}\pathwarp-release-target
+      RELEASE_ARTIFACT_DIR: ${{ runner.temp }}\pathwarp-release-artifacts
+      RELEASE_TARGET: x86_64-pc-windows-msvc
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Validate release preparation helpers
+        shell: pwsh
+        run: ./scripts/release/prepare.ps1 -Mode SelfTest
+
+      - name: Validate release tag and package version
+        shell: pwsh
+        run: ./scripts/release/prepare.ps1 -Mode Validate -Tag $env:GITHUB_REF_NAME
+
+      - name: Build release binary
+        shell: pwsh
+        run: |
+          if (Test-Path -LiteralPath $env:CARGO_TARGET_DIR) {
+            Remove-Item -LiteralPath $env:CARGO_TARGET_DIR -Recurse -Force
+          }
+          cargo build --locked --release --bin PathWarp
+          if ($LASTEXITCODE -ne 0) {
+            exit $LASTEXITCODE
+          }
+
+      - name: Stage portable package and checksum
+        shell: pwsh
+        run: ./scripts/release/prepare.ps1 -Mode Package -Tag $env:GITHUB_REF_NAME -TargetDirectory $env:CARGO_TARGET_DIR -OutputDirectory $env:RELEASE_ARTIFACT_DIR
+
+      - name: Record build provenance
+        shell: pwsh
+        run: |
+          $runnerImage = (@($env:ImageOS, $env:ImageVersion) | Where-Object { $_ }) -join ' '
+          if ([string]::IsNullOrWhiteSpace($runnerImage)) {
+            $runnerImage = "$env:RUNNER_OS/$env:RUNNER_ARCH"
+          }
+          $rustVersion = rustc --version
+          @"
+          ## Release preflight
+          - Commit SHA: $env:GITHUB_SHA
+          - Tag: $env:GITHUB_REF_NAME
+          - Rust/toolchain: $rustVersion
+          - Target: $env:RELEASE_TARGET
+          - Runner: $runnerImage
+          "@ | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+
+      - name: Upload candidate release artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: PathWarp-${{ github.ref_name }}-windows-x64
+          path: |
+            ${{ runner.temp }}/pathwarp-release-artifacts/*.zip
+            ${{ runner.temp }}/pathwarp-release-artifacts/*.sha256
+          if-no-files-found: error
