@@ -140,11 +140,11 @@ fn render_header(
     let key_event = key_event.flatten();
 
     // The overlay can receive focus even when the pointer lands on its blank background or
-    // another custom-painted region. Keep the editor as the logical keyboard target for the
-    // whole focused viewport; when focus leaves the native window, egui's `InputState::focused`
-    // becomes false and we stop requesting it.
+    // another custom-painted region. Restore the editor only when it is no longer the logical
+    // target; repeating `request_focus` while it already owns focus would interrupt IME
+    // composition in egui.
     let viewport_focused = ui.input(|input| input.focused);
-    if viewport_focused || theme_event.is_some() {
+    if (viewport_focused || theme_event.is_some()) && !search_response.1.has_focus() {
         search_response.1.request_focus();
     }
 
@@ -440,12 +440,59 @@ mod tests {
         harness.ctx.input_mut(|input| input.focused = true);
         harness.run();
 
+        let blank = egui::pos2(410.0, 300.0);
+        harness.event(egui::Event::PointerMoved(blank));
+        harness.event(egui::Event::PointerButton {
+            pos: blank,
+            button: egui::PointerButton::Primary,
+            pressed: true,
+            modifiers: egui::Modifiers::default(),
+        });
+        harness.event(egui::Event::PointerButton {
+            pos: blank,
+            button: egui::PointerButton::Primary,
+            pressed: false,
+            modifiers: egui::Modifiers::default(),
+        });
+        harness.run();
+
         assert!(
             harness
                 .get_by_role(egui::accesskit::Role::TextInput)
                 .is_focused(),
             "a focused overlay must keep its TextEdit as the keyboard target"
         );
+    }
+
+    #[test]
+    fn active_ime_composition_is_not_interrupted_by_focus_maintenance() {
+        let mut harness = harness_for(controller_with(&["C:\\Work"], ""));
+        harness.ctx.input_mut(|input| input.focused = true);
+        harness.run();
+
+        harness.event(egui::Event::Ime(egui::ImeEvent::Preedit {
+            text: "ni".to_owned(),
+            active_range_chars: Some(0..2),
+        }));
+        harness.run();
+
+        assert_eq!(harness.state().0.query(), "ni");
+
+        let ime = harness
+            .output()
+            .platform_output
+            .ime
+            .as_ref()
+            .expect("focused TextEdit should publish IME output");
+        assert!(
+            !ime.should_interrupt_composition,
+            "maintaining focus must not interrupt an active IME composition"
+        );
+
+        harness.event(egui::Event::Ime(egui::ImeEvent::Commit("你".to_owned())));
+        harness.run();
+
+        assert_eq!(harness.state().0.query(), "你");
     }
 
     #[test]
