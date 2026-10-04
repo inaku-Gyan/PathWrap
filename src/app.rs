@@ -2,7 +2,7 @@
 //! 控制器 [`crate::core::controller::Controller`]，并执行控制器返回的 [`Effect`]。
 //! 本文件不含任何显隐/停靠/注入/去抖判断——那些全在控制器里，可被单测覆盖。
 
-use crate::config::{AppConfig, ThemeMode, ThemePreference};
+use crate::config::{AppConfig, ConfigStore, ThemeMode, ThemePreference};
 use crate::core::controller::{Controller, Effect, Env, Event};
 use crate::os::monitor::{self, DialogInfo};
 use crate::os::{explorer, window_ext};
@@ -35,6 +35,7 @@ pub struct PathWarpApp {
 
     theme_preference: ThemePreference,
     theme_mode: ThemeMode,
+    config_store: ConfigStore,
     controller: Controller,
 }
 
@@ -43,6 +44,7 @@ impl PathWarpApp {
         cc: &eframe::CreationContext<'_>,
         dialog_rx: Receiver<Option<DialogInfo>>,
         theme_preference: ThemePreference,
+        config_store: ConfigStore,
     ) -> Self {
         let mut app = Self {
             overlay_hwnd: extract_hwnd(cc),
@@ -54,6 +56,7 @@ impl PathWarpApp {
                 ThemePreference::Light => ThemeMode::Light,
             },
             theme_preference,
+            config_store,
             controller: Controller::new(),
         };
         // 尽早应用窗口样式并停靠到屏幕外，避免启动时窗口在默认位置可见。
@@ -106,9 +109,7 @@ impl PathWarpApp {
         self.theme_mode = mode;
 
         let config = AppConfig { theme: preference };
-        if let Err(error) = config.save() {
-            log::warn!("could not persist theme preference: {error}");
-        }
+        self.config_store.save(&config);
     }
 
     fn toggle_theme_preference(&mut self) -> ThemePreference {

@@ -25,6 +25,33 @@ fn main() -> eframe::Result<()> {
     logging::init_logging();
     enable_per_monitor_v2_dpi_awareness();
 
+    let selected_storage = match config::parse_storage_dir(std::env::args_os().skip(1)) {
+        Ok(selected) => selected,
+        Err(error) => {
+            log::error!("invalid command line: {error}");
+            std::process::exit(2);
+        }
+    };
+    let storage_directory = match std::env::current_exe() {
+        Ok(executable) => {
+            match config::resolve_storage_path_for_process(selected_storage, &executable) {
+                Ok(directory) => Some(directory),
+                Err(error) => {
+                    log::warn!(
+                        "could not resolve the executable directory: {error}; running in memory-only mode"
+                    );
+                    None
+                }
+            }
+        }
+        Err(error) => {
+            log::warn!(
+                "could not resolve the executable directory: {error}; running in memory-only mode"
+            );
+            None
+        }
+    };
+
     let (tx, rx) = std::sync::mpsc::channel();
 
     let options = eframe::NativeOptions {
@@ -41,7 +68,7 @@ fn main() -> eframe::Result<()> {
         "PathWarp",
         options,
         Box::new(move |cc| {
-            let config = config::AppConfig::load();
+            let (config_store, config) = config::ConfigStore::open(storage_directory);
             ui::theme::setup_theme_with_preference(&cc.egui_ctx, config.theme);
 
             let ctx_clone = cc.egui_ctx.clone();
@@ -49,7 +76,12 @@ fn main() -> eframe::Result<()> {
                 os::monitor::start_monitor(tx, ctx_clone);
             });
 
-            Ok(Box::new(app::PathWarpApp::new(cc, rx, config.theme)))
+            Ok(Box::new(app::PathWarpApp::new(
+                cc,
+                rx,
+                config.theme,
+                config_store,
+            )))
         }),
     )
 }

@@ -16,7 +16,7 @@ Download the latest Windows release from [GitHub Releases](https://github.com/in
 
 ### Upgrade
 
-Close PathWarp, extract the new ZIP, and replace the existing program directory with the new same-named directory. The user configuration is stored outside that directory at `%APPDATA%\PathWarp\config.json`, so replacing the program files keeps the saved theme preference and other settings. If Windows does not provide `%APPDATA%`, PathWarp falls back to `%LOCALAPPDATA%\PathWarp\config.json`.
+PathWarp stores its settings in `pathwrap-store\config.json` beside `PathWarp.exe`. Keep that directory when replacing the executable if you want the saved theme preference and other settings to remain. If you start PathWarp with `--storage-dir <PATH>`, that directory is used instead; relative paths are resolved beside the executable. If the selected directory cannot be used, PathWarp warns and continues in memory without saving settings.
 
 ### Download and run problems
 
