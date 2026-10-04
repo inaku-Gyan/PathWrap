@@ -100,3 +100,7 @@ of truth for plans, decisions, dependencies, and the product backlog.
   object. A missing `theme` uses the default preference; unknown fields,
   malformed content, and invalid values warn and restore the full default
   configuration instead of blocking startup or invoking a migration.
+- **Persistence failure:** configuration writes use a same-directory temporary
+  file and atomic replacement. A failed save preserves the last formal file,
+  warns once, and switches the current process to memory-only mode until the
+  next launch; leftover temporary files are never read as configuration.
