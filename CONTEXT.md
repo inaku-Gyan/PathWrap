@@ -96,3 +96,7 @@ of truth for plans, decisions, dependencies, and the product backlog.
   directory cannot be created or written. Startup logs a warning, the
   application continues with in-memory settings, and it does not fall back to
   `%APPDATA%` or migrate legacy configuration.
+- **Configuration format:** the persisted JSON is a small, non-versioned
+  object. A missing `theme` uses the default preference; unknown fields,
+  malformed content, and invalid values warn and restore the full default
+  configuration instead of blocking startup or invoking a migration.
