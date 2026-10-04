@@ -81,3 +81,18 @@ of truth for plans, decisions, dependencies, and the product backlog.
 - **Search editor:** the focused `egui::TextEdit` bound directly to the
   controller query. Its blinking caret, selection, clipboard, and text/IME
   events are the input surface; no custom caret or global keyboard hook is used.
+
+## Portable persistence terms
+
+- **Storage directory:** the directory selected for persisted PathWarp data. By
+  default it is `pathwrap-store` beside the running `PathWarp.exe`;
+  `--storage-dir <PATH>` overrides it, with relative overrides resolved beside
+  the executable.
+- **Persisted configuration:** the current settings file at `<storage
+  directory>\\config.json`. Each executable directory has its own default
+  storage directory; an explicit override may intentionally select another
+  location.
+- **Memory-only mode:** the safe runtime mode entered when the storage
+  directory cannot be created or written. Startup logs a warning, the
+  application continues with in-memory settings, and it does not fall back to
+  `%APPDATA%` or migrate legacy configuration.
