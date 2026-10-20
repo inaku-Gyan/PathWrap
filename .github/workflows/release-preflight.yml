@@ -98,7 +98,7 @@ jobs:
           persist-credentials: false
 
       - name: Download verified candidate artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: PathWarp-${{ github.ref_name }}-windows-x64
           path: ${{ runner.temp }}/pathwarp-release-artifacts
