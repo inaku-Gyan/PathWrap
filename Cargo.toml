@@ -47,7 +47,7 @@ features = [
 ]
 
 [dev-dependencies]
-egui_kittest = "0.35"
+egui_kittest = "0.37"
 uiautomation = "0.25"
 
 [lints.clippy]
