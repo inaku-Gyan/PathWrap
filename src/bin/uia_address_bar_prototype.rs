@@ -10,7 +10,7 @@ use std::os::windows::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::sync::mpsc;
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use windows::Win32::Foundation::{E_ABORT, E_POINTER, HWND, LPARAM, WPARAM};
 use windows::Win32::System::Com::{
     CLSCTX_INPROC_SERVER, COINIT_APARTMENTTHREADED, COINIT_MULTITHREADED, CoCreateInstance,
@@ -19,11 +19,10 @@ use windows::Win32::System::Com::{
 use windows::Win32::System::Ole::IOleWindow;
 use windows::Win32::System::Threading::{CREATE_NO_WINDOW, GetCurrentProcessId};
 use windows::Win32::UI::Accessibility::{
-    CUIAutomation, IUIAutomation, IUIAutomationElement, IUIAutomationElement3,
-    IUIAutomationExpandCollapsePattern, IUIAutomationInvokePattern,
-    IUIAutomationLegacyIAccessiblePattern, IUIAutomationTreeWalker, IUIAutomationValuePattern,
-    UIA_ExpandCollapsePatternId, UIA_InvokePatternId, UIA_LegacyIAccessiblePatternId,
-    UIA_ValuePatternId,
+    CUIAutomation, IUIAutomation, IUIAutomationElement, IUIAutomationExpandCollapsePattern,
+    IUIAutomationInvokePattern, IUIAutomationLegacyIAccessiblePattern, IUIAutomationTreeWalker,
+    IUIAutomationValuePattern, UIA_ExpandCollapsePatternId, UIA_InvokePatternId,
+    UIA_LegacyIAccessiblePatternId, UIA_ValuePatternId,
 };
 use windows::Win32::UI::Shell::Common::COMDLG_FILTERSPEC;
 use windows::Win32::UI::Shell::{
@@ -33,12 +32,18 @@ use windows::Win32::UI::Shell::{
     SIGDN_FILESYSPATH,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
-    EnumWindows, GetClassNameW, GetWindowThreadProcessId, IsWindow, IsWindowVisible, KillTimer,
-    PostMessageW, SetTimer, WM_CLOSE,
+    EnumChildWindows, EnumWindows, GetClassNameW, GetWindowThreadProcessId, IsWindow,
+    IsWindowVisible, KillTimer, PostMessageW, SetTimer, WM_CLOSE,
 };
-use windows::core::{BOOL, HSTRING, Interface, PWSTR, Ref, implement, w};
+use windows::core::{BOOL, BSTR, HSTRING, Interface, PWSTR, Ref, implement, w};
 
 type AnyResult<T> = Result<T, Box<dyn std::error::Error>>;
+
+fn now_ms() -> u128 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_or(0, |value| value.as_millis())
+}
 
 thread_local! {
     static FIXTURE: RefCell<Option<(IFileDialog, PathBuf)>> = const { RefCell::new(None) };
@@ -64,7 +69,11 @@ fn main() -> AnyResult<()> {
     if !matches!(mode, "open" | "save") {
         return Err("usage: uia_address_bar_prototype [open|save]".into());
     }
-    run(mode)
+    let value_target = args.get(2).map_or("edit", String::as_str);
+    if !matches!(value_target, "edit" | "combo") {
+        return Err("usage: uia_address_bar_prototype [open|save] [edit|combo]".into());
+    }
+    run(mode, value_target)
 }
 
 fn text(value: PWSTR) -> windows::core::Result<String> {
@@ -86,6 +95,7 @@ fn snapshot(dialog: &IFileDialog, root: &Path) -> windows::core::Result<Value> {
         "filename": text(unsafe { dialog.GetFileName()? })?,
         "file_type": unsafe { dialog.GetFileTypeIndex()? },
         "dialog_visible": unsafe { IsWindowVisible(window).as_bool() },
+        "observed_at_ms": now_ms(),
     }))
 }
 
@@ -216,7 +226,7 @@ fn close_fixture() {
     let _ = unsafe { EnumWindows(Some(visit), LPARAM(0)) };
 }
 
-fn run(mode: &str) -> AnyResult<()> {
+fn run(mode: &str, value_target: &str) -> AnyResult<()> {
     let root = std::env::temp_dir().join(format!(
         "PathWarp-UIA-PROTOTYPE-{}-{mode}",
         std::process::id()
@@ -281,7 +291,7 @@ fn run(mode: &str) -> AnyResult<()> {
             }
         };
         println!("{}", json!({"event": "baseline", "state": before}));
-        probe(window, &root, &receive, &before)?;
+        probe(window, &root, &receive, &before, value_target)?;
         Ok(())
     })();
     if let Some(input) = child.stdin.as_mut() {
@@ -351,7 +361,7 @@ fn inventory_element(
         root_element,
         None::<usize>,
         0,
-        phase == "address_context_menu",
+        phase == "address_context_menu" || phase == "hidden_address_window",
     )];
     let mut entries = Vec::new();
     while let Some((element, parent, depth, in_address)) = pending.pop() {
@@ -416,110 +426,237 @@ fn inventory_element(
     Ok(entries)
 }
 
-fn popup_roots(
-    uia: &IUIAutomation,
-    pid: u32,
-    dialog: HWND,
-) -> AnyResult<Vec<IUIAutomationElement>> {
-    let walker = unsafe { uia.RawViewWalker()? };
-    let desktop = unsafe { uia.GetRootElement()? };
-    let mut child = next_element(unsafe { walker.GetFirstChildElement(&desktop) })?;
-    let mut roots = Vec::new();
-    while let Some(current) = child {
-        child = next_element(unsafe { walker.GetNextSiblingElement(&current) })?;
-        if unsafe { current.CurrentProcessId()? } == i32::try_from(pid)?
-            && unsafe { current.CurrentNativeWindowHandle()? } != dialog
+fn address_windows(window: HWND) -> Vec<HWND> {
+    unsafe extern "system" fn collect(window: HWND, data: LPARAM) -> BOOL {
+        unsafe { &mut *(data.0 as *mut Vec<HWND>) }.push(window);
+        BOOL(1)
+    }
+    let mut windows = Vec::new();
+    let _ = unsafe {
+        EnumChildWindows(
+            Some(window),
+            Some(collect),
+            LPARAM((&raw mut windows) as isize),
+        )
+    };
+    windows
+}
+
+fn observe(
+    events: &mpsc::Receiver<Value>,
+    before: &Value,
+    phase: &str,
+    duration: Duration,
+) -> Value {
+    let mut last = before.clone();
+    let mut polls = 0;
+    let deadline = Instant::now() + duration;
+    let started_at = now_ms();
+    while Instant::now() < deadline {
+        if let Ok(event) = events.recv_timeout(Duration::from_millis(100))
+            && event["event"] == "host_poll"
+            && event["observed_at_ms"]
+                .as_u64()
+                .is_some_and(|value| u128::from(value) >= started_at)
         {
-            roots.push(current);
+            last = event;
+            polls += 1;
         }
     }
-    Ok(roots)
-}
-
-fn show_context_menu(window: HWND) -> mpsc::Receiver<Value> {
-    let (send, receive) = mpsc::channel();
-    let raw = window.0 as usize;
-    std::thread::spawn(move || {
-        let started = Instant::now();
-        let result = (|| -> windows::core::Result<()> {
-            unsafe { CoInitializeEx(None, COINIT_MULTITHREADED).ok()? };
-            let uia: IUIAutomation =
-                unsafe { CoCreateInstance(&CUIAutomation, None, CLSCTX_INPROC_SERVER)? };
-            let element = unsafe { uia.ElementFromHandle(HWND(raw as *mut _))? };
-            unsafe { element.cast::<IUIAutomationElement3>()?.ShowContextMenu() }
-        })();
-        let _ = send.send(json!({
-            "event": "action_result", "action": "ShowContextMenu", "success": result.is_ok(),
-            "hresult": result.as_ref().err().map_or("HRESULT(0x00000000)".to_owned(), |error| format!("{:?}", error.code())),
-            "elapsed_ms": started.elapsed().as_millis(),
-        }));
-    });
-    receive
-}
-
-fn probe(window: HWND, root: &Path, _: &mpsc::Receiver<Value>, before: &Value) -> AnyResult<()> {
-    let uia: IUIAutomation =
-        unsafe { CoCreateInstance(&CUIAutomation, None, CLSCTX_INPROC_SERVER)? };
-    let entries = inventory(&uia, window, root, "initial")?;
-    let toolbars: Vec<_> = entries
-        .iter()
-        .filter(|(_, state)| {
-            state["address_scope"] == true
-                && state["class"] == "ToolbarWindow32"
-                && state["parent"]
-                    .as_u64()
-                    .and_then(|index| usize::try_from(index).ok())
-                    .is_some_and(|index| entries[index].1["class"] == "Breadcrumb Parent")
-        })
-        .collect();
-    if toolbars.len() != 1 {
-        return Err("fixture address toolbar is not unambiguously identified".into());
-    }
-    let target = unsafe { toolbars[0].0.CurrentNativeWindowHandle()? };
     println!(
         "{}",
-        json!({"event": "action_start", "action": "ShowContextMenu", "target": toolbars[0].1})
+        json!({"event": "native_observation", "phase": phase, "started_at_ms": started_at, "fresh_polls": polls, "state": last})
     );
-    let action = show_context_menu(target);
-    let mut host_pid = 0;
-    unsafe { GetWindowThreadProcessId(window, Some(&mut host_pid)) };
-    let deadline = Instant::now() + Duration::from_secs(3);
-    let mut action_result = None;
-    let menus = loop {
-        if let Ok(result) = action.try_recv() {
-            println!("{result}");
-            action_result = Some(result);
-        }
-        let menus = popup_roots(&uia, host_pid, window)?;
-        if !menus.is_empty() {
-            break menus;
-        }
-        if Instant::now() >= deadline
-            || action_result
-                .as_ref()
-                .is_some_and(|result| result["success"] == false)
-        {
-            inventory(&uia, window, root, "after_context_menu")?;
-            println!(
-                "{}",
-                json!({
-                    "event": "verdict", "result": "context_menu_not_observed", "action": action_result,
-                    "before": before, "navigation_actions": 0,
-                    "dialog_still_open": unsafe { IsWindow(Some(window)).as_bool() },
-                })
-            );
-            return Ok(());
-        }
-        std::thread::sleep(Duration::from_millis(50));
-    };
-    for menu in menus {
-        inventory_element(&uia, menu, root, "address_context_menu")?;
-    }
+    last
+}
+
+fn action_result(action: &str, result: &windows::core::Result<()>) {
     println!(
         "{}",
         json!({
-        "event": "verdict", "result": "context_menu_inventory_complete",
-            "elements": entries.len(), "before": before, "navigation_actions": 0,
+            "event": "action_result", "action": action, "success": result.is_ok(),
+            "hresult": result.as_ref().err().map_or("HRESULT(0x00000000)".to_owned(), |error| format!("{:?}", error.code())),
+        })
+    );
+}
+
+fn probe(
+    window: HWND,
+    root: &Path,
+    events: &mpsc::Receiver<Value>,
+    before: &Value,
+    value_target: &str,
+) -> AnyResult<()> {
+    let uia: IUIAutomation =
+        unsafe { CoCreateInstance(&CUIAutomation, None, CLSCTX_INPROC_SERVER)? };
+    let entries = inventory(&uia, window, root, "initial")?;
+    let bands: Vec<_> = entries
+        .iter()
+        .filter(|(_, state)| state["class"] == "Address Band Root")
+        .collect();
+    if bands.len() != 1 {
+        return Err("fixture address band is not unambiguously identified".into());
+    }
+    println!(
+        "{}",
+        json!({"event": "action_start", "action": "SetFocus", "target": bands[0].1})
+    );
+    let result = unsafe { bands[0].0.SetFocus() };
+    println!(
+        "{}",
+        json!({
+            "event": "action_result", "action": "SetFocus", "success": result.is_ok(),
+            "hresult": result.as_ref().err().map_or("HRESULT(0x00000000)".to_owned(), |error| format!("{:?}", error.code())),
+        })
+    );
+    std::thread::sleep(Duration::from_millis(150));
+    let after = inventory(&uia, window, root, "after_address_focus")?;
+    let focused = unsafe { uia.GetFocusedElement()? };
+    println!(
+        "{}",
+        json!({
+            "event": "focused_element", "class": unsafe { focused.CurrentClassName()? }.to_string(),
+            "control_type": unsafe { focused.CurrentControlType()? }.0,
+            "hwnd": unsafe { focused.CurrentNativeWindowHandle()? }.0 as usize,
+            "pid": unsafe { focused.CurrentProcessId()? },
+        })
+    );
+    let band_window = unsafe { bands[0].0.CurrentNativeWindowHandle()? };
+    let mut editors = Vec::new();
+    for native in address_windows(band_window) {
+        let mut class = [0_u16; 256];
+        let length = usize::try_from(unsafe { GetClassNameW(native, &mut class) })?;
+        let class = String::from_utf16_lossy(&class[..length]);
+        println!(
+            "{}",
+            json!({
+                "event": "address_hwnd", "class": class, "hwnd": native.0 as usize,
+                "visible": unsafe { IsWindowVisible(native).as_bool() },
+            })
+        );
+        let element = unsafe { uia.ElementFromHandle(native)? };
+        let hidden = inventory_element(&uia, element.clone(), root, "hidden_address_window")?;
+        let requested_class = if value_target == "combo" {
+            "ComboBox"
+        } else {
+            "Edit"
+        };
+        if class == requested_class && unsafe { element.CurrentNativeWindowHandle()? } == native {
+            editors.push((element, hidden[0].1.clone()));
+        }
+    }
+    if editors.len() != 1 {
+        let after_state = observe(
+            events,
+            before,
+            "editor_discovery",
+            Duration::from_millis(250),
+        );
+        println!(
+            "{}",
+            json!({
+                "event": "verdict", "result": "address_editor_not_unambiguous", "editor_count": editors.len(),
+                "initial_elements": entries.len(), "after_elements": after.len(), "before": before, "after": after_state,
+                "set_value_calls": 0, "commit_calls": 0,
+                "dialog_still_open": unsafe { IsWindow(Some(window)).as_bool() },
+            })
+        );
+        return Ok(());
+    }
+    let editor = &editors[0];
+    println!(
+        "{}",
+        json!({"event": "action_start", "action": "SetFocusAddressEditor", "target": editor.1})
+    );
+    let focus_result = unsafe { editor.0.SetFocus() };
+    action_result("SetFocusAddressEditor", &focus_result);
+    std::thread::sleep(Duration::from_millis(150));
+    inventory(&uia, window, root, "after_editor_focus")?;
+    let value = unsafe {
+        editor
+            .0
+            .GetCurrentPatternAs::<IUIAutomationValuePattern>(UIA_ValuePatternId)
+    };
+    let Ok(value) = value else {
+        println!(
+            "{}",
+            json!({
+                "event": "verdict", "result": "address_editor_value_pattern_unavailable", "editor": editor.1,
+                "set_value_calls": 0, "commit_calls": 0, "before": before,
+                "dialog_still_open": unsafe { IsWindow(Some(window)).as_bool() },
+            })
+        );
+        return Ok(());
+    };
+    if unsafe { value.CurrentIsReadOnly()?.as_bool() }
+        || !unsafe { editor.0.CurrentIsEnabled()?.as_bool() }
+    {
+        return Err("address editor is not enabled and writable".into());
+    }
+    println!(
+        "{}",
+        json!({"event": "action_start", "action": "SetValue", "target": editor.1, "destination": "PROTOTYPE_ROOT\\B"})
+    );
+    let result = unsafe { value.SetValue(&BSTR::from(root.join("B").to_string_lossy().as_ref())) };
+    action_result("SetValue", &result);
+    let readback = unsafe { value.CurrentValue() };
+    println!(
+        "{}",
+        json!({
+            "event": "address_text_readback", "value": readback.as_ref().ok().map(|value| scrub(&value.to_string(), root)),
+            "binding_error_hresult": pattern_error(&readback),
+        })
+    );
+    let text_only = observe(
+        events,
+        before,
+        "after_set_value_only",
+        Duration::from_secs(1),
+    );
+    let written = inventory(&uia, window, root, "after_set_value")?;
+    let go: Vec<_> = written
+        .iter()
+        .filter(|(_, state)| {
+            state["address_scope"] == true
+                && state["enabled"] == true
+                && state["offscreen"] == false
+                && state["patterns"]["invoke"]["available"] == true
+                && state["name"].as_str().is_some_and(|name| {
+                    name.starts_with("转到") || name.starts_with("Go to") || name == "Go"
+                })
+        })
+        .collect();
+    let mut commits = 0;
+    if result.is_ok() && text_only["folder"] != "PROTOTYPE_ROOT\\B" && go.len() == 1 {
+        println!(
+            "{}",
+            json!({"event": "action_start", "action": "InvokeGo", "target": go[0].1})
+        );
+        let invoke = unsafe {
+            go[0]
+                .0
+                .GetCurrentPatternAs::<IUIAutomationInvokePattern>(UIA_InvokePatternId)?
+        };
+        let result = unsafe { invoke.Invoke() };
+        commits += 1;
+        action_result("InvokeGo", &result);
+    }
+    let final_state = observe(
+        events,
+        &text_only,
+        "after_commit_stage",
+        Duration::from_secs(2),
+    );
+    inventory(&uia, window, root, "final")?;
+    let arrived = final_state["folder"] == "PROTOTYPE_ROOT\\B";
+    println!(
+        "{}",
+        json!({
+            "event": "verdict", "result": if arrived { "arrival_observed" } else { "arrival_not_observed" },
+            "set_value_calls": 1, "set_value_succeeded": result.is_ok(), "commit_calls": commits, "go_candidates": go.len(),
+            "before": before, "after_set_value_only": text_only, "after": final_state,
+            "filename_preserved": final_state["filename"] == before["filename"],
+            "file_type_preserved": final_state["file_type"] == before["file_type"],
             "dialog_still_open": unsafe { IsWindow(Some(window)).as_bool() },
         })
     );

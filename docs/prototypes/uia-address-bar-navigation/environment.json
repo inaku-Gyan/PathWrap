@@ -1,0 +1,12 @@
+{
+  "captured_utc": "2026-11-16T21:42:02.6458950Z",
+  "os_caption": "Microsoft Windows 11 家庭版 中文版",
+  "os_version": "10.0.26300",
+  "os_build": "26300",
+  "os_architecture": "64 位",
+  "process_ui_culture": "zh-CN",
+  "rustc": "rustc 1.100.0 (0ef1bc386 2026-11-09)",
+  "scenario": "separate external MTA client and owned STA modern Common Item Open/Save fixtures; Edit and ComboBox Value provider cases",
+  "host_token": "inherited from external probe; no elevation requested; integrity levels not independently queried",
+  "main_base_commit": "17ea89b43d96f09499213f4745be476db885bc0e"
+}
