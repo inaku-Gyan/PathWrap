@@ -9,15 +9,17 @@ default-run = "PathWarp"
 # glow (OpenGL) 渲染器：Windows 上经窗口自身 alpha + DWM 合成，支持真正的窗口透明；
 # 默认的 wgpu 渲染器对 HWND surface 只报告 Opaque alpha，透明区域会渲染成黑。
 eframe = {
-  version = "0.35",
+  version = "0.37",
   default-features = false,
   features = [
     "default_fonts",
     "accesskit",
+    "clipboard",
     "glow",
+    "links",
   ]
 }
-egui = "0.35"
+egui = "0.37"
 env_logger = "0.11"
 log = "0.4"
 raw-window-handle = "0.6"
@@ -47,7 +49,7 @@ features = [
 ]
 
 [dev-dependencies]
-egui_kittest = "0.35"
+egui_kittest = "0.37"
 uiautomation = "0.25"
 
 [lints.clippy]

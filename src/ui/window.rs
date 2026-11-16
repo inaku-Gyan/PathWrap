@@ -5,7 +5,7 @@
 use crate::config::{ThemeMode, ThemePreference};
 use crate::core::controller::Controller;
 use crate::core::types::KeyAction;
-use egui::{Align, CornerRadius, FontId, Margin, Stroke, StrokeKind, Ui};
+use egui::{Align2, CornerRadius, FontId, Margin, Stroke, StrokeKind, Ui};
 
 const SEARCH_CONTROL_HEIGHT: f32 = 32.0;
 const SEARCH_ICON_SIZE: f32 = 18.0;
@@ -88,12 +88,12 @@ fn render_header(
                             .hint_text("点击后输入以筛选路径…")
                             .frame(egui::Frame::NONE)
                             .margin(Margin::ZERO)
-                            .vertical_align(Align::Center)
+                            .align(Align2::LEFT_CENTER)
                             .return_key(None),
                     );
                     let search_response = ui.interact(
                         search_rect,
-                        ui.id().with("path_filter_search"),
+                        ui.scope_id().with("path_filter_search"),
                         egui::Sense::click(),
                     );
                     if search_response.clicked() {
@@ -173,9 +173,8 @@ fn render_theme_button(
         .add(egui::Button::new("").min_size(egui::vec2(THEME_BUTTON_WIDTH, 28.0)))
         .on_hover_text(description.clone());
     paint_theme_icon(ui, response.rect, theme_mode);
-    response.widget_info(|| {
-        egui::WidgetInfo::labeled(egui::WidgetType::Button, true, description.clone())
-    });
+    response
+        .widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, description.clone()));
 
     let mut action = response
         .clicked()
@@ -378,6 +377,8 @@ mod tests {
 
     fn harness_for(controller: Controller) -> Harness<'static, (Controller, Option<UiEvent>)> {
         Harness::builder()
+            // Interaction tests use built-in fonts, without the app's Windows CJK font setup.
+            .allow_missing_glyphs()
             .with_size(egui::vec2(420.0, 320.0))
             .build_ui_state(
                 |ui, state: &mut (Controller, Option<UiEvent>)| {
