@@ -7,5 +7,6 @@
   "process_ui_culture": "zh-CN",
   "rustc": "rustc 1.100.0 (0ef1bc386 2026-11-09)",
   "host_token": "inherited from external probe; no elevation requested; integrity level not independently queried",
-  "scenario": "one initial-state standard modern Open and Save fixture; x64 external MTA probe and separate STA host"
+  "scenario": "one initial-state standard modern Open and Save fixture; x64 external MTA probe and separate STA host",
+  "listbox_service_inspection_captured_utc": "2026-11-16T21:00:23.5038169Z"
 }

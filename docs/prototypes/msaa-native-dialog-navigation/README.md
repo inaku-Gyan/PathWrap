@@ -18,6 +18,8 @@ There is no production navigation or Ctrl+G change.
 **This MSAA access route did not produce `IFileDialog` in either measured
 dialog.** The native folder-navigation stage was not reached.
 
+Initial pass:
+
 | Observation | Open | Save |
 | --- | ---: | ---: |
 | Dialog and descendant HWNDs examined | 48 | 50 |
@@ -38,8 +40,9 @@ returned `E_NOINTERFACE`. Those two additional QueryInterface results are
 logged separately and are not included in the request totals above.
 
 The two interface returns are not two proven distinct native model objects,
-and do not establish a usable dialog object. This experiment did not classify
-the ListBox object's model or test its other interfaces/services. Root dialog,
+and do not establish a usable dialog object. The initial pass did not classify
+the ListBox object's model or test its other interfaces/services; the
+user-requested follow-up below does. Root dialog,
 address-band, breadcrumb, Shell view and other enumerated child HWNDs returned
 `E_FAIL` (`0x80004005`) with null for all three requested IIDs. Receiving an
 ordinary accessibility object in the diagnostic is not native navigation proof.
@@ -47,6 +50,53 @@ ordinary accessibility object in the diagnostic is not native navigation proof.
 This is a bounded negative result for this access protocol, these IIDs, these
 fixture states and this Windows build. It does not prove all native access
 impossible, or resolve a service-provider, cooperating-host or helper design.
+
+## User-requested ListBox inspection
+
+After reviewing the initial artifact, the user chose **"Inspect the returned
+ListBox object further first"**. The prototype was extended with read-only
+queries, then the controlled Open/Save checks were repeated. The final
+[Open inspection trace](listbox-services-open.jsonl) and
+[Save inspection trace](listbox-services-save.jsonl) include these observations
+for **both** separately returned native-object interfaces:
+
+| Inspection | Result in both dialogs |
+| --- | --- |
+| `IDispatch::GetTypeInfoCount` | 1 |
+| Type description | `IAccessible`, GUID `618736E0-3C3D-11CF-810C-00AA00389B71`, 28 functions |
+| `get_accRole(CHILDID_SELF)` | 9, `ROLE_SYSTEM_WINDOW` |
+| Accessibility state | `0x00108000`, invisible and focusable |
+| Accessible child count | 7 |
+| `WindowFromAccessibleObject` and `IOleWindow::GetWindow` | Both identify the hidden ListBox HWND, not the dialog root |
+| `IAccessible`, `IOleWindow`, `IServiceProvider` | QueryInterface succeeded |
+| `IProvideClassInfo`, `IObjectWithSite` | `E_NOINTERFACE` |
+| `IFileDialog`, `IFileDialog2`, `IFileOpenDialog`, `IFileSaveDialog` | `E_NOINTERFACE` |
+| `IShellBrowser`, `IShellView`, `IFolderView` | `E_NOINTERFACE` |
+| `QueryService(SID_STopLevelBrowser, IShellBrowser)` | `E_INVALIDARG` (`0x80070057`), no interface |
+| `QueryService(SID_SCommDlgBrowser, IShellBrowser)` | `E_INVALIDARG`, no interface |
+| `QueryService(IAccessibleEx, IAccessibleEx)` diagnostic | `E_INVALIDARG`, no interface |
+
+The two native-object requests returned different canonical `IUnknown`
+identities. They were therefore inspected separately, rather than assuming the
+first object's interface support covers the second. Neither shared canonical
+identity with a newly requested ordinary `OBJID_CLIENT/IAccessible` object on
+the same HWND. Different identities do not establish different underlying UI
+windows; all measured window mappings still point to that same ListBox.
+
+The evidence is consistent with window-accessibility objects rather than an
+exposed native dialog/browser object. This is an inference from the reported
+type, role, window and queried interfaces, not a proven private implementation
+class. The service failures are recorded as `E_INVALIDARG`, not relabelled
+`E_NOINTERFACE` or treated as proof that no other service can exist.
+
+The final pair each enumerated 48 HWNDs and made 144 native-object requests:
+two `S_OK`/non-null, one `E_NOINTERFACE`/null and 141 `E_FAIL`/null. Per-run HWND
+inventories differ from the initial Save capture; these are measured snapshots,
+not a fixed count of dialog parts. Inspection queries and ordinary accessibility
+comparisons are separate from those native request totals. No external native
+navigation call was made; both dialogs stayed open and were closed by fixture
+cleanup. These results do not establish a usable Shell-service route from the
+returned objects.
 
 ## Run
 
@@ -83,6 +133,10 @@ only that fixture after probing. Scratch folders remain for inspection.
 6. Query any returned `IUnknown`/`IDispatch` for `IFileDialog`. If obtained,
    require its `IOleWindow` HWND to equal the original root and its `GetFolder`
    to read A before attempting a single `SetFolder(B)`.
+   The extended source also inspects both returned objects' type information,
+   role/state, window identity and bounded interface/service capabilities as
+   described above. These are read-only diagnostics, not another navigation
+   backend; no accessibility setter, action or browser navigation is invoked.
 7. The inherited, compiled navigation stage would compare native before/after
    snapshots, poll folder readback, check a matching independent host event and
    dialog lifetime. **That stage did not execute in either recorded run.**
@@ -101,10 +155,15 @@ nothing about preservation. No filename/type or focus-handoff result is claimed.
 
 ## Evidence and coverage
 
-- [Open trace](open.jsonl) and [Save trace](save.jsonl).
+- Initial [Open trace](open.jsonl) and [Save trace](save.jsonl), captured with
+  [the initial probe source](https://github.com/inaku-Gyan/PathWrap/blob/6804f047f351ffdc9d6d54e12ff36e613dca9caf/src/bin/msaa_native_dialog_prototype.rs).
+- Final [Open inspection](listbox-services-open.jsonl) and
+  [Save inspection](listbox-services-save.jsonl), captured with the extended
+  source on this branch. The original artifact remains immutable at its commit.
 - [Captured environment](environment.json): Windows 11 Home Chinese,
   `10.0.26300`, build 26300, x64, `zh-CN`; Rust 1.100.0.
-- One initial-state standard modern Open and one Save fixture, separate client
+- Initial and follow-up pairs of initial-state standard modern Open/Save
+  fixtures, separate client
   and host PIDs. The host inherits the client token; no elevation was requested.
   Integrity levels were not independently queried.
 - No claim about other apps, custom/legacy/brokered/elevated dialogs, other
@@ -126,3 +185,14 @@ The [provider guidance](https://learn.microsoft.com/en-us/windows/win32/winauto/
 also calls out cross-process COM interface registration. These contracts do not
 promise a file-dialog object on every window. The source and runtime traces
 above supply the evidence for the limited verdict here.
+
+The deeper inspection uses Microsoft's
+[`GetTypeInfo`](https://learn.microsoft.com/en-us/windows/win32/api/oaidl/nf-oaidl-idispatch-gettypeinfo),
+[`GetDocumentation`](https://learn.microsoft.com/en-us/windows/win32/api/oaidl/nf-oaidl-itypeinfo-getdocumentation),
+[`get_accRole`](https://learn.microsoft.com/en-us/windows/win32/api/oleacc/nf-oleacc-iaccessible-get_accrole)
+and [`WindowFromAccessibleObject`](https://learn.microsoft.com/en-us/windows/win32/api/oleacc/nf-oleacc-windowfromaccessibleobject)
+contracts. Browser service IDs come from the
+[`IShellBrowser` site-chain guidance](https://learn.microsoft.com/en-us/windows/win32/api/shobjidl_core/nn-shobjidl_core-ishellbrowser).
+The [`IAccessibleEx` example](https://learn.microsoft.com/en-us/windows/win32/winauto/using-iaccessibleex-from-a-client)
+provides its diagnostic service/IID pair but assumes an in-process client; it
+does not guarantee that this external query works.

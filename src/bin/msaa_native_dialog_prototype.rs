@@ -15,23 +15,27 @@ use std::time::{Duration, Instant};
 use windows::Win32::Foundation::{E_ABORT, HWND, LPARAM, WPARAM};
 use windows::Win32::System::Com::{
     CLSCTX_INPROC_SERVER, COINIT_APARTMENTTHREADED, COINIT_MULTITHREADED, CoCreateInstance,
-    CoInitializeEx, CoTaskMemFree, IDispatch,
+    CoInitializeEx, CoTaskMemFree, IDispatch, IServiceProvider, ITypeInfo,
 };
-use windows::Win32::System::Ole::IOleWindow;
+use windows::Win32::System::Ole::{IObjectWithSite, IOleWindow, IProvideClassInfo};
 use windows::Win32::System::Threading::{CREATE_NO_WINDOW, GetCurrentProcessId};
-use windows::Win32::UI::Accessibility::IAccessible;
+use windows::Win32::System::Variant::VARIANT;
+use windows::Win32::UI::Accessibility::{IAccessible, IAccessibleEx, WindowFromAccessibleObject};
 use windows::Win32::UI::Shell::Common::COMDLG_FILTERSPEC;
 use windows::Win32::UI::Shell::{
     FDE_OVERWRITE_RESPONSE, FDE_SHAREVIOLATION_RESPONSE, FDEOR_DEFAULT, FDESVR_DEFAULT,
     FOS_DONTADDTORECENT, FOS_FORCEFILESYSTEM, FileOpenDialog, FileSaveDialog, IFileDialog,
-    IFileDialogEvents, IFileDialogEvents_Impl, IShellItem, SHCreateItemFromParsingName,
-    SIGDN_FILESYSPATH,
+    IFileDialog2, IFileDialogEvents, IFileDialogEvents_Impl, IFileOpenDialog, IFileSaveDialog,
+    IFolderView, IShellBrowser, IShellItem, IShellView, SHCreateItemFromParsingName,
+    SID_SCommDlgBrowser, SID_STopLevelBrowser, SIGDN_FILESYSPATH,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
     EnumChildWindows, EnumWindows, GetClassNameW, GetDlgCtrlID, GetWindowThreadProcessId, IsWindow,
     IsWindowVisible, OBJID_CLIENT, OBJID_NATIVEOM, PostMessageW, WM_CLOSE,
 };
-use windows::core::{BOOL, GUID, HRESULT, HSTRING, IUnknown, Interface, PWSTR, Ref, implement, w};
+use windows::core::{
+    BOOL, BSTR, GUID, HRESULT, HSTRING, IUnknown, Interface, PWSTR, Ref, implement, w,
+};
 
 // The generated Result<()> binding erases successful HRESULT values. Keep the raw
 // documented ABI here so the evidence records the exact result and nullness.
@@ -321,6 +325,199 @@ fn query_dialog<T: Interface>(
     result.ok()
 }
 
+fn inspect_cast<T: Interface>(
+    object: &IUnknown,
+    index: usize,
+    source: &str,
+    name: &str,
+) -> Option<T> {
+    let result = object.cast::<T>();
+    println!(
+        "{}",
+        json!({
+            "event": "object_interface", "window_index": index, "source": source, "iid_name": name,
+            "iid": format!("{:?}", T::IID), "interface_obtained": result.is_ok(),
+            "hresult": hresult(result.as_ref().err().map_or(HRESULT(0), |error| error.code())),
+        })
+    );
+    result.ok()
+}
+
+fn inspect_service<T: Interface>(
+    provider: &IServiceProvider,
+    index: usize,
+    source: &str,
+    service: &GUID,
+    name: &str,
+) -> Option<T> {
+    let result = unsafe { provider.QueryService::<T>(service) };
+    println!(
+        "{}",
+        json!({
+            "event": "object_service", "window_index": index, "source": source,
+            "service_name": name, "service_id": format!("{service:?}"),
+            "iid": format!("{:?}", T::IID), "interface_obtained": result.is_ok(),
+            "hresult": hresult(result.as_ref().err().map_or(HRESULT(0), |error| error.code())),
+        })
+    );
+    result.ok()
+}
+
+fn inspect_type_info(info: windows::core::Result<ITypeInfo>, index: usize, source: &str) {
+    let result = (|| -> windows::core::Result<Value> {
+        let info = info?;
+        let mut name = BSTR::new();
+        unsafe { info.GetDocumentation(-1, Some(&mut name), None, std::ptr::null_mut(), None)? };
+        let attributes = unsafe { info.GetTypeAttr()? };
+        if attributes.is_null() {
+            return Err(windows::Win32::Foundation::E_POINTER.into());
+        }
+        let value = unsafe { *attributes };
+        unsafe { info.ReleaseTypeAttr(attributes) };
+        Ok(json!({
+            "name": name.to_string(), "guid": format!("{:?}", value.guid),
+            "type_kind": value.typekind.0, "functions": value.cFuncs,
+            "variables": value.cVars, "implemented_types": value.cImplTypes,
+        }))
+    })();
+    println!(
+        "{}",
+        json!({
+            "event": "object_type_info", "window_index": index, "source": source,
+            "value": result.as_ref().ok(),
+            "hresult": hresult(result.as_ref().err().map_or(HRESULT(0), |error| error.code())),
+        })
+    );
+}
+
+fn inspect_object(
+    unknown: Option<&IUnknown>,
+    dispatch: Option<&IDispatch>,
+    index: usize,
+    window: HWND,
+) {
+    let Some(unknown) = unknown else { return };
+    let canonical_dispatch = dispatch.and_then(|value| value.cast::<IUnknown>().ok());
+    println!(
+        "{}",
+        json!({
+            "event": "object_identity", "window_index": index,
+            "native_unknown_and_dispatch_same_identity": canonical_dispatch.as_ref().map(|value| value.as_raw() == unknown.as_raw()),
+        })
+    );
+    inspect_one_object(unknown, index, window, "IUnknown");
+    if let Some(dispatch_object) = canonical_dispatch {
+        inspect_one_object(&dispatch_object, index, window, "IDispatch");
+    }
+}
+
+fn inspect_one_object(object: &IUnknown, index: usize, window: HWND, source: &str) {
+    if let Some(dispatch) = inspect_cast::<IDispatch>(object, index, source, "IDispatch") {
+        let count = unsafe { dispatch.GetTypeInfoCount() };
+        println!(
+            "{}",
+            json!({
+                "event": "object_type_info_count", "window_index": index, "source": source,
+                "value": count.as_ref().ok(),
+                "hresult": hresult(count.as_ref().err().map_or(HRESULT(0), |error| error.code())),
+            })
+        );
+        inspect_type_info(unsafe { dispatch.GetTypeInfo(0, 0) }, index, source);
+    }
+    if let Some(accessible) = inspect_cast::<IAccessible>(object, index, source, "IAccessible") {
+        let role = unsafe { accessible.get_accRole(&VARIANT::from(0_i32)) }
+            .and_then(|value| i32::try_from(&value));
+        let state = unsafe { accessible.get_accState(&VARIANT::from(0_i32)) }
+            .and_then(|value| i32::try_from(&value));
+        let count = unsafe { accessible.accChildCount() };
+        let mut actual_window = HWND::default();
+        let window_result =
+            unsafe { WindowFromAccessibleObject(&accessible, Some(&mut actual_window)) };
+        println!(
+            "{}",
+            json!({
+                "event": "object_accessibility", "window_index": index, "source": source,
+                "role": role.as_ref().ok(), "role_hresult": hresult(role.as_ref().err().map_or(HRESULT(0), |error| error.code())),
+                "state": state.as_ref().ok(), "state_hresult": hresult(state.as_ref().err().map_or(HRESULT(0), |error| error.code())),
+                "child_count": count.as_ref().ok(), "child_count_hresult": hresult(count.as_ref().err().map_or(HRESULT(0), |error| error.code())),
+                "accessible_hwnd": actual_window.0 as usize, "matches_source_window": actual_window == window,
+                "window_hresult": hresult(window_result.as_ref().err().map_or(HRESULT(0), |error| error.code())),
+            })
+        );
+        let (_, client) = request::<IAccessible>(window, index, OBJID_CLIENT.0, "IAccessible");
+        let client_identity = client.and_then(|value| value.cast::<IUnknown>().ok());
+        println!(
+            "{}",
+            json!({
+                "event": "object_client_comparison", "window_index": index, "source": source,
+                "native_and_ordinary_client_same_identity": client_identity.as_ref().map(|value| value.as_raw() == object.as_raw()),
+            })
+        );
+    }
+    if let Some(ole_window) = inspect_cast::<IOleWindow>(object, index, source, "IOleWindow") {
+        let result = unsafe { ole_window.GetWindow() };
+        println!(
+            "{}",
+            json!({
+                "event": "object_ole_window", "window_index": index, "source": source,
+                "hwnd": result.as_ref().ok().map(|value| value.0 as usize),
+                "hresult": hresult(result.as_ref().err().map_or(HRESULT(0), |error| error.code())),
+            })
+        );
+    }
+    if let Some(class_info) =
+        inspect_cast::<IProvideClassInfo>(object, index, source, "IProvideClassInfo")
+    {
+        inspect_type_info(
+            unsafe { class_info.GetClassInfo() },
+            index,
+            &format!("{source}/IProvideClassInfo"),
+        );
+    }
+    if let Some(provider) =
+        inspect_cast::<IServiceProvider>(object, index, source, "IServiceProvider")
+    {
+        for (service_id, service_name) in [
+            (SID_STopLevelBrowser, "SID_STopLevelBrowser"),
+            (SID_SCommDlgBrowser, "SID_SCommDlgBrowser"),
+        ] {
+            if let Some(browser) = inspect_service::<IShellBrowser>(
+                &provider,
+                index,
+                source,
+                &service_id,
+                service_name,
+            ) {
+                let result = unsafe { browser.GetWindow() };
+                println!(
+                    "{}",
+                    json!({
+                        "event": "object_service_browser_window", "window_index": index,
+                        "source": source, "service_name": service_name,
+                        "hwnd": result.as_ref().ok().map(|value| value.0 as usize),
+                        "hresult": hresult(result.as_ref().err().map_or(HRESULT(0), |error| error.code())),
+                    })
+                );
+                let _ = query_dialog(Some(browser), index, &format!("{source}/{service_name}"));
+            }
+        }
+        let _ = inspect_service::<IAccessibleEx>(
+            &provider,
+            index,
+            source,
+            &IAccessibleEx::IID,
+            "IAccessibleEx",
+        );
+    }
+    let _ = inspect_cast::<IObjectWithSite>(object, index, source, "IObjectWithSite");
+    let _ = inspect_cast::<IFileDialog2>(object, index, source, "IFileDialog2");
+    let _ = inspect_cast::<IFileOpenDialog>(object, index, source, "IFileOpenDialog");
+    let _ = inspect_cast::<IFileSaveDialog>(object, index, source, "IFileSaveDialog");
+    let _ = inspect_cast::<IShellBrowser>(object, index, source, "IShellBrowser");
+    let _ = inspect_cast::<IShellView>(object, index, source, "IShellView");
+    let _ = inspect_cast::<IFolderView>(object, index, source, "IFolderView");
+}
+
 fn probe(window: HWND, root: &Path, events: &mpsc::Receiver<Value>) -> AnyResult<()> {
     unsafe extern "system" fn collect(window: HWND, data: LPARAM) -> BOOL {
         unsafe { &mut *(data.0 as *mut Vec<HWND>) }.push(window);
@@ -378,6 +575,7 @@ fn probe(window: HWND, root: &Path, events: &mpsc::Receiver<Value>) -> AnyResult
         for result in [unknown_hr, dispatch_hr, dialog_hr] {
             *counts.entry(hresult(result)).or_default() += 1;
         }
+        inspect_object(unknown.as_ref(), dispatch.as_ref(), index, provider);
         let from_unknown = query_dialog(unknown, index, "OBJID_NATIVEOM/IUnknown");
         let from_dispatch = query_dialog(dispatch, index, "OBJID_NATIVEOM/IDispatch");
         if let Some(dialog) = direct.or(from_unknown).or(from_dispatch) {
