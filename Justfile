@@ -1,18 +1,17 @@
-set windows-shell := ["pwsh.exe", "-NoLogo", "-Command"]
-
-# Show help message by default
-default:
-    @just help
+[windows]
+set shell := ["pwsh.exe", "-NoLogo", "-Command"]
 
 # Run non-fixing fmt/clippy/check
 [arg("mode", pattern="--ci|--local")]
 check mode="--local":
+    just --fmt --check
     cargo fmt --all -- --check
     {{ if mode == "--ci" { "cargo clippy --all-targets --all-features -- -D warnings" } else { "cargo clippy --all-targets --all-features" } }}
     cargo check
 
 # Run auto-fix for fmt, clippy, and rustc suggestions
 fix:
+    just --fmt
     cargo fmt --all
     cargo clippy --fix --all-targets --all-features --allow-dirty
     cargo fix --all-targets --all-features --allow-dirty
@@ -39,5 +38,6 @@ clean:
     cargo clean
 
 # Show this help message
+[default]
 help:
     @just --list
