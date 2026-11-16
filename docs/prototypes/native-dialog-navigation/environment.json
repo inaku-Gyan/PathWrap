@@ -1,0 +1,10 @@
+{
+  "caption": "Microsoft Windows 11 家庭版 中文版",
+  "version": "10.0.26300",
+  "build": "26300",
+  "architecture": "64 位",
+  "process_ui_culture": "zh-CN",
+  "rust": "rustc 1.100.0 (0ef1bc386 2026-11-09)",
+  "host_creation": "child process inherits the client token; no elevation request",
+  "integrity_level_measurement": "not separately queried"
+}
