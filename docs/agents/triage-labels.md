@@ -1,13 +1,14 @@
 # Triage Labels
 
+Map canonical triage roles to these GitHub labels.
+
 | Canonical role | GitHub label | Meaning |
 | --- | --- | --- |
-| `needs-triage` | `needs-triage` | Maintainer needs to evaluate |
+| `needs-triage` | `needs-triage` | Maintainer needs to evaluate the issue |
 | `needs-info` | `needs-info` | Waiting for more information |
-| `ready-for-agent` | `ready-for-agent` | Fully specified for an AFK agent |
-| `ready-for-human` | `ready-for-human` | Requires human action or decision |
+| `ready-for-agent` | `ready-for-agent` | Fully specified and ready for an agent |
+| `ready-for-human` | `ready-for-human` | Requires human implementation or a decision |
 | `wontfix` | `wontfix` | Will not be actioned |
 
-Keep at most one of these status labels on an issue. Use a `wayfinder:*` label
-separately when the issue is a Wayfinder map or child ticket; the two label
-families describe different dimensions.
+Keep at most one of these status labels on an issue.
+Use `wayfinder:*` labels separately for map or child ticket types.

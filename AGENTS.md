@@ -6,8 +6,8 @@ Issues and specs live in GitHub Issues for `inaku-Gyan/PathWrap`; use `gh`. See 
 
 ### Triage labels
 
-Use the default labels `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, and `wontfix`. See `docs/agents/triage-labels.md`.
+Use `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, and `wontfix`. See `docs/agents/triage-labels.md`.
 
 ### Domain docs
 
-This is a single-context repo: root `CONTEXT.md` and `docs/adr/`. See `docs/agents/domain.md`.
+Single-context layout: root `GLOSSARY.md` and `docs/adr/`. See `docs/agents/domain.md`.
