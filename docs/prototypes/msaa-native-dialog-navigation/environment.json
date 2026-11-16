@@ -1,0 +1,11 @@
+{
+  "captured_utc": "2026-11-16T20:49:50.3553583Z",
+  "os_caption": "Microsoft Windows 11 家庭版 中文版",
+  "os_version": "10.0.26300",
+  "os_build": "26300",
+  "os_architecture": "64 位",
+  "process_ui_culture": "zh-CN",
+  "rustc": "rustc 1.100.0 (0ef1bc386 2026-11-09)",
+  "host_token": "inherited from external probe; no elevation requested; integrity level not independently queried",
+  "scenario": "one initial-state standard modern Open and Save fixture; x64 external MTA probe and separate STA host"
+}
