@@ -7,7 +7,6 @@ check mode="--local":
     just --fmt --check
     cargo fmt --all -- --check
     {{ if mode == "--ci" { "cargo clippy --all-targets --all-features -- -D warnings" } else { "cargo clippy --all-targets --all-features" } }}
-    cargo check
 
 # Run auto-fix for fmt, clippy, and rustc suggestions
 fix:
