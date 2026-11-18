@@ -1,0 +1,459 @@
+{
+    "invoke":  {
+                   "elapsed_us":  30989,
+                   "event":  "invoke_result",
+                   "hresult":  "HRESULT(0x00000000)",
+                   "invoke_calls":  1,
+                   "observed_at_ms":  1795018702440,
+                   "success":  true
+               },
+    "observation":  {
+                        "dialog_alive":  true,
+                        "event":  "probe_done",
+                        "followup_actions":  0,
+                        "invoke_calls":  1,
+                        "late_snapshot_2900ms_removed":  true,
+                        "observation_elapsed_ms":  3000,
+                        "observed_at_ms":  1795018705441,
+                        "requested_observation_ms":  3000,
+                        "set_focus_calls":  0,
+                        "set_value_calls":  0
+                    },
+    "snapshot_timing":  [
+                            {
+                                "actual_offset_ms":  0,
+                                "event":  "snapshot_start",
+                                "observed_at_ms":  1795018702440,
+                                "phase":  "after_0ms"
+                            },
+                            {
+                                "actual_offset_ms":  691,
+                                "event":  "snapshot_end",
+                                "observed_at_ms":  1795018703132,
+                                "phase":  "after_0ms"
+                            },
+                            {
+                                "actual_offset_ms":  1000,
+                                "event":  "snapshot_start",
+                                "observed_at_ms":  1795018703441,
+                                "phase":  "after_1000ms"
+                            },
+                            {
+                                "actual_offset_ms":  1502,
+                                "event":  "snapshot_end",
+                                "observed_at_ms":  1795018703943,
+                                "phase":  "after_1000ms"
+                            },
+                            {
+                                "actual_offset_ms":  2000,
+                                "event":  "snapshot_start",
+                                "observed_at_ms":  1795018704441,
+                                "phase":  "after_2000ms"
+                            },
+                            {
+                                "actual_offset_ms":  2489,
+                                "event":  "snapshot_end",
+                                "observed_at_ms":  1795018704930,
+                                "phase":  "after_2000ms"
+                            }
+                        ],
+    "cutoff_events":  [
+
+                      ],
+    "incomplete_tree_captures":  [
+
+                                 ],
+    "tree_captures":  [
+                          {
+                              "complete":  true,
+                              "elements":  108,
+                              "event":  "tree_capture_end",
+                              "observed_at_ms":  1795018702348,
+                              "phase":  "initial"
+                          },
+                          {
+                              "complete":  true,
+                              "elements":  2,
+                              "event":  "tree_capture_end",
+                              "observed_at_ms":  1795018702357,
+                              "phase":  "before_address_combo"
+                          },
+                          {
+                              "complete":  true,
+                              "elements":  108,
+                              "event":  "tree_capture_end",
+                              "observed_at_ms":  1795018702939,
+                              "phase":  "after_0ms"
+                          },
+                          {
+                              "complete":  true,
+                              "elements":  33,
+                              "event":  "tree_capture_end",
+                              "observed_at_ms":  1795018703015,
+                              "phase":  "after_0ms_address_combo"
+                          },
+                          {
+                              "complete":  true,
+                              "elements":  1,
+                              "event":  "tree_capture_end",
+                              "observed_at_ms":  1795018703021,
+                              "phase":  "after_0ms_owned_popup_uia_0"
+                          },
+                          {
+                              "complete":  true,
+                              "elements":  31,
+                              "event":  "tree_capture_end",
+                              "observed_at_ms":  1795018703130,
+                              "phase":  "after_0ms_owned_popup_native_0"
+                          },
+                          {
+                              "complete":  true,
+                              "elements":  108,
+                              "event":  "tree_capture_end",
+                              "observed_at_ms":  1795018703746,
+                              "phase":  "after_1000ms"
+                          },
+                          {
+                              "complete":  true,
+                              "elements":  33,
+                              "event":  "tree_capture_end",
+                              "observed_at_ms":  1795018703824,
+                              "phase":  "after_1000ms_address_combo"
+                          },
+                          {
+                              "complete":  true,
+                              "elements":  1,
+                              "event":  "tree_capture_end",
+                              "observed_at_ms":  1795018703829,
+                              "phase":  "after_1000ms_owned_popup_uia_0"
+                          },
+                          {
+                              "complete":  true,
+                              "elements":  31,
+                              "event":  "tree_capture_end",
+                              "observed_at_ms":  1795018703941,
+                              "phase":  "after_1000ms_owned_popup_native_0"
+                          },
+                          {
+                              "complete":  true,
+                              "elements":  108,
+                              "event":  "tree_capture_end",
+                              "observed_at_ms":  1795018704739,
+                              "phase":  "after_2000ms"
+                          },
+                          {
+                              "complete":  true,
+                              "elements":  33,
+                              "event":  "tree_capture_end",
+                              "observed_at_ms":  1795018704819,
+                              "phase":  "after_2000ms_address_combo"
+                          },
+                          {
+                              "complete":  true,
+                              "elements":  1,
+                              "event":  "tree_capture_end",
+                              "observed_at_ms":  1795018704826,
+                              "phase":  "after_2000ms_owned_popup_uia_0"
+                          },
+                          {
+                              "complete":  true,
+                              "elements":  31,
+                              "event":  "tree_capture_end",
+                              "observed_at_ms":  1795018704928,
+                              "phase":  "after_2000ms_owned_popup_native_0"
+                          }
+                      ],
+    "native_verdict":  {
+                           "after":  {
+                                         "dialog_alive":  true,
+                                         "dialog_visible":  true,
+                                         "event":  "host_poll",
+                                         "file_type":  2,
+                                         "filename":  "pending-prototype-name.csv",
+                                         "folder":  "PROTOTYPE_ROOT\\A",
+                                         "hwnd":  394524,
+                                         "observed_at_ms":  1795018705779
+                                     },
+                           "before":  {
+                                          "dialog_alive":  true,
+                                          "dialog_visible":  true,
+                                          "event":  "host_poll",
+                                          "file_type":  2,
+                                          "filename":  "pending-prototype-name.csv",
+                                          "folder":  "PROTOTYPE_ROOT\\A",
+                                          "hwnd":  394524,
+                                          "observed_at_ms":  1795018701990
+                                      },
+                           "event":  "native_verdict",
+                           "file_type_preserved":  true,
+                           "filename_preserved":  true,
+                           "folder_unchanged":  true,
+                           "same_dialog_alive":  true,
+                           "successful_jump_tested":  false
+                       },
+    "observation_native_poll_count":  26,
+    "observation_native_states":  [
+                                      {
+                                          "Name":  "PROTOTYPE_ROOT\\A, pending-prototype-name.csv, 2, True, True",
+                                          "Count":  26
+                                      }
+                                  ],
+    "combo_snapshots":  [
+                            {
+                                "phase":  "before_address_combo",
+                                "elements":  2,
+                                "root_value":  "",
+                                "direct_button_actions":  [
+                                                              {
+                                                                  "name":  "地址",
+                                                                  "legacy_default_action":  "打开"
+                                                              }
+                                                          ],
+                                "list_items":  0
+                            },
+                            {
+                                "phase":  "after_0ms_address_combo",
+                                "elements":  33,
+                                "root_value":  "",
+                                "direct_button_actions":  [
+                                                              {
+                                                                  "name":  "地址",
+                                                                  "legacy_default_action":  "关闭"
+                                                              }
+                                                          ],
+                                "list_items":  25
+                            },
+                            {
+                                "phase":  "after_1000ms_address_combo",
+                                "elements":  33,
+                                "root_value":  "",
+                                "direct_button_actions":  [
+                                                              {
+                                                                  "name":  "地址",
+                                                                  "legacy_default_action":  "关闭"
+                                                              }
+                                                          ],
+                                "list_items":  25
+                            },
+                            {
+                                "phase":  "after_2000ms_address_combo",
+                                "elements":  33,
+                                "root_value":  "",
+                                "direct_button_actions":  [
+                                                              {
+                                                                  "name":  "地址",
+                                                                  "legacy_default_action":  "关闭"
+                                                              }
+                                                          ],
+                                "list_items":  25
+                            }
+                        ],
+    "native_address_visibility":  [
+                                      {
+                                          "phase":  "before",
+                                          "class":  "ComboBoxEx32",
+                                          "hwnd":  397438,
+                                          "visible":  false
+                                      },
+                                      {
+                                          "phase":  "before",
+                                          "class":  "ComboBox",
+                                          "hwnd":  20318312,
+                                          "visible":  false
+                                      },
+                                      {
+                                          "phase":  "before",
+                                          "class":  "Edit",
+                                          "hwnd":  397786,
+                                          "visible":  false
+                                      },
+                                      {
+                                          "phase":  "after_0ms",
+                                          "class":  "ComboBoxEx32",
+                                          "hwnd":  397438,
+                                          "visible":  false
+                                      },
+                                      {
+                                          "phase":  "after_0ms",
+                                          "class":  "ComboBox",
+                                          "hwnd":  20318312,
+                                          "visible":  false
+                                      },
+                                      {
+                                          "phase":  "after_0ms",
+                                          "class":  "Edit",
+                                          "hwnd":  397786,
+                                          "visible":  false
+                                      },
+                                      {
+                                          "phase":  "after_1000ms",
+                                          "class":  "ComboBoxEx32",
+                                          "hwnd":  397438,
+                                          "visible":  false
+                                      },
+                                      {
+                                          "phase":  "after_1000ms",
+                                          "class":  "ComboBox",
+                                          "hwnd":  20318312,
+                                          "visible":  false
+                                      },
+                                      {
+                                          "phase":  "after_1000ms",
+                                          "class":  "Edit",
+                                          "hwnd":  397786,
+                                          "visible":  false
+                                      },
+                                      {
+                                          "phase":  "after_2000ms",
+                                          "class":  "ComboBoxEx32",
+                                          "hwnd":  397438,
+                                          "visible":  false
+                                      },
+                                      {
+                                          "phase":  "after_2000ms",
+                                          "class":  "ComboBox",
+                                          "hwnd":  20318312,
+                                          "visible":  false
+                                      },
+                                      {
+                                          "phase":  "after_2000ms",
+                                          "class":  "Edit",
+                                          "hwnd":  397786,
+                                          "visible":  false
+                                      }
+                                  ],
+    "owned_popups":  [
+                         {
+                             "event":  "owned_popup_summary",
+                             "native_roots_excluding_dialog":  18,
+                             "native_visible_roots_excluding_dialog":  0,
+                             "observed_at_ms":  1795018702409,
+                             "phase":  "before",
+                             "uia_desktop_roots_excluding_dialog":  0
+                         },
+                         {
+                             "event":  "owned_popup_summary",
+                             "native_roots_excluding_dialog":  19,
+                             "native_visible_roots_excluding_dialog":  2,
+                             "observed_at_ms":  1795018703132,
+                             "phase":  "after_0ms",
+                             "uia_desktop_roots_excluding_dialog":  1
+                         },
+                         {
+                             "event":  "owned_popup_summary",
+                             "native_roots_excluding_dialog":  19,
+                             "native_visible_roots_excluding_dialog":  2,
+                             "observed_at_ms":  1795018703943,
+                             "phase":  "after_1000ms",
+                             "uia_desktop_roots_excluding_dialog":  1
+                         },
+                         {
+                             "event":  "owned_popup_summary",
+                             "native_roots_excluding_dialog":  19,
+                             "native_visible_roots_excluding_dialog":  2,
+                             "observed_at_ms":  1795018704930,
+                             "phase":  "after_2000ms",
+                             "uia_desktop_roots_excluding_dialog":  1
+                         }
+                     ],
+    "focus":  [
+                  {
+                      "event":  "focus_foreground",
+                      "focused":  {
+                                      "class":  "Edit",
+                                      "control_type":  50004,
+                                      "hwnd":  458818,
+                                      "name":  "文件名(N):",
+                                      "pid":  6588
+                                  },
+                      "foreground":  {
+                                         "alive":  true,
+                                         "class":  "#32770",
+                                         "hwnd":  394524,
+                                         "owner":  null,
+                                         "parent":  null,
+                                         "pid":  6588,
+                                         "visible":  true
+                                     },
+                      "observed_at_ms":  1795018702360,
+                      "phase":  "before"
+                  },
+                  {
+                      "event":  "focus_foreground",
+                      "focused":  {
+                                      "class":  "ComboBox",
+                                      "control_type":  50003,
+                                      "hwnd":  20318312,
+                                      "name":  "地址",
+                                      "pid":  6588
+                                  },
+                      "foreground":  {
+                                         "alive":  true,
+                                         "class":  "#32770",
+                                         "hwnd":  394524,
+                                         "owner":  null,
+                                         "parent":  null,
+                                         "pid":  6588,
+                                         "visible":  true
+                                     },
+                      "observed_at_ms":  1795018702623,
+                      "phase":  "after_0ms"
+                  },
+                  {
+                      "event":  "focus_foreground",
+                      "focused":  {
+                                      "class":  "ComboBox",
+                                      "control_type":  50003,
+                                      "hwnd":  20318312,
+                                      "name":  "地址",
+                                      "pid":  6588
+                                  },
+                      "foreground":  {
+                                         "alive":  true,
+                                         "class":  "#32770",
+                                         "hwnd":  394524,
+                                         "owner":  null,
+                                         "parent":  null,
+                                         "pid":  6588,
+                                         "visible":  true
+                                     },
+                      "observed_at_ms":  1795018703443,
+                      "phase":  "after_1000ms"
+                  },
+                  {
+                      "event":  "focus_foreground",
+                      "focused":  {
+                                      "class":  "ComboBox",
+                                      "control_type":  50003,
+                                      "hwnd":  20318312,
+                                      "name":  "地址",
+                                      "pid":  6588
+                                  },
+                      "foreground":  {
+                                         "alive":  true,
+                                         "class":  "#32770",
+                                         "hwnd":  394524,
+                                         "owner":  null,
+                                         "parent":  null,
+                                         "pid":  6588,
+                                         "visible":  true
+                                     },
+                      "observed_at_ms":  1795018704443,
+                      "phase":  "after_2000ms"
+                  }
+              ],
+    "recognized_go_elements_in_main_after_trees":  0,
+    "client_exit":  {
+                        "elapsed_ms":  3461,
+                        "event":  "client_exit",
+                        "note":  "A timeout leaves the provider HRESULT unknown; there is no retry.",
+                        "success":  true,
+                        "timed_out":  false,
+                        "total_timeout_ms":  15000
+                    },
+    "fixture_cleanup":  {
+                            "event":  "fixture_cleanup",
+                            "host_exited":  true
+                        },
+    "publication_redaction":  "Runtime normalizes fixture root and redacts complete profile-relative and other absolute non-fixture paths in captured names."
+}

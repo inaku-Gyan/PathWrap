@@ -1,0 +1,48 @@
+{
+  "case_started_utc": "2026-11-18T16:18:21.5100438Z",
+  "case_finished_utc": "2026-11-18T16:18:26.0705948Z",
+  "os_build": "26300",
+  "os_revision": 9974,
+  "os_edition": "CoreCountrySpecific",
+  "os_architecture": "X64",
+  "process_ui_culture": "zh-CN",
+  "rustc": "rustc 1.100.0 (0ef1bc386 2026-11-09)",
+  "listary_processes_before": [
+    {
+      "ProcessName": "Listary.Service",
+      "Id": 6176,
+      "SessionId": 0,
+      "MainWindowHandle": 0
+    }
+  ],
+  "listary_processes_after": [
+    {
+      "ProcessName": "Listary.Service",
+      "Id": 6176,
+      "SessionId": 0,
+      "MainWindowHandle": 0
+    }
+  ],
+  "listary_services_before": [
+    {
+      "Name": "ListaryServiceV2",
+      "State": "Running",
+      "ProcessId": 6176
+    }
+  ],
+  "listary_services_after": [
+    {
+      "Name": "ListaryServiceV2",
+      "State": "Running",
+      "ProcessId": 6176
+    }
+  ],
+  "listary_desktop_and_interactive_helpers_absent_at_both_checks": true,
+  "all_listary_components_absent": false,
+  "prototype_exit_code": 0,
+  "remaining_prototype_processes": 0,
+  "preflight_note": "Initial broad Listary* guard stopped before fixture creation or Invoke because the Session 0 service remained. The sole GUI case records desktop-app absence and retained service explicitly.",
+  "scope": "One modern Common Item Open fixture; one exact child UIA Invoke; desktop application exited with Session 0 ListaryServiceV2 retained; not complete third-party isolation",
+  "execution_context": "Authorized unsandboxed desktop command; owned STA fixture and external MTA worker inherit supervisor token; integrity levels not independently queried",
+  "prior_prototype_commit": "b29d2c92d4324ec37cf172d49fc7f2df12a139de"
+}
