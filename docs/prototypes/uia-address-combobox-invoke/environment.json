@@ -1,0 +1,13 @@
+﻿{
+    "captured_utc":  "2026-11-18T15:54:18.2493953Z",
+    "os_build":  "26300",
+    "os_revision":  9974,
+    "os_edition":  "CoreCountrySpecific",
+    "os_architecture":  "X64",
+    "process_ui_culture":  "zh-CN",
+    "rustc":  "rustc 1.100.0 (0ef1bc386 2026-11-09)",
+    "scenario":  "One external MTA UIA client and owned STA modern Open dialog; one exact address ComboBox child Invoke; three-second read-only observation",
+    "execution_context":  "Authorized unsandboxed desktop command; host and UIA worker inherit supervisor token; integrity levels not separately queried",
+    "accepted_fixture_commit":  "657de8701358f7a6bdc45a198b7629b0dd9214bb",
+    "main_base_commit":  "17ea89b43d96f09499213f4745be476db885bc0e"
+}
