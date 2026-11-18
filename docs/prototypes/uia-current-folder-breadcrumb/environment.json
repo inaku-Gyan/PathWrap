@@ -1,0 +1,64 @@
+{
+  "case": "one-current-folder-breadcrumb-Invoke",
+  "case_count": 1,
+  "started_at_utc": "2026-11-18T16:50:56.7596011Z",
+  "finished_at_utc": "2026-11-18T16:51:01.4514997Z",
+  "windows_build": "26300.9974",
+  "display_version": "26H2",
+  "architecture": "AMD64",
+  "ui_culture": "zh-CN",
+  "culture": "zh-CN",
+  "rust_version": "rustc 1.100.0 (0ef1bc386 2026-11-09)",
+  "branch": "prototype/uia-current-folder-breadcrumb-20261119",
+  "binary_name": "uia_current_folder_breadcrumb_prototype.exe",
+  "binary_sha256": "0E5713350C0EF59D7CBC4DACEB5FE57959EBB34C10AB4FF3840FAF9A229B38F6",
+  "source_sha256": "6D3E2E8DF462359DC1A4D114C3B1BB61A70CA129B3A5DE9E1295E1D3581E14B8",
+  "exit_code": 0,
+  "before": {
+    "observed_at_utc": "2026-11-18T16:50:56.7519111Z",
+    "processes": [
+      {
+        "name": "Listary.Service",
+        "pid": 6176,
+        "session_id": 0,
+        "main_window_handle": 0
+      }
+    ],
+    "services": [
+      {
+        "Name": "ListaryServiceV2",
+        "State": "Running",
+        "StartMode": "Auto",
+        "ProcessId": 6176
+      }
+    ],
+    "interactive_components_absent": true,
+    "all_listary_components_absent": false
+  },
+  "after": {
+    "observed_at_utc": "2026-11-18T16:51:01.4439725Z",
+    "processes": [
+      {
+        "name": "Listary.Service",
+        "pid": 6176,
+        "session_id": 0,
+        "main_window_handle": 0
+      }
+    ],
+    "services": [
+      {
+        "Name": "ListaryServiceV2",
+        "State": "Running",
+        "StartMode": "Auto",
+        "ProcessId": 6176
+      }
+    ],
+    "interactive_components_absent": true,
+    "all_listary_components_absent": false
+  },
+  "listary_service_was_stopped": false,
+  "integrity_level_measured": false,
+  "inherited_user_token": true,
+  "remaining_prototype_processes": [],
+  "note": "Desktop app/helpers exited; Session 0 Listary service retained. No complete component-isolation or causality claim."
+}

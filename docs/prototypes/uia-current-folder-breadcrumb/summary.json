@@ -1,0 +1,749 @@
+{
+    "invoke":  {
+                   "elapsed_us":  45366,
+                   "event":  "invoke_result",
+                   "hresult":  "HRESULT(0x00000000)",
+                   "invoke_calls":  1,
+                   "observed_at_ms":  1795020657654,
+                   "success":  true
+               },
+    "observation":  {
+                        "dialog_alive":  true,
+                        "event":  "probe_done",
+                        "followup_actions":  0,
+                        "invoke_calls":  1,
+                        "late_snapshot_2900ms_removed":  true,
+                        "observation_elapsed_ms":  3000,
+                        "observed_at_ms":  1795020660654,
+                        "requested_observation_ms":  3000,
+                        "set_focus_calls":  0,
+                        "set_value_calls":  0
+                    },
+    "action_gate":  {
+                        "control_type":  50031,
+                        "event":  "action_gate",
+                        "legacy_default_action":  "打开",
+                        "legacy_role":  62,
+                        "name":  "‎A",
+                        "observed_at_ms":  1795020657608,
+                        "valid_observed_pair":  true
+                    },
+    "target_identity":  {
+                            "band":  {
+                                         "address_scope":  true,
+                                         "automation_id":  "41477",
+                                         "class":  "Address Band Root",
+                                         "control_type":  50033,
+                                         "depth":  3,
+                                         "enabled":  true,
+                                         "event":  "element",
+                                         "focusable":  true,
+                                         "framework":  "Win32",
+                                         "hwnd":  460070,
+                                         "index":  88,
+                                         "legacy_default_action":  "",
+                                         "legacy_role":  10,
+                                         "name":  "",
+                                         "offscreen":  false,
+                                         "parent":  79,
+                                         "patterns":  {
+                                                          "expand_collapse":  {
+                                                                                  "available":  false,
+                                                                                  "binding_error_hresult":  "HRESULT(0x00000000)"
+                                                                              },
+                                                          "invoke":  {
+                                                                         "available":  false,
+                                                                         "binding_error_hresult":  "HRESULT(0x00000000)"
+                                                                     },
+                                                          "legacy":  {
+                                                                         "available":  true,
+                                                                         "binding_error_hresult":  null
+                                                                     },
+                                                          "value":  {
+                                                                        "available":  false,
+                                                                        "binding_error_hresult":  "HRESULT(0x00000000)"
+                                                                    }
+                                                      },
+                                         "phase":  "initial",
+                                         "pid":  32468,
+                                         "provider":  "[pid:3384,providerId:0x70526 Main:Nested [pid:32468,providerId:0x70526 Annotation(parent link):Microsoft: Annotation Proxy (unmanaged:UIAutomationCore.DLL); Main:Microsoft: MSAA Proxy (unmanaged:UIAutomationCore.DLL)]; Hwnd(parent link):Microsoft: HWND Proxy (unmanaged:uiautomationcore.dll)]",
+                                         "value":  null,
+                                         "value_readonly":  null
+                                     },
+                            "event":  "target_identity",
+                            "native_ancestors":  [
+                                                     {
+                                                         "alive":  true,
+                                                         "class":  "ToolbarWindow32",
+                                                         "hwnd":  1117880,
+                                                         "owner":  null,
+                                                         "parent":  1509934,
+                                                         "pid":  32468,
+                                                         "visible":  true
+                                                     },
+                                                     {
+                                                         "alive":  true,
+                                                         "class":  "Breadcrumb Parent",
+                                                         "hwnd":  1509934,
+                                                         "owner":  null,
+                                                         "parent":  1249440,
+                                                         "pid":  32468,
+                                                         "visible":  true
+                                                     },
+                                                     {
+                                                         "alive":  true,
+                                                         "class":  "msctls_progress32",
+                                                         "hwnd":  1249440,
+                                                         "owner":  null,
+                                                         "parent":  460070,
+                                                         "pid":  32468,
+                                                         "visible":  true
+                                                     },
+                                                     {
+                                                         "alive":  true,
+                                                         "class":  "Address Band Root",
+                                                         "hwnd":  460070,
+                                                         "owner":  null,
+                                                         "parent":  197858,
+                                                         "pid":  32468,
+                                                         "visible":  true
+                                                     },
+                                                     {
+                                                         "alive":  true,
+                                                         "class":  "ReBarWindow32",
+                                                         "hwnd":  197858,
+                                                         "owner":  null,
+                                                         "parent":  9373808,
+                                                         "pid":  32468,
+                                                         "visible":  true
+                                                     },
+                                                     {
+                                                         "alive":  true,
+                                                         "class":  "WorkerW",
+                                                         "hwnd":  9373808,
+                                                         "owner":  null,
+                                                         "parent":  4850696,
+                                                         "pid":  32468,
+                                                         "visible":  true
+                                                     },
+                                                     {
+                                                         "alive":  true,
+                                                         "class":  "#32770",
+                                                         "hwnd":  4850696,
+                                                         "owner":  null,
+                                                         "parent":  null,
+                                                         "pid":  32468,
+                                                         "visible":  true
+                                                     }
+                                                 ],
+                            "native_combo_visible":  false,
+                            "probe_hypothesis":  "Current-folder breadcrumb Invoke may reveal an address state; semantics unproven.",
+                            "target":  {
+                                           "address_scope":  true,
+                                           "automation_id":  "",
+                                           "class":  "",
+                                           "control_type":  50031,
+                                           "depth":  1,
+                                           "enabled":  true,
+                                           "event":  "element",
+                                           "focusable":  false,
+                                           "framework":  "",
+                                           "hwnd":  0,
+                                           "index":  3,
+                                           "legacy_default_action":  "打开",
+                                           "legacy_role":  62,
+                                           "name":  "‎A",
+                                           "offscreen":  false,
+                                           "parent":  0,
+                                           "patterns":  {
+                                                            "expand_collapse":  {
+                                                                                    "available":  false,
+                                                                                    "binding_error_hresult":  "HRESULT(0x00000000)"
+                                                                                },
+                                                            "invoke":  {
+                                                                           "available":  true,
+                                                                           "binding_error_hresult":  null
+                                                                       },
+                                                            "legacy":  {
+                                                                           "available":  true,
+                                                                           "binding_error_hresult":  null
+                                                                       },
+                                                            "value":  {
+                                                                          "available":  false,
+                                                                          "binding_error_hresult":  "HRESULT(0x00000000)"
+                                                                      }
+                                                        },
+                                           "phase":  "before_breadcrumb",
+                                           "pid":  32468,
+                                           "provider":  "[pid:32468,providerId:0x0 Annotation:Microsoft: Annotation Proxy (unmanaged:UIAutomationCore.DLL); Main(parent link):Microsoft: MSAA Proxy (unmanaged:UIAutomationCore.DLL)]",
+                                           "value":  null,
+                                           "value_readonly":  null
+                                       },
+                            "toolbar":  {
+                                            "address_scope":  true,
+                                            "automation_id":  "1001",
+                                            "class":  "ToolbarWindow32",
+                                            "control_type":  50021,
+                                            "depth":  0,
+                                            "enabled":  true,
+                                            "event":  "element",
+                                            "focusable":  true,
+                                            "framework":  "Win32",
+                                            "hwnd":  1117880,
+                                            "index":  0,
+                                            "legacy_default_action":  "",
+                                            "legacy_role":  22,
+                                            "name":  "地址: PROTOTYPE_ROOT\\A",
+                                            "offscreen":  false,
+                                            "parent":  null,
+                                            "patterns":  {
+                                                             "expand_collapse":  {
+                                                                                     "available":  false,
+                                                                                     "binding_error_hresult":  "HRESULT(0x00000000)"
+                                                                                 },
+                                                             "invoke":  {
+                                                                            "available":  false,
+                                                                            "binding_error_hresult":  "HRESULT(0x00000000)"
+                                                                        },
+                                                             "legacy":  {
+                                                                            "available":  true,
+                                                                            "binding_error_hresult":  null
+                                                                        },
+                                                             "value":  {
+                                                                           "available":  false,
+                                                                           "binding_error_hresult":  "HRESULT(0x00000000)"
+                                                                       }
+                                                         },
+                                            "phase":  "before_breadcrumb",
+                                            "pid":  32468,
+                                            "provider":  "[pid:3384,providerId:0x110EB8 Main:Nested [pid:32468,providerId:0x110EB8 Annotation(parent link):Microsoft: Annotation Proxy (unmanaged:UIAutomationCore.DLL); Main:Microsoft: MSAA Proxy (unmanaged:UIAutomationCore.DLL)]; Hwnd(parent link):Microsoft: HWND Proxy (unmanaged:uiautomationcore.dll)]",
+                                            "value":  null,
+                                            "value_readonly":  null
+                                        },
+                            "uia_child_offscreen":  false,
+                            "uia_parent_matches":  true
+                        },
+    "snapshot_timing":  [
+                            {
+                                "actual_offset_ms":  0,
+                                "event":  "snapshot_start",
+                                "observed_at_ms":  1795020657654,
+                                "phase":  "after_0ms"
+                            },
+                            {
+                                "actual_offset_ms":  432,
+                                "event":  "snapshot_end",
+                                "observed_at_ms":  1795020658086,
+                                "phase":  "after_0ms"
+                            },
+                            {
+                                "actual_offset_ms":  1000,
+                                "event":  "snapshot_start",
+                                "observed_at_ms":  1795020658654,
+                                "phase":  "after_1000ms"
+                            },
+                            {
+                                "actual_offset_ms":  1341,
+                                "event":  "snapshot_end",
+                                "observed_at_ms":  1795020658995,
+                                "phase":  "after_1000ms"
+                            },
+                            {
+                                "actual_offset_ms":  2000,
+                                "event":  "snapshot_start",
+                                "observed_at_ms":  1795020659654,
+                                "phase":  "after_2000ms"
+                            },
+                            {
+                                "actual_offset_ms":  2650,
+                                "event":  "snapshot_end",
+                                "observed_at_ms":  1795020660304,
+                                "phase":  "after_2000ms"
+                            }
+                        ],
+    "cutoff_events":  [
+
+                      ],
+    "incomplete_tree_captures":  [
+
+                                 ],
+    "tree_captures":  [
+                          {
+                              "complete":  true,
+                              "elements":  108,
+                              "event":  "tree_capture_end",
+                              "observed_at_ms":  1795020657541,
+                              "phase":  "initial"
+                          },
+                          {
+                              "complete":  true,
+                              "elements":  4,
+                              "event":  "tree_capture_end",
+                              "observed_at_ms":  1795020657553,
+                              "phase":  "before_breadcrumb"
+                          },
+                          {
+                              "complete":  true,
+                              "elements":  108,
+                              "event":  "tree_capture_end",
+                              "observed_at_ms":  1795020658032,
+                              "phase":  "after_0ms"
+                          },
+                          {
+                              "complete":  true,
+                              "elements":  2,
+                              "event":  "tree_capture_end",
+                              "observed_at_ms":  1795020658041,
+                              "phase":  "after_0ms_address_combo"
+                          },
+                          {
+                              "complete":  true,
+                              "elements":  108,
+                              "event":  "tree_capture_end",
+                              "observed_at_ms":  1795020658948,
+                              "phase":  "after_1000ms"
+                          },
+                          {
+                              "complete":  true,
+                              "elements":  2,
+                              "event":  "tree_capture_end",
+                              "observed_at_ms":  1795020658957,
+                              "phase":  "after_1000ms_address_combo"
+                          },
+                          {
+                              "complete":  true,
+                              "elements":  108,
+                              "event":  "tree_capture_end",
+                              "observed_at_ms":  1795020659983,
+                              "phase":  "after_2000ms"
+                          },
+                          {
+                              "complete":  true,
+                              "elements":  2,
+                              "event":  "tree_capture_end",
+                              "observed_at_ms":  1795020659992,
+                              "phase":  "after_2000ms_address_combo"
+                          }
+                      ],
+    "main_tree_counts":  [
+                             {
+                                 "phase":  "initial",
+                                 "elements":  108,
+                                 "complete":  true
+                             },
+                             {
+                                 "phase":  "after_0ms",
+                                 "elements":  108,
+                                 "complete":  true
+                             },
+                             {
+                                 "phase":  "after_1000ms",
+                                 "elements":  108,
+                                 "complete":  true
+                             },
+                             {
+                                 "phase":  "after_2000ms",
+                                 "elements":  108,
+                                 "complete":  true
+                             }
+                         ],
+    "native_verdict":  {
+                           "after":  {
+                                         "dialog_alive":  true,
+                                         "dialog_visible":  true,
+                                         "event":  "host_poll",
+                                         "file_type":  2,
+                                         "filename":  "pending-prototype-name.csv",
+                                         "folder":  "PROTOTYPE_ROOT\\A",
+                                         "hwnd":  4850696,
+                                         "observed_at_ms":  1795020660984
+                                     },
+                           "before":  {
+                                          "dialog_alive":  true,
+                                          "dialog_visible":  true,
+                                          "event":  "host_poll",
+                                          "file_type":  2,
+                                          "filename":  "pending-prototype-name.csv",
+                                          "folder":  "PROTOTYPE_ROOT\\A",
+                                          "hwnd":  4850696,
+                                          "observed_at_ms":  1795020657175
+                                      },
+                           "event":  "native_verdict",
+                           "file_type_preserved":  true,
+                           "filename_preserved":  true,
+                           "folder_unchanged":  true,
+                           "same_dialog_alive":  true,
+                           "successful_jump_tested":  false
+                       },
+    "observation_native_poll_count":  27,
+    "after_client_native_observation":  {
+                                            "event":  "native_observation",
+                                            "fresh_polls":  4,
+                                            "phase":  "after_client",
+                                            "started_at_ms":  1795020660667,
+                                            "state":  {
+                                                          "dialog_alive":  true,
+                                                          "dialog_visible":  true,
+                                                          "event":  "host_poll",
+                                                          "file_type":  2,
+                                                          "filename":  "pending-prototype-name.csv",
+                                                          "folder":  "PROTOTYPE_ROOT\\A",
+                                                          "hwnd":  4850696,
+                                                          "observed_at_ms":  1795020660984
+                                                      }
+                                        },
+    "native_address_visibility":  [
+                                      {
+                                          "phase":  "before",
+                                          "state":  {
+                                                        "alive":  true,
+                                                        "class":  "ComboBoxEx32",
+                                                        "hwnd":  3673814,
+                                                        "owner":  null,
+                                                        "parent":  1249440,
+                                                        "pid":  32468,
+                                                        "visible":  false
+                                                    }
+                                      },
+                                      {
+                                          "phase":  "before",
+                                          "state":  {
+                                                        "alive":  true,
+                                                        "class":  "ComboBox",
+                                                        "hwnd":  15862116,
+                                                        "owner":  null,
+                                                        "parent":  3673814,
+                                                        "pid":  32468,
+                                                        "visible":  false
+                                                    }
+                                      },
+                                      {
+                                          "phase":  "before",
+                                          "state":  {
+                                                        "alive":  true,
+                                                        "class":  "Edit",
+                                                        "hwnd":  4262722,
+                                                        "owner":  null,
+                                                        "parent":  15862116,
+                                                        "pid":  32468,
+                                                        "visible":  false
+                                                    }
+                                      },
+                                      {
+                                          "phase":  "after_0ms",
+                                          "state":  {
+                                                        "alive":  true,
+                                                        "class":  "ComboBoxEx32",
+                                                        "hwnd":  3673814,
+                                                        "owner":  null,
+                                                        "parent":  1249440,
+                                                        "pid":  32468,
+                                                        "visible":  false
+                                                    }
+                                      },
+                                      {
+                                          "phase":  "after_0ms",
+                                          "state":  {
+                                                        "alive":  true,
+                                                        "class":  "ComboBox",
+                                                        "hwnd":  15862116,
+                                                        "owner":  null,
+                                                        "parent":  3673814,
+                                                        "pid":  32468,
+                                                        "visible":  false
+                                                    }
+                                      },
+                                      {
+                                          "phase":  "after_0ms",
+                                          "state":  {
+                                                        "alive":  true,
+                                                        "class":  "Edit",
+                                                        "hwnd":  4262722,
+                                                        "owner":  null,
+                                                        "parent":  15862116,
+                                                        "pid":  32468,
+                                                        "visible":  false
+                                                    }
+                                      },
+                                      {
+                                          "phase":  "after_1000ms",
+                                          "state":  {
+                                                        "alive":  true,
+                                                        "class":  "ComboBoxEx32",
+                                                        "hwnd":  3673814,
+                                                        "owner":  null,
+                                                        "parent":  1249440,
+                                                        "pid":  32468,
+                                                        "visible":  false
+                                                    }
+                                      },
+                                      {
+                                          "phase":  "after_1000ms",
+                                          "state":  {
+                                                        "alive":  true,
+                                                        "class":  "ComboBox",
+                                                        "hwnd":  15862116,
+                                                        "owner":  null,
+                                                        "parent":  3673814,
+                                                        "pid":  32468,
+                                                        "visible":  false
+                                                    }
+                                      },
+                                      {
+                                          "phase":  "after_1000ms",
+                                          "state":  {
+                                                        "alive":  true,
+                                                        "class":  "Edit",
+                                                        "hwnd":  4262722,
+                                                        "owner":  null,
+                                                        "parent":  15862116,
+                                                        "pid":  32468,
+                                                        "visible":  false
+                                                    }
+                                      },
+                                      {
+                                          "phase":  "after_2000ms",
+                                          "state":  {
+                                                        "alive":  true,
+                                                        "class":  "ComboBoxEx32",
+                                                        "hwnd":  3673814,
+                                                        "owner":  null,
+                                                        "parent":  1249440,
+                                                        "pid":  32468,
+                                                        "visible":  false
+                                                    }
+                                      },
+                                      {
+                                          "phase":  "after_2000ms",
+                                          "state":  {
+                                                        "alive":  true,
+                                                        "class":  "ComboBox",
+                                                        "hwnd":  15862116,
+                                                        "owner":  null,
+                                                        "parent":  3673814,
+                                                        "pid":  32468,
+                                                        "visible":  false
+                                                    }
+                                      },
+                                      {
+                                          "phase":  "after_2000ms",
+                                          "state":  {
+                                                        "alive":  true,
+                                                        "class":  "Edit",
+                                                        "hwnd":  4262722,
+                                                        "owner":  null,
+                                                        "parent":  15862116,
+                                                        "pid":  32468,
+                                                        "visible":  false
+                                                    }
+                                      }
+                                  ],
+    "owned_popups":  [
+                         {
+                             "event":  "owned_popup_summary",
+                             "native_roots_excluding_dialog":  18,
+                             "native_visible_roots_excluding_dialog":  0,
+                             "observed_at_ms":  1795020657607,
+                             "phase":  "before",
+                             "uia_desktop_roots_excluding_dialog":  0
+                         },
+                         {
+                             "event":  "owned_popup_summary",
+                             "native_roots_excluding_dialog":  19,
+                             "native_visible_roots_excluding_dialog":  0,
+                             "observed_at_ms":  1795020658086,
+                             "phase":  "after_0ms",
+                             "uia_desktop_roots_excluding_dialog":  0
+                         },
+                         {
+                             "event":  "owned_popup_summary",
+                             "native_roots_excluding_dialog":  19,
+                             "native_visible_roots_excluding_dialog":  0,
+                             "observed_at_ms":  1795020658995,
+                             "phase":  "after_1000ms",
+                             "uia_desktop_roots_excluding_dialog":  0
+                         },
+                         {
+                             "event":  "owned_popup_summary",
+                             "native_roots_excluding_dialog":  19,
+                             "native_visible_roots_excluding_dialog":  0,
+                             "observed_at_ms":  1795020660304,
+                             "phase":  "after_2000ms",
+                             "uia_desktop_roots_excluding_dialog":  0
+                         }
+                     ],
+    "focus":  [
+                  {
+                      "event":  "focus_foreground",
+                      "focused":  {
+                                      "class":  "TermControl",
+                                      "control_type":  50020,
+                                      "hwnd":  0,
+                                      "name":  null,
+                                      "pid":  4304
+                                  },
+                      "foreground":  {
+                                         "alive":  true,
+                                         "class":  "CASCADIA_HOSTING_WINDOW_CLASS",
+                                         "hwnd":  4721418,
+                                         "owner":  null,
+                                         "parent":  null,
+                                         "pid":  4304,
+                                         "visible":  true
+                                     },
+                      "observed_at_ms":  1795020657558,
+                      "phase":  "before"
+                  },
+                  {
+                      "event":  "focus_foreground",
+                      "focused":  {
+                                      "class":  "ToolbarWindow32",
+                                      "control_type":  50021,
+                                      "hwnd":  1117880,
+                                      "name":  "地址: PROTOTYPE_ROOT\\A",
+                                      "pid":  32468
+                                  },
+                      "foreground":  {
+                                         "alive":  true,
+                                         "class":  "#32770",
+                                         "hwnd":  4850696,
+                                         "owner":  null,
+                                         "parent":  null,
+                                         "pid":  32468,
+                                         "visible":  true
+                                     },
+                      "observed_at_ms":  1795020657671,
+                      "phase":  "after_0ms"
+                  },
+                  {
+                      "event":  "focus_foreground",
+                      "focused":  {
+                                      "class":  "ToolbarWindow32",
+                                      "control_type":  50021,
+                                      "hwnd":  1117880,
+                                      "name":  "地址: PROTOTYPE_ROOT\\A",
+                                      "pid":  32468
+                                  },
+                      "foreground":  {
+                                         "alive":  true,
+                                         "class":  "#32770",
+                                         "hwnd":  4850696,
+                                         "owner":  null,
+                                         "parent":  null,
+                                         "pid":  32468,
+                                         "visible":  true
+                                     },
+                      "observed_at_ms":  1795020658656,
+                      "phase":  "after_1000ms"
+                  },
+                  {
+                      "event":  "focus_foreground",
+                      "focused":  {
+                                      "class":  "ToolbarWindow32",
+                                      "control_type":  50021,
+                                      "hwnd":  1117880,
+                                      "name":  "地址: PROTOTYPE_ROOT\\A",
+                                      "pid":  32468
+                                  },
+                      "foreground":  {
+                                         "alive":  true,
+                                         "class":  "#32770",
+                                         "hwnd":  4850696,
+                                         "owner":  null,
+                                         "parent":  null,
+                                         "pid":  32468,
+                                         "visible":  true
+                                     },
+                      "observed_at_ms":  1795020659658,
+                      "phase":  "after_2000ms"
+                  }
+              ],
+    "after_0ms_main_address_invoke_metadata":  [
+                                                   {
+                                                       "name":  "所有位置",
+                                                       "control_type":  50031,
+                                                       "legacy_role":  62,
+                                                       "legacy_default_action":  "打开"
+                                                   },
+                                                   {
+                                                       "name":  "‎PROTOTYPE_ROOT",
+                                                       "control_type":  50031,
+                                                       "legacy_role":  62,
+                                                       "legacy_default_action":  "打开"
+                                                   },
+                                                   {
+                                                       "name":  "‎A",
+                                                       "control_type":  50031,
+                                                       "legacy_role":  62,
+                                                       "legacy_default_action":  "打开"
+                                                   },
+                                                   {
+                                                       "name":  "上一个位置",
+                                                       "control_type":  50000,
+                                                       "legacy_role":  43,
+                                                       "legacy_default_action":  "按"
+                                                   },
+                                                   {
+                                                       "name":  "刷新“A”(F5)",
+                                                       "control_type":  50000,
+                                                       "legacy_role":  43,
+                                                       "legacy_default_action":  "按"
+                                                   }
+                                               ],
+    "recognized_go_name_rule":  "Address-scope Invoke element name matches ^(Go|Go to|转到|前往)($|[ :：]); a heuristic, not universal identification.",
+    "recognized_go_elements_count":  0,
+    "client_exit":  {
+                        "elapsed_ms":  3487,
+                        "event":  "client_exit",
+                        "note":  "A timeout leaves the provider HRESULT unknown; there is no retry.",
+                        "success":  true,
+                        "timed_out":  false,
+                        "total_timeout_ms":  15000
+                    },
+    "fixture_cleanup":  {
+                            "event":  "fixture_cleanup",
+                            "host_exited":  true
+                        },
+    "publication_redaction":  "Fixture root normalized; all non-fixture absolute/profile-relative names redacted by inherited scrubber. Unrelated app titles/trees are not captured.",
+    "observation_native_states":  [
+                                      {
+                                          "count":  27,
+                                          "folder":  "PROTOTYPE_ROOT\\A",
+                                          "filename":  "pending-prototype-name.csv",
+                                          "type_index":  2,
+                                          "dialog_alive":  true,
+                                          "dialog_visible":  true,
+                                          "hwnd":  4850696
+                                      }
+                                  ],
+    "post_invoke_folder_change_callbacks":  [
+                                                {
+                                                    "dialog_alive":  true,
+                                                    "dialog_visible":  true,
+                                                    "event":  "folder_snapshot",
+                                                    "file_type":  2,
+                                                    "filename":  "pending-prototype-name.csv",
+                                                    "folder":  "PROTOTYPE_ROOT\\A",
+                                                    "hwnd":  4850696,
+                                                    "observed_at_ms":  1795020657661
+                                                }
+                                            ],
+    "captured_file_view_markers":  [
+                                       {
+                                           "phase":  "initial",
+                                           "name":  "marker-only-in-A"
+                                       },
+                                       {
+                                           "phase":  "after_0ms",
+                                           "name":  "marker-only-in-A"
+                                       },
+                                       {
+                                           "phase":  "after_1000ms",
+                                           "name":  "marker-only-in-A"
+                                       },
+                                       {
+                                           "phase":  "after_2000ms",
+                                           "name":  "marker-only-in-A"
+                                       }
+                                   ]
+}
