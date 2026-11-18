@@ -5,9 +5,19 @@ one filename restoration move the same dialog from A to B while preserving its
 pending filename/type?
 
 This branch is evidence for [the full-chain prototype](https://github.com/inaku-Gyan/PathWrap/issues/89),
-not product implementation. The selected scope is one fresh Open case and one
-fresh Save case; results will be added after those cases. No case has run at
-this source-preparation point.
+not product implementation. The first Open case stopped before any provider
+action because this prototype incorrectly required Address Band Root to be the
+toolbar's grandparent. The existing native chain contains an intermediate
+msctls_progress32. This is an implementation defect, not evidence of failed
+filename navigation. Its source is immutable commit
+50048d1216817ffdcb2cbea6276a21aa874e33b9; its original open.jsonl and
+environment.json are preserved here.
+
+The corrected locator validates bounded ancestry to the original dialog and
+records that chain. The human explicitly answered “你可以重试”. The remaining
+execution is one corrected Open retry and the first Save case, using the same
+checked correction and separate evidence under corrected/. There has been no
+Save case yet at this preparation point. Further automatic repeats are excluded.
 
 ## Run
 

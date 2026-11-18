@@ -1,0 +1,39 @@
+{
+  "source_commit": "50048d1216817ffdcb2cbea6276a21aa874e33b9",
+  "source_sha256": "c26fdf172367aba45d1fd6d8690f00603ad47045cdd14655b003fdaa41020713",
+  "executable_sha256": "5665b776d21ce9120442a5d3c1172010bda8229d2473635a4156e9bd7f6aa0e7",
+  "rust": "rustc 1.100.0 (0ef1bc386 2026-11-09)",
+  "architecture": "AMD64",
+  "ui_culture": "zh-CN",
+  "windows_build": "26300",
+  "windows_ubr": 9974,
+  "windows_display_version": "26H2",
+  "observed_before_utc": "2026-11-18T20:38:12.2297388Z",
+  "relevant_processes_before": [
+    {
+      "ProcessName": "Listary.Service",
+      "Id": 6176,
+      "SessionId": 0
+    }
+  ],
+  "listary_service_before": [
+    {
+      "Name": "ListaryServiceV2",
+      "State": "Running",
+      "StartMode": "Auto",
+      "ProcessId": 6176
+    }
+  ],
+  "integrity_levels": "not independently measured",
+  "execution_scope": "one owned Open case and one owned Save case; no automatic repeat",
+  "open_execution": {
+    "start_utc": "2026-11-18T20:39:23.1603847Z",
+    "end_utc": "2026-11-18T20:39:24.6577233Z",
+    "exit_code": 0,
+    "source_sha256_before": "c26fdf172367aba45d1fd6d8690f00603ad47045cdd14655b003fdaa41020713",
+    "executable_sha256_before": "5665b776d21ce9120442a5d3c1172010bda8229d2473635a4156e9bd7f6aa0e7",
+    "source_sha256_after": "c26fdf172367aba45d1fd6d8690f00603ad47045cdd14655b003fdaa41020713",
+    "executable_sha256_after": "5665b776d21ce9120442a5d3c1172010bda8229d2473635a4156e9bd7f6aa0e7",
+    "stderr_bytes": 0
+  }
+}

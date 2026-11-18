@@ -686,12 +686,38 @@ fn toolbar_name(
             continue;
         }
         let parent = unsafe { GetParent(child) }?;
-        let grand = unsafe { GetParent(parent) }?;
-        if native(parent)["class"] != "Breadcrumb Parent"
-            || native(grand)["class"] != "Address Band Root"
-        {
+        if native(parent)["class"] != "Breadcrumb Parent" {
             continue;
         }
+        // The accepted trace has msctls_progress32 between Breadcrumb Parent
+        // and Address Band Root. Validate bounded ancestry, not direct parentage.
+        let mut cursor = parent;
+        let mut chain = Vec::new();
+        let mut saw_band = false;
+        let mut reached_dialog = false;
+        for _ in 0..16 {
+            let state = native(cursor);
+            if state["pid"] != pid || state["alive"] != true {
+                break;
+            }
+            saw_band |= state["class"] == "Address Band Root";
+            chain.push(state);
+            if cursor == window {
+                reached_dialog = true;
+                break;
+            }
+            let Ok(next) = (unsafe { GetParent(cursor) }) else {
+                break;
+            };
+            cursor = next;
+        }
+        if !saw_band || !reached_dialog {
+            continue;
+        }
+        println!(
+            "{}",
+            json!({"event":"toolbar_native_ancestry", "phase":phase, "chain":chain})
+        );
         let element = call("ElementFromHandle.toolbar", false, || unsafe {
             uia.ElementFromHandle(child)
         })?;
