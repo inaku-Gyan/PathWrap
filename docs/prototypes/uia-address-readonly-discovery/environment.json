@@ -1,0 +1,67 @@
+{
+  "case": "initial-A-readonly-address-discovery",
+  "case_count": 1,
+  "started_at_utc": "2026-11-18T17:29:00.4350700Z",
+  "finished_at_utc": "2026-11-18T17:29:01.7825164Z",
+  "windows_build": "26300.9974",
+  "display_version": "26H2",
+  "architecture": "AMD64",
+  "ui_culture": "zh-CN",
+  "culture": "zh-CN",
+  "rust_version": "rustc 1.100.0 (0ef1bc386 2026-11-09)",
+  "branch": "prototype/uia-address-readonly-discovery-20261119",
+  "binary_name": "uia_address_readonly_discovery_prototype.exe",
+  "binary_sha256": "782F67794011F0ACBA207540097E8DB1DC169E7E1DD96BF01592D1C6C6236165",
+  "source_sha256": "7C67921DE0705E894589A267E27940DFD9700B8AAC6B00F3C53F1A9965F6B3C2",
+  "exit_code": 0,
+  "before": {
+    "observed_at_utc": "2026-11-18T17:29:00.4288387Z",
+    "processes": [
+      {
+        "name": "Listary.Service",
+        "pid": 6176,
+        "session_id": 0,
+        "main_window_handle": 0
+      }
+    ],
+    "services": [
+      {
+        "Name": "ListaryServiceV2",
+        "State": "Running",
+        "StartMode": "Auto",
+        "ProcessId": 6176
+      }
+    ],
+    "interactive_components_absent": true,
+    "all_listary_components_absent": false
+  },
+  "after": {
+    "observed_at_utc": "2026-11-18T17:29:01.7744790Z",
+    "processes": [
+      {
+        "name": "Listary.Service",
+        "pid": 6176,
+        "session_id": 0,
+        "main_window_handle": 0
+      }
+    ],
+    "services": [
+      {
+        "Name": "ListaryServiceV2",
+        "State": "Running",
+        "StartMode": "Auto",
+        "ProcessId": 6176
+      }
+    ],
+    "interactive_components_absent": true,
+    "all_listary_components_absent": false
+  },
+  "listary_service_was_stopped": false,
+  "foreground_was_forced": false,
+  "manual_editor_setup": false,
+  "provider_actions": 0,
+  "integrity_level_measured": false,
+  "inherited_user_token": true,
+  "remaining_prototype_processes": [],
+  "note": "Environment recorded without modification. Pattern metadata is not runtime entry/edit/commit proof."
+}
