@@ -1,0 +1,37 @@
+﻿{
+    "base_commit":  "eaae4e7f46a400de98bd16aba537dedaf64b1bec",
+    "branch":  "feat/session-ctrl-g",
+    "recorded_utc":  "2026-11-18T23:53:45.4207318Z",
+    "windows_build":  "26300",
+    "windows_ubr":  9974,
+    "windows_display_version":  "26H2",
+    "source_sha256":  {
+                          "src/app.rs":  "818d3335392dcc30edcd50b98e5722330676719ade9f2f2eff36e5cbf84b89ae",
+                          "src/core/controller.rs":  "05de884f872a7a73ecbe448da299f97fc04fa343d634535dc758e046c97ec216",
+                          "src/os/mod.rs":  "cfce6d2e276e7495f8c982038d5fc16705692e5746237c6e856261fa3ebfae74",
+                          "src/os/shortcut.rs":  "76a3cbab51556a1435d3644f6fa97e39e20099386475b2b75f87898017362646",
+                          "src/os/window_ext.rs":  "ca863e98c1dbb5a5df9a00561c411ce711d66e6d4646d29cba4339e6510ec2ea",
+                          "src/bin/dialog_host.rs":  "5e33061a01a1b9905d5732f3b5e841bece9aac4052fd398bc9f70220fe81ca60",
+                          "tests/e2e.rs":  "722d9d2c8ffad9e419bb89eb16bd0626a48d704fa1f7c542e9055bdcca031b8d",
+                          "Cargo.toml":  "91c0bb3eb551145e30bedf60d492970989d3ee07a0bf60bd5a652a296092b4ad",
+                          "Cargo.lock":  "d20e64f3c7908cbf6dedbb05e1bff732167237b6dda8f8625f95ff152d40500f"
+                      },
+    "binary_sha256":  {
+                          "PathWarp.exe":  "838240378f3df2d63d3cd3710c4250a371c7634e31cae179088f9afe955e2c6b",
+                          "dialog_host.exe":  "4da742e96238368a58420db5718b3e44fa0bd67492503c6a56bf0efb76429320",
+                          "e2e.exe":  "8bc231b6be393be6bd354ffb0ed106113d3914e4685a340040120344f78ee7b3"
+                      },
+    "required_checks":  [
+                            "just check --ci",
+                            "just build",
+                            "just test"
+                        ],
+    "noninteractive_passed":  71,
+    "noninteractive_ignored":  8,
+    "prior_authorized_gui_invocations":  3,
+    "final_e2e_approval":  "user explicitly approved one targeted two-case invocation",
+    "final_e2e_status":  "passed: 2 Ctrl+G cases, 0 failed, 5 filtered out, 3.47 seconds",
+    "verified_after_final_checks_utc":  "2026-11-18T23:57:42.4138798Z",
+    "tested_source_and_binaries_unchanged":  true,
+    "total_separately_approved_gui_invocations":  4
+}

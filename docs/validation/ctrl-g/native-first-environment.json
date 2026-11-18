@@ -1,0 +1,34 @@
+﻿{
+    "base_commit":  "eaae4e7f46a400de98bd16aba537dedaf64b1bec",
+    "branch":  "feat/session-ctrl-g",
+    "recorded_utc":  "2026-11-18T23:46:09.9350272Z",
+    "windows_build":  "26300",
+    "windows_ubr":  9974,
+    "windows_display_version":  "26H2",
+    "source_sha256":  {
+                          "src/app.rs":  "818d3335392dcc30edcd50b98e5722330676719ade9f2f2eff36e5cbf84b89ae",
+                          "src/core/controller.rs":  "05de884f872a7a73ecbe448da299f97fc04fa343d634535dc758e046c97ec216",
+                          "src/os/mod.rs":  "cfce6d2e276e7495f8c982038d5fc16705692e5746237c6e856261fa3ebfae74",
+                          "src/os/shortcut.rs":  "058c980c39f07bb37a39e3f92e773714d6b4df95090ce9243afaec462ea5ee57",
+                          "src/os/window_ext.rs":  "ca863e98c1dbb5a5df9a00561c411ce711d66e6d4646d29cba4339e6510ec2ea",
+                          "src/bin/dialog_host.rs":  "5e33061a01a1b9905d5732f3b5e841bece9aac4052fd398bc9f70220fe81ca60",
+                          "tests/e2e.rs":  "48475e6d37db15a4d8e0a3f69b950a471c0a472d7c77ed02f7e787ab072bb744",
+                          "Cargo.toml":  "91c0bb3eb551145e30bedf60d492970989d3ee07a0bf60bd5a652a296092b4ad",
+                          "Cargo.lock":  "d20e64f3c7908cbf6dedbb05e1bff732167237b6dda8f8625f95ff152d40500f"
+                      },
+    "binary_sha256":  {
+                          "PathWarp.exe":  "ee4731e7d52d08dcefd78546c8ab20cc5366d19ec150922f0f65f94faa5d7f09",
+                          "dialog_host.exe":  "472e2607cb06e6e107a926cfb9176b805e8994bc6eddb26d5a0bbd1968559ccb",
+                          "e2e.exe":  "a3c98677ce4dadce0641da34746e0bd1a57f5857c85045e8e38139b311a9bdd1"
+                      },
+    "required_checks":  [
+                            "just check --ci",
+                            "just build",
+                            "just test"
+                        ],
+    "noninteractive_passed":  71,
+    "noninteractive_ignored":  8,
+    "prior_authorized_gui_invocations":  2,
+    "final_e2e_approval":  "user explicitly approved one seven-case invocation",
+    "final_e2e_status":  "6 passed, 1 failed at unrelated-window expected G-count assertion; 17.56 seconds"
+}

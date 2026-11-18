@@ -1,0 +1,329 @@
+//! Ctrl+G routing. The hook only consumes this chord for the current, live
+//! dialog/overlay foreground pair. It never edits text or activates a window;
+//! the UI revalidates the session before using its normal activation path.
+use crate::core::controller::FocusRequest;
+use std::cell::RefCell;
+use std::sync::{Arc, Mutex, mpsc};
+use std::thread::JoinHandle;
+use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, WPARAM};
+use windows::Win32::System::LibraryLoader::GetModuleHandleW;
+use windows::Win32::System::Threading::{GetCurrentProcessId, GetCurrentThreadId};
+use windows::Win32::UI::Input::KeyboardAndMouse::{
+    GetAsyncKeyState, IsWindowEnabled, VIRTUAL_KEY, VK_CONTROL, VK_G, VK_LCONTROL, VK_LMENU,
+    VK_LSHIFT, VK_LWIN, VK_MENU, VK_RCONTROL, VK_RMENU, VK_RSHIFT, VK_RWIN, VK_SHIFT,
+};
+use windows::Win32::UI::WindowsAndMessaging::{
+    CallNextHookEx, DispatchMessageW, GetForegroundWindow, GetMessageW, GetWindowThreadProcessId,
+    IsWindowVisible, KBDLLHOOKSTRUCT, MSG, PM_NOREMOVE, PeekMessageW, PostThreadMessageW,
+    SetWindowsHookExW, TranslateMessage, UnhookWindowsHookEx, WH_KEYBOARD_LL, WM_KEYDOWN, WM_KEYUP,
+    WM_QUIT, WM_SYSKEYDOWN, WM_SYSKEYUP,
+};
+
+#[derive(Clone, Copy)]
+struct Scope {
+    request: FocusRequest,
+    overlay: isize,
+}
+
+impl Scope {
+    fn is_foreground(self) -> bool {
+        let dialog = HWND(self.request.dialog.hwnd as *mut core::ffi::c_void);
+        let overlay = HWND(self.overlay as *mut core::ffi::c_void);
+        unsafe {
+            let foreground = GetForegroundWindow();
+            if foreground != dialog && foreground != overlay {
+                return false;
+            }
+            if !IsWindowVisible(dialog).as_bool()
+                || !IsWindowEnabled(dialog).as_bool()
+                || !IsWindowVisible(overlay).as_bool()
+            {
+                return false;
+            }
+            let mut dialog_pid = 0;
+            let mut overlay_pid = 0;
+            GetWindowThreadProcessId(dialog, Some(&mut dialog_pid));
+            GetWindowThreadProcessId(overlay, Some(&mut overlay_pid));
+            dialog_pid == self.request.dialog.pid && overlay_pid == GetCurrentProcessId()
+        }
+    }
+}
+
+#[derive(Default)]
+struct Shared {
+    scope: Option<Scope>,
+    // Coalesce held/repeated shortcuts without an unbounded event queue.
+    pending: Option<FocusRequest>,
+}
+
+pub struct Listener {
+    shared: Arc<Mutex<Shared>>,
+    thread: Option<JoinHandle<()>>,
+    thread_id: u32,
+}
+
+impl Listener {
+    pub fn start() -> Result<Self, String> {
+        let shared = Arc::new(Mutex::new(Shared::default()));
+        let worker_shared = Arc::clone(&shared);
+        let (ready_tx, ready_rx) = mpsc::sync_channel(1);
+        let thread = std::thread::Builder::new()
+            .name("pathwarp-shortcut".into())
+            .spawn(move || run(worker_shared, ready_tx))
+            .map_err(|error| error.to_string())?;
+        match ready_rx.recv() {
+            Ok(Ok(thread_id)) => Ok(Self {
+                shared,
+                thread: Some(thread),
+                thread_id,
+            }),
+            result => {
+                let _ = thread.join();
+                Err(match result {
+                    Ok(Err(error)) => error,
+                    _ => "shortcut thread ended before startup".into(),
+                })
+            }
+        }
+    }
+
+    pub fn set_scope(&self, request: Option<FocusRequest>, overlay: isize) {
+        if let Ok(mut shared) = self.shared.lock() {
+            shared.scope = request
+                .filter(|_| overlay != 0)
+                .map(|request| Scope { request, overlay });
+        }
+    }
+
+    pub fn take_request(&self) -> Option<FocusRequest> {
+        self.shared.lock().ok()?.pending.take()
+    }
+}
+
+impl Drop for Listener {
+    fn drop(&mut self) {
+        self.set_scope(None, 0);
+        unsafe {
+            let _ = PostThreadMessageW(self.thread_id, WM_QUIT, WPARAM(0), LPARAM(0));
+        }
+        if let Some(thread) = self.thread.take() {
+            let _ = thread.join();
+        }
+    }
+}
+
+#[derive(Default)]
+struct KeyState {
+    modifiers: u8,
+    g_down: bool,
+    captured_g: bool,
+}
+
+#[derive(Debug, Default, PartialEq, Eq)]
+struct KeyResult {
+    consume: bool,
+    request_focus: bool,
+}
+
+impl KeyState {
+    fn exact_ctrl(&self) -> bool {
+        self.modifiers & 3 != 0 && self.modifiers & !3 == 0
+    }
+
+    fn key(&mut self, vk: u32, down: bool, eligible: bool) -> KeyResult {
+        let modifier = u16::try_from(vk).ok().and_then(|vk| match VIRTUAL_KEY(vk) {
+            VK_LCONTROL | VK_CONTROL => Some(0),
+            VK_RCONTROL => Some(1),
+            VK_LSHIFT | VK_SHIFT => Some(2),
+            VK_RSHIFT => Some(3),
+            VK_LMENU | VK_MENU => Some(4),
+            VK_RMENU => Some(5),
+            VK_LWIN => Some(6),
+            VK_RWIN => Some(7),
+            _ => None,
+        });
+        if let Some(bit) = modifier {
+            if down {
+                self.modifiers |= 1 << bit;
+            } else {
+                self.modifiers &= !(1 << bit);
+            }
+        }
+        if vk != u32::from(VK_G.0) {
+            return KeyResult::default();
+        }
+        if !down {
+            self.g_down = false;
+            return KeyResult {
+                consume: std::mem::take(&mut self.captured_g),
+                request_focus: false,
+            };
+        }
+        let initial = !self.g_down;
+        self.g_down = true;
+        let request_focus = eligible && self.exact_ctrl() && (initial || self.captured_g);
+        self.captured_g |= request_focus;
+        KeyResult {
+            consume: self.captured_g,
+            request_focus,
+        }
+    }
+}
+
+struct HookState {
+    shared: Arc<Mutex<Shared>>,
+    keys: KeyState,
+}
+
+thread_local! {
+    static HOOK: RefCell<Option<HookState>> = const { RefCell::new(None) };
+}
+
+unsafe extern "system" fn keyboard_hook(code: i32, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
+    if code == 0 && lparam.0 != 0 {
+        let message = u32::try_from(wparam.0).ok();
+        let down = match message {
+            Some(WM_KEYDOWN | WM_SYSKEYDOWN) => Some(true),
+            Some(WM_KEYUP | WM_SYSKEYUP) => Some(false),
+            _ => None,
+        };
+        if let Some(down) = down {
+            let key = unsafe { &*(lparam.0 as *const KBDLLHOOKSTRUCT) };
+            let consume = HOOK.with(|slot| {
+                let Ok(mut slot) = slot.try_borrow_mut() else {
+                    return false;
+                };
+                let Some(state) = slot.as_mut() else {
+                    return false;
+                };
+                // Never wait on the UI in a keyboard callback. All other keys
+                // go straight down the hook chain; modifiers are tracked from
+                // hook events rather than the not-yet-updated async key state.
+                let mut shared = state.shared.try_lock().ok();
+                let scope = shared.as_ref().and_then(|shared| shared.scope);
+                let eligible = key.vkCode == u32::from(VK_G.0)
+                    && down
+                    && state.keys.exact_ctrl()
+                    && scope.is_some_and(Scope::is_foreground);
+                let result = state.keys.key(key.vkCode, down, eligible);
+                if result.request_focus
+                    && let (Some(shared), Some(scope)) = (shared.as_mut(), scope)
+                {
+                    shared.pending = Some(scope.request);
+                }
+                result.consume
+            });
+            if consume {
+                return LRESULT(1);
+            }
+        }
+    }
+    unsafe { CallNextHookEx(None, code, wparam, lparam) }
+}
+
+fn run(shared: Arc<Mutex<Shared>>, ready: mpsc::SyncSender<Result<u32, String>>) {
+    let mut keys = KeyState::default();
+    // Seed keys already held when the listener starts. GetAsyncKeyState is used
+    // here, before installing the hook, never to read the changing key in it.
+    for vk in [
+        VK_LCONTROL,
+        VK_RCONTROL,
+        VK_LSHIFT,
+        VK_RSHIFT,
+        VK_LMENU,
+        VK_RMENU,
+        VK_LWIN,
+        VK_RWIN,
+        VK_G,
+    ] {
+        if unsafe { GetAsyncKeyState(i32::from(vk.0)) } < 0 {
+            keys.key(u32::from(vk.0), true, false);
+        }
+    }
+    HOOK.with(|slot| *slot.borrow_mut() = Some(HookState { shared, keys }));
+    let mut message = MSG::default();
+    unsafe {
+        // Ensure that Drop can post WM_QUIT as soon as startup completes.
+        let _ = PeekMessageW(&mut message, None, 0, 0, PM_NOREMOVE);
+    }
+    let installed = unsafe {
+        GetModuleHandleW(None).and_then(|module| {
+            SetWindowsHookExW(WH_KEYBOARD_LL, Some(keyboard_hook), Some(module.into()), 0)
+        })
+    };
+    match installed {
+        Ok(hook) => {
+            let _ = ready.send(Ok(unsafe { GetCurrentThreadId() }));
+            unsafe {
+                while GetMessageW(&mut message, None, 0, 0).0 > 0 {
+                    let _ = TranslateMessage(&message);
+                    DispatchMessageW(&message);
+                }
+                let _ = UnhookWindowsHookEx(hook);
+            }
+        }
+        Err(error) => {
+            let _ = ready.send(Err(error.to_string()));
+        }
+    }
+    HOOK.with(|slot| *slot.borrow_mut() = None);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn key(state: &mut KeyState, vk: VIRTUAL_KEY, down: bool, eligible: bool) -> KeyResult {
+        state.key(u32::from(vk.0), down, eligible)
+    }
+
+    #[test]
+    fn only_exact_ctrl_g_in_the_live_scope_is_consumed() {
+        let mut state = KeyState::default();
+        assert!(!key(&mut state, VK_G, true, true).consume);
+        key(&mut state, VK_G, false, false);
+        key(&mut state, VK_RCONTROL, true, false);
+        assert!(!key(&mut state, VK_G, true, false).consume);
+        key(&mut state, VK_G, false, false);
+        key(&mut state, VK_LSHIFT, true, false);
+        assert!(!key(&mut state, VK_G, true, true).consume);
+        key(&mut state, VK_G, false, false);
+        key(&mut state, VK_LSHIFT, false, false);
+        assert!(key(&mut state, VK_G, true, true).request_focus);
+    }
+
+    #[test]
+    fn altgr_and_windows_chords_pass_through() {
+        for modifier in [VK_RMENU, VK_LWIN, VK_RWIN] {
+            let mut state = KeyState::default();
+            key(&mut state, VK_LCONTROL, true, false);
+            key(&mut state, modifier, true, false);
+            assert!(!key(&mut state, VK_G, true, true).consume);
+        }
+    }
+
+    #[test]
+    fn captured_release_is_balanced_after_control_or_foreground_changes() {
+        let mut state = KeyState::default();
+        key(&mut state, VK_LCONTROL, true, false);
+        assert!(key(&mut state, VK_G, true, true).request_focus);
+        assert!(key(&mut state, VK_G, true, true).request_focus);
+        key(&mut state, VK_LCONTROL, false, false);
+        let repeat = key(&mut state, VK_G, true, false);
+        assert!(repeat.consume);
+        assert!(!repeat.request_focus);
+        assert!(key(&mut state, VK_G, false, false).consume);
+        assert!(!key(&mut state, VK_G, true, false).consume);
+        assert!(!key(&mut state, VK_G, false, false).consume);
+    }
+
+    #[test]
+    fn pressing_control_during_an_existing_g_does_not_capture_its_repeat() {
+        let mut state = KeyState::default();
+        key(&mut state, VK_G, true, false);
+        key(&mut state, VK_LCONTROL, true, false);
+        assert!(!key(&mut state, VK_G, true, true).consume);
+        assert!(!key(&mut state, VK_G, false, false).consume);
+        assert!(key(&mut state, VK_G, true, true).request_focus);
+    }
+}

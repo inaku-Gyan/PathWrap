@@ -32,6 +32,9 @@ If a download is incomplete, download the ZIP again from [GitHub Releases](https
 - Use the sun/moon control beside the search frame to switch between light and dark palettes;
   right-click it to follow the Windows theme or choose a fixed palette
 - Focus-aware: clicking the overlay makes it the foreground editor while the current file-dialog session remains visible and tracked
+- Press Ctrl+G while the tracked dialog or PathWarp is active to focus its search
+  editor. The shortcut passes through in other applications and does not reopen
+  a dismissed or closed session. A denied activation shows a focus notice.
 - Built with Rust + egui/eframe + windows-rs
 
 ### Folder-jump support
@@ -83,8 +86,14 @@ decoupled by channels. Key design decisions:
 - **Text editing** ([src/ui/window.rs](src/ui/window.rs)): the search row uses an egui
   `TextEdit` bound directly to the controller query. The widget owns its blinking caret,
   selection, clipboard, paste, backspace, and platform text/IME events; navigation, Enter, and
-  Escape are mapped to controller actions. There is no custom caret glyph and no global keyboard
-  hook competing with the focused editor.
+  Escape are mapped to controller actions. There is no custom caret glyph. A narrow
+  [Ctrl+G listener](src/os/shortcut.rs) registers the native hotkey while the live
+  dialog/overlay pair is foreground and unregisters when the interaction loses
+  foreground or ends. Its native notification rechecks the session/window identity,
+  requests normal activation once and reports the observed result. The existing
+  TextEdit focus path selects the editor. There is no simulated product input or
+  activation fallback. See the
+  [Ctrl+G validation record](docs/validation/ctrl-g/README.md).
 - **Verified UIA navigation** ([src/core/navigation.rs](src/core/navigation.rs),
   [src/os/dialog.rs](src/os/dialog.rs)): a session/request-bound worker snapshots filename,
   selected type and complete folder path. It uses at most two filename Value writes and
