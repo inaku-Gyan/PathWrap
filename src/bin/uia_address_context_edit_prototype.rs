@@ -2,6 +2,7 @@
 //! Run: cargo run --bin uia_address_context_edit_prototype
 //! At most one context request and one strictly guarded Edit-address Invoke.
 //! Derived from the accepted read-only inventory, retained unchanged beside this file.
+//! Corrected revision: include reused, previously hidden fixture popup HWNDs.
 #![allow(clippy::print_stdout)]
 
 use serde_json::{Value, json};
@@ -865,6 +866,7 @@ impl Inspector {
             self.budget.stop("menu_array_budget");
             return Err("menu array outside bounds".into());
         }
+        emit(json!({"event":"menu_array_observation","length":length,"observed_at_ms":now_ms()}));
         (0..length)
             .map(|index| {
                 need(self.budget.read("MenuArray.GetElement", || unsafe {
@@ -981,9 +983,7 @@ impl Inspector {
             .copied()
             .filter(|window| {
                 let raw = window.0 as usize;
-                raw != self.budget.dialog
-                    && unsafe { IsWindowVisible(*window).as_bool() }
-                    && (!before.contains(&raw) || class_name(*window) == "#32768")
+                raw != self.budget.dialog && unsafe { IsWindowVisible(*window).as_bool() }
             })
             .map(native_info)
             .collect();
@@ -998,9 +998,6 @@ impl Inspector {
         for window in own_windows {
             let raw = window.0 as usize;
             if raw == self.budget.dialog || !unsafe { IsWindowVisible(window).as_bool() } {
-                continue;
-            }
-            if before.contains(&raw) && class_name(window) != "#32768" {
                 continue;
             }
             if !self.window_cache.contains_key(&raw) {
@@ -1184,7 +1181,8 @@ fn probe(window: HWND, root: &Path, host_pid: u32) -> AnyResult<()> {
     emit(
         json!({"event":"case_start","host_pid":host_pid,"client_pid":std::process::id(),"observed_at_ms":now_ms(),
         "max_window_seeds":16,"max_unique_elements":64,"max_depth":8,"max_uia_calls":512,"soft_budget_ms":10000,"supervisor_ms":15000,
-        "max_context_requests":1,"max_edit_invokes":1,"raw_success_hresult_retained":false}),
+        "max_context_requests":1,"max_edit_invokes":1,"raw_success_hresult_retained":false,
+        "popup_policy":"all_visible_fixture_top_level_windows_including_preexisting_handles"}),
     );
     let uia: IUIAutomation =
         unsafe { CoCreateInstance(&CUIAutomation, None, CLSCTX_INPROC_SERVER)? };

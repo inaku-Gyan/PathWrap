@@ -16,6 +16,12 @@ answered “ok” to [the exact single-case protocol](https://github.com/inaku-G
 The investigation addresses a specific observation gap in the earlier
 toolbar context-menu test; it performs no broad pattern inventory.
 
+The measured version is preserved at commit
+`6d21c4a4c93c2c1d903904f9f550976943fe6a5b`. The current branch also contains
+a prepared correction, described below. **That corrected source has not
+been executed in a GUI case.** Existing raw evidence remains unchanged and
+belongs only to the captured version.
+
 ## Observations and implementation defect
 
 The scoped observer completed 16 native popup polls and 16 successful
@@ -42,13 +48,38 @@ read as complete popup coverage. The derived summary explicitly records
 
 No claim that all context menus are absent, that the toolbar cannot expose
 Edit address, or that UIA navigation is impossible follows from this run.
-The observer requires a code correction and a separately authorized rerun
-before this gap can be resolved. The selected protocol forbids an automatic
-rerun; exactly one GUI case has been executed.
+Resolving this gap requires the prepared correction and a separately
+authorized rerun. The selected protocol forbids an automatic rerun; exactly
+one GUI case has been executed.
+
+## Prepared correction — not yet executed
+
+The [current proposed source](../../../src/bin/uia_address_context_edit_prototype.rs)
+removes both pre-existing-HWND exclusions: native popup polling and UIA seed
+selection now consider every visible fixture-owned top-level window other
+than the original dialog. A reused HWND remains eligible regardless of its
+before-window membership or class. Before-window membership is retained as
+provenance only. Native shadow evidence is recorded, while SysShadow
+decorations remain excluded from semantic menu binding.
+
+The corrected source also logs the explicit result of each Menu-array
+length read. The target scope, exact Edit-address caption and fresh
+uniqueness/ownership/Invoke guards, action limits and all budgets remain
+unchanged. This adds no alternative navigation action or provider fallback.
+
+The correction is prepared for one new initial-A case with separately named
+evidence, preserving the first run. It will run only if the human permits
+another case. Current branch code and the captured execution must not be
+treated as the same revision.
+
+The prepared correction also passed `just check --ci`, `just build` and
+`just test`: 47 existing tests plus the two caption-guard tests passed, with
+five interactive/diagnostic tests ignored. This validates compilation and
+the tested guards; it is not runtime validation of the corrected popup path.
 
 ## Exact execution and evidence
 
-- [Executed Rust source captured with this report](../../../src/bin/uia_address_context_edit_prototype.rs).
+- [Exact executed Rust source](https://github.com/inaku-Gyan/PathWrap/blob/6d21c4a4c93c2c1d903904f9f550976943fe6a5b/src/bin/uia_address_context_edit_prototype.rs).
 - [Chronological scrubbed trace](open.jsonl).
 - [Derived observations, coverage-gap classification and independent truth](summary.json).
 - [Environment and executed source/binary hashes](environment.json).
@@ -139,5 +170,5 @@ No manual editor preparation, clipboard, SetFocus, setter, arbitrary menu
 command, default-action fallback, alternate backend, service shutdown,
 explicit foreground forcing, automatic rerun, product change, PR or merge.
 Owned fixture initialization and teardown are separate from measured
-actions. This prototype remains open for human review and correction of
-the observation gap; the navigation contract remains blocked.
+actions. This prototype remains open for review of the limited run and
+permission for one corrected rerun; the navigation contract remains blocked.
