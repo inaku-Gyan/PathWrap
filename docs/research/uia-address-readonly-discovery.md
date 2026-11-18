@@ -1,6 +1,6 @@
 # UIA 地址控件的只读能力盘点
 
-研究日期：2026-11-19。对应 [研究票 #80](https://github.com/inaku-Gyan/PathWrap/issues/80)，供 [后续调查决策 #79](https://github.com/inaku-Gyan/PathWrap/issues/79) 使用。本轮只阅读官方文档、官方源码和本地绑定，没有运行 GUI、UIA 查询或动作，也没有关闭进程或服务。
+研究日期：2026-11-19。对应 [Research read-only discovery of omitted UIA address-control capabilities](https://github.com/inaku-Gyan/PathWrap/issues/80)，供 [Choose the next automatic UIA investigation after same-folder breadcrumb activation](https://github.com/inaku-Gyan/PathWrap/issues/79) 使用。本轮只阅读官方文档、官方源码和本地绑定，没有运行 GUI、UIA 查询或动作，也没有关闭进程或服务。
 
 ## 结论与证据范围
 
@@ -100,7 +100,7 @@
 | `CurrentRole` | 保留数字 role，供同一目标、同一采样状态比较。 |
 | `CurrentName`、`CurrentDescription`、`CurrentHelp` | 保留名称、描述、帮助文字；它们是线索，不是调用动作的授权或准确效果保证。 |
 
-所有 getter 分别记录成功/错误；成功返回空字符串也要保存，不能再用 `.ok()` 将错误与空值合并。Legacy 的底层 MSAA 来源、UIA 原生 provider 与 proxy 存在边界，因此 Legacy 缺失不能否定其它 UIA 能力。[访问 MSAA servers](https://learn.microsoft.com/en-us/windows/win32/winauto/uiauto-accessingmsaaservers)
+分别保存接口缺失、getter 错误与成功返回空字符串。此前 `.ok()` 会将 getter 错误变为 `None`，与接口未取得等原因共用序列化的 `null`；成功空字符串仍可保留为 `""`，问题在于错误原因丢失。Legacy 的底层 MSAA 来源、UIA 原生 provider 与 proxy 存在边界，因此 Legacy 缺失不能否定其它 UIA 能力。[访问 MSAA servers](https://learn.microsoft.com/en-us/windows/win32/winauto/uiauto-accessingmsaaservers)
 
 额外读取 UIA `AccessKey`（30007，访问键/助记键，access key）与 `AcceleratorKey`（30006，快捷键，accelerator key），用 `GetCurrentPropertyValueEx(..., true)` 保留不支持与空串差别；两者都是 `VT_BSTR` 元数据，不能把它们翻译成模拟输入方案。同步保存 UIA 的 enabled/offscreen/focusable/has-focus、bounding rectangle 与原生 HWND 可见性，以区分报告来源。[UIA 元素属性](https://learn.microsoft.com/en-us/windows/win32/winauto/uiauto-automation-element-propids)
 
@@ -110,7 +110,7 @@
 
 ## 建议交给人选择的下一次调查
 
-以下是待选择的原型规格，本研究没有执行，也不代替 #79 的人类确认。
+以下是待选择的原型规格，本研究没有执行，也不代替 [Choose the next automatic UIA investigation after same-folder breadcrumb activation](https://github.com/inaku-Gyan/PathWrap/issues/79) 的人类确认。
 
 1. **一次 controlled Open、初始文件夹 A、零 provider 动作。** 维持原有 filename/filter，不手动预置 editor、不主动设置前台、不停止服务、不进行自动重跑。外部客户端只采用 B（UIA 地址栏）策略，不使用模拟输入、剪贴板、原生 helper 或 fallback。自有 fixture 的 native `IFileDialog` 仅作初始设置和独立只读真值，不成为外部客户端取得的另一导航后端。[已接受 fixture 的边界](https://github.com/inaku-Gyan/PathWrap/blob/a1daeeec7db641336adac80934053b3765ee1247/docs/prototypes/uia-current-folder-breadcrumb/README.md)
 2. **固定唯一目标与窄范围。** 绑定原 dialog HWND/PID 和 Address Band Root；只遍历其 Raw 子树（包含 Breadcrumb Parent/toolbar），另从该地址带限定的 HWND 后代中寻找已知 ComboBoxEx32/ComboBox/Edit，再分别 `ElementFromHandle` 读取其 Raw 子树；不因隐藏而跳过，不扩展至桌面或其它应用。来源链、父子关系、重复元素身份均记录，目标歧义立即终止。Raw view 与基点 scope 是官方支持的树读取方式；`ElementFromHandle` 是按 HWND 取得元素，但文档不保证任意隐藏控件都能提供完整 provider。本机隐藏控件可读取的依据来自已接受原型，仍须逐项记录本次结果。[树与 scope](https://learn.microsoft.com/en-us/windows/win32/winauto/uiauto-treeoverview)、[ElementFromHandle](https://learn.microsoft.com/en-us/windows/win32/api/uiautomationclient/nf-uiautomationclient-iuiautomation-elementfromhandle)、[已接受发现代码](https://github.com/inaku-Gyan/PathWrap/blob/a1daeeec7db641336adac80934053b3765ee1247/src/bin/uia_current_folder_breadcrumb_prototype.rs#L526)
@@ -123,4 +123,4 @@
 
 本次验证仅为文档与源码核对：核对固定锁文件/本地绑定、35 对目录常量、Legacy getter 和 Rust 空接口转换；提交前检查 diff 与目录映射。只新增本笔记，不修改产品、既有原型或用户的 GLOSSARY.md；无 Rust 代码变更，不运行 Rust 测试或 GUI。
 
-仍未知：本机目标每项新模式/属性的实际结果、查询耗时、可见编辑进入方法、任意 B 提交与可靠外部到达验证。官方接口的存在不解决这些未知。#80 的事实前提可据此解决；#79 仍须由人选择是否实施上述只读调查，不能把本研究当作任何 GUI 运行授权。
+仍未知：本机目标每项新模式/属性的实际结果、查询耗时、可见编辑进入方法、任意 B 提交与可靠外部到达验证。官方接口的存在不解决这些未知。[Research read-only discovery of omitted UIA address-control capabilities](https://github.com/inaku-Gyan/PathWrap/issues/80) 的事实前提可据此解决；[Choose the next automatic UIA investigation after same-folder breadcrumb activation](https://github.com/inaku-Gyan/PathWrap/issues/79) 仍须由人选择是否实施上述只读调查，不能把本研究当作任何 GUI 运行授权。
