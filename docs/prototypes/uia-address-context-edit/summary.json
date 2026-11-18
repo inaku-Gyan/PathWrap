@@ -1,0 +1,1090 @@
+{
+  "case_start": {
+    "client_pid": 28676,
+    "event": "case_start",
+    "host_pid": 39044,
+    "max_context_requests": 1,
+    "max_depth": 8,
+    "max_edit_invokes": 1,
+    "max_uia_calls": 512,
+    "max_unique_elements": 64,
+    "max_window_seeds": 16,
+    "observed_at_ms": 1795029607321,
+    "raw_success_hresult_retained": false,
+    "soft_budget_ms": 10000,
+    "supervisor_ms": 15000
+  },
+  "case_done": {
+    "calls": 68,
+    "complete": true,
+    "edit_invoke_completed": false,
+    "edit_started": false,
+    "elapsed_ms": 3282,
+    "event": "case_done",
+    "menu_observation_complete": true,
+    "observed_at_ms": 1795029610603,
+    "post_edit_observation_complete": false,
+    "show_result": true,
+    "show_started": true,
+    "stop_reason": null,
+    "unique_elements": 1,
+    "visible_writable_observed": false,
+    "window_seeds": 2
+  },
+  "program_complete": true,
+  "popup_observation_complete_under_selected_intent": false,
+  "coverage_gap": "The executed filter excluded pre-existing top-level HWNDs unless class #32768, even if previously hidden nonstandard popup HWNDs became visible. Native popup polls therefore do not cover every fixture-owned reused popup. No evidence shows that such a popup actually appeared; the gap prevents a comprehensive negative conclusion.",
+  "known_preexisting_hidden_windows_excluded_from_native_popup_selection": [
+    {
+      "alive": true,
+      "class": "Auto-Suggest Dropdown",
+      "hwnd": 5115494,
+      "owner": 5310948,
+      "parent": 5310948,
+      "pid": 39044,
+      "visible": false
+    },
+    {
+      "alive": true,
+      "class": "tooltips_class32",
+      "hwnd": 2689594,
+      "owner": null,
+      "parent": null,
+      "pid": 39044,
+      "visible": false
+    },
+    {
+      "alive": true,
+      "class": "Auto-Suggest Dropdown",
+      "hwnd": 12125414,
+      "owner": 5310948,
+      "parent": 5310948,
+      "pid": 39044,
+      "visible": false
+    },
+    {
+      "alive": true,
+      "class": "tooltips_class32",
+      "hwnd": 658502,
+      "owner": 5310948,
+      "parent": 5310948,
+      "pid": 39044,
+      "visible": false
+    },
+    {
+      "alive": true,
+      "class": "tooltips_class32",
+      "hwnd": 6489356,
+      "owner": null,
+      "parent": null,
+      "pid": 39044,
+      "visible": false
+    },
+    {
+      "alive": true,
+      "class": "tooltips_class32",
+      "hwnd": 2100026,
+      "owner": 5310948,
+      "parent": 5310948,
+      "pid": 39044,
+      "visible": false
+    },
+    {
+      "alive": true,
+      "class": "ComboLBox",
+      "hwnd": 986108,
+      "owner": null,
+      "parent": 65548,
+      "pid": 39044,
+      "visible": false
+    },
+    {
+      "alive": true,
+      "class": "tooltips_class32",
+      "hwnd": 1706974,
+      "owner": 5310948,
+      "parent": 5310948,
+      "pid": 39044,
+      "visible": false
+    },
+    {
+      "alive": true,
+      "class": "tooltips_class32",
+      "hwnd": 2228922,
+      "owner": 5310948,
+      "parent": 5310948,
+      "pid": 39044,
+      "visible": false
+    },
+    {
+      "alive": true,
+      "class": "tooltips_class32",
+      "hwnd": 9111936,
+      "owner": 5310948,
+      "parent": 5310948,
+      "pid": 39044,
+      "visible": false
+    },
+    {
+      "alive": true,
+      "class": "_SearchEditBoxFakeWindow",
+      "hwnd": 2228874,
+      "owner": 5310948,
+      "parent": 5310948,
+      "pid": 39044,
+      "visible": false
+    },
+    {
+      "alive": true,
+      "class": "tooltips_class32",
+      "hwnd": 4786104,
+      "owner": 5310948,
+      "parent": 5310948,
+      "pid": 39044,
+      "visible": false
+    },
+    {
+      "alive": true,
+      "class": "tooltips_class32",
+      "hwnd": 29099454,
+      "owner": 5310948,
+      "parent": 5310948,
+      "pid": 39044,
+      "visible": false
+    },
+    {
+      "alive": true,
+      "class": "ComboLBox",
+      "hwnd": 1704498,
+      "owner": null,
+      "parent": 65548,
+      "pid": 39044,
+      "visible": false
+    },
+    {
+      "alive": true,
+      "class": "ComboLBox",
+      "hwnd": 2818618,
+      "owner": null,
+      "parent": 65548,
+      "pid": 39044,
+      "visible": false
+    },
+    {
+      "alive": true,
+      "class": "WorkerW",
+      "hwnd": 9047674,
+      "owner": null,
+      "parent": null,
+      "pid": 39044,
+      "visible": false
+    },
+    {
+      "alive": true,
+      "class": "IME",
+      "hwnd": 1249106,
+      "owner": 5310948,
+      "parent": 5310948,
+      "pid": 39044,
+      "visible": false
+    },
+    {
+      "alive": true,
+      "class": "MSCTFIME UI",
+      "hwnd": 10748538,
+      "owner": 1249106,
+      "parent": 1249106,
+      "pid": 39044,
+      "visible": false
+    }
+  ],
+  "event_counts": {
+    "probe_start": 1,
+    "folder_snapshot": 1,
+    "host_poll": 36,
+    "baseline": 1,
+    "case_start": 1,
+    "call_start": 68,
+    "call_end": 68,
+    "element": 1,
+    "native_address_state": 6,
+    "focus_foreground": 2,
+    "owned_window_baseline": 1,
+    "context_request_finished": 1,
+    "menu_discovery_begin": 1,
+    "native_popup_poll": 16,
+    "menu_discovery_end": 1,
+    "case_done": 1,
+    "client_exit": 1,
+    "native_observation": 1,
+    "native_verdict": 1,
+    "host_closed": 1,
+    "fixture_cleanup": 1
+  },
+  "call_start_count": 68,
+  "call_end_count": 68,
+  "call_kind_counts": {
+    "read": 67,
+    "action": 1
+  },
+  "action_results": [
+    {
+      "call": 34,
+      "elapsed_us": 41706,
+      "event": "call_end",
+      "kind": "action",
+      "label": "toolbar.ShowContextMenu",
+      "observed_at_ms": 1795029607391,
+      "raw_hresult": null,
+      "rust_error_code": null,
+      "rust_result": "ok"
+    }
+  ],
+  "read_error_results": [],
+  "menu_only_findall_calls": 16,
+  "menu_array_length_calls": 16,
+  "menu_array_get_element_calls": 0,
+  "menu_discovery_begin": {
+    "event": "menu_discovery_begin",
+    "observed_at_ms": 1795029607446
+  },
+  "menu_discovery_end": {
+    "elapsed_ms": 3155,
+    "event": "menu_discovery_end",
+    "invoked": false,
+    "observation_complete": true,
+    "observed_at_ms": 1795029610601
+  },
+  "native_popup_polls": [
+    {
+      "event": "native_popup_poll",
+      "force_fresh": false,
+      "observed_at_ms": 1795029607446,
+      "windows": []
+    },
+    {
+      "event": "native_popup_poll",
+      "force_fresh": false,
+      "observed_at_ms": 1795029607665,
+      "windows": []
+    },
+    {
+      "event": "native_popup_poll",
+      "force_fresh": false,
+      "observed_at_ms": 1795029607863,
+      "windows": []
+    },
+    {
+      "event": "native_popup_poll",
+      "force_fresh": false,
+      "observed_at_ms": 1795029608061,
+      "windows": []
+    },
+    {
+      "event": "native_popup_poll",
+      "force_fresh": false,
+      "observed_at_ms": 1795029608265,
+      "windows": []
+    },
+    {
+      "event": "native_popup_poll",
+      "force_fresh": false,
+      "observed_at_ms": 1795029608464,
+      "windows": []
+    },
+    {
+      "event": "native_popup_poll",
+      "force_fresh": false,
+      "observed_at_ms": 1795029608666,
+      "windows": []
+    },
+    {
+      "event": "native_popup_poll",
+      "force_fresh": false,
+      "observed_at_ms": 1795029608862,
+      "windows": []
+    },
+    {
+      "event": "native_popup_poll",
+      "force_fresh": false,
+      "observed_at_ms": 1795029609052,
+      "windows": []
+    },
+    {
+      "event": "native_popup_poll",
+      "force_fresh": false,
+      "observed_at_ms": 1795029609244,
+      "windows": []
+    },
+    {
+      "event": "native_popup_poll",
+      "force_fresh": false,
+      "observed_at_ms": 1795029609438,
+      "windows": []
+    },
+    {
+      "event": "native_popup_poll",
+      "force_fresh": false,
+      "observed_at_ms": 1795029609629,
+      "windows": []
+    },
+    {
+      "event": "native_popup_poll",
+      "force_fresh": false,
+      "observed_at_ms": 1795029609821,
+      "windows": []
+    },
+    {
+      "event": "native_popup_poll",
+      "force_fresh": false,
+      "observed_at_ms": 1795029610015,
+      "windows": []
+    },
+    {
+      "event": "native_popup_poll",
+      "force_fresh": false,
+      "observed_at_ms": 1795029610206,
+      "windows": []
+    },
+    {
+      "event": "native_popup_poll",
+      "force_fresh": false,
+      "observed_at_ms": 1795029610404,
+      "windows": []
+    }
+  ],
+  "owned_window_baseline": {
+    "event": "owned_window_baseline",
+    "observed_at_ms": 1795029607346,
+    "windows": [
+      {
+        "alive": true,
+        "class": "Auto-Suggest Dropdown",
+        "hwnd": 5115494,
+        "owner": 5310948,
+        "parent": 5310948,
+        "pid": 39044,
+        "visible": false
+      },
+      {
+        "alive": true,
+        "class": "tooltips_class32",
+        "hwnd": 2689594,
+        "owner": null,
+        "parent": null,
+        "pid": 39044,
+        "visible": false
+      },
+      {
+        "alive": true,
+        "class": "Auto-Suggest Dropdown",
+        "hwnd": 12125414,
+        "owner": 5310948,
+        "parent": 5310948,
+        "pid": 39044,
+        "visible": false
+      },
+      {
+        "alive": true,
+        "class": "tooltips_class32",
+        "hwnd": 658502,
+        "owner": 5310948,
+        "parent": 5310948,
+        "pid": 39044,
+        "visible": false
+      },
+      {
+        "alive": true,
+        "class": "tooltips_class32",
+        "hwnd": 6489356,
+        "owner": null,
+        "parent": null,
+        "pid": 39044,
+        "visible": false
+      },
+      {
+        "alive": true,
+        "class": "tooltips_class32",
+        "hwnd": 2100026,
+        "owner": 5310948,
+        "parent": 5310948,
+        "pid": 39044,
+        "visible": false
+      },
+      {
+        "alive": true,
+        "class": "ComboLBox",
+        "hwnd": 986108,
+        "owner": null,
+        "parent": 65548,
+        "pid": 39044,
+        "visible": false
+      },
+      {
+        "alive": true,
+        "class": "#32770",
+        "hwnd": 5310948,
+        "owner": null,
+        "parent": null,
+        "pid": 39044,
+        "visible": true
+      },
+      {
+        "alive": true,
+        "class": "tooltips_class32",
+        "hwnd": 1706974,
+        "owner": 5310948,
+        "parent": 5310948,
+        "pid": 39044,
+        "visible": false
+      },
+      {
+        "alive": true,
+        "class": "tooltips_class32",
+        "hwnd": 2228922,
+        "owner": 5310948,
+        "parent": 5310948,
+        "pid": 39044,
+        "visible": false
+      },
+      {
+        "alive": true,
+        "class": "tooltips_class32",
+        "hwnd": 9111936,
+        "owner": 5310948,
+        "parent": 5310948,
+        "pid": 39044,
+        "visible": false
+      },
+      {
+        "alive": true,
+        "class": "_SearchEditBoxFakeWindow",
+        "hwnd": 2228874,
+        "owner": 5310948,
+        "parent": 5310948,
+        "pid": 39044,
+        "visible": false
+      },
+      {
+        "alive": true,
+        "class": "tooltips_class32",
+        "hwnd": 4786104,
+        "owner": 5310948,
+        "parent": 5310948,
+        "pid": 39044,
+        "visible": false
+      },
+      {
+        "alive": true,
+        "class": "tooltips_class32",
+        "hwnd": 29099454,
+        "owner": 5310948,
+        "parent": 5310948,
+        "pid": 39044,
+        "visible": false
+      },
+      {
+        "alive": true,
+        "class": "ComboLBox",
+        "hwnd": 1704498,
+        "owner": null,
+        "parent": 65548,
+        "pid": 39044,
+        "visible": false
+      },
+      {
+        "alive": true,
+        "class": "ComboLBox",
+        "hwnd": 2818618,
+        "owner": null,
+        "parent": 65548,
+        "pid": 39044,
+        "visible": false
+      },
+      {
+        "alive": true,
+        "class": "WorkerW",
+        "hwnd": 9047674,
+        "owner": null,
+        "parent": null,
+        "pid": 39044,
+        "visible": false
+      },
+      {
+        "alive": true,
+        "class": "IME",
+        "hwnd": 1249106,
+        "owner": 5310948,
+        "parent": 5310948,
+        "pid": 39044,
+        "visible": false
+      },
+      {
+        "alive": true,
+        "class": "MSCTFIME UI",
+        "hwnd": 10748538,
+        "owner": 1249106,
+        "parent": 1249106,
+        "pid": 39044,
+        "visible": false
+      }
+    ]
+  },
+  "captured_elements": [
+    {
+      "data": {
+        "automation_id": {
+          "status": "ok",
+          "value": "1001"
+        },
+        "class": {
+          "status": "ok",
+          "value": "ToolbarWindow32"
+        },
+        "control_type": {
+          "status": "ok",
+          "value": 50021
+        },
+        "enabled": {
+          "status": "ok",
+          "value": true
+        },
+        "name": {
+          "status": "ok",
+          "value": "地址: PROTOTYPE_ROOT\\A"
+        },
+        "native_hwnd": {
+          "status": "ok",
+          "value": 2887540
+        },
+        "offscreen": {
+          "status": "ok",
+          "value": false
+        },
+        "pid": {
+          "status": "ok",
+          "value": 39044
+        }
+      },
+      "event": "element",
+      "index": 0,
+      "observed_at_ms": 1795029607341,
+      "source": "address_toolbar"
+    }
+  ],
+  "menu_edges": [],
+  "edit_candidates": [],
+  "native_address_states": [
+    {
+      "class": "ComboBoxEx32",
+      "event": "native_address_state",
+      "observed_at_ms": 1795029607341,
+      "phase": "before",
+      "state": {
+        "alive": true,
+        "class": "ComboBoxEx32",
+        "hwnd": 3540886,
+        "owner": null,
+        "parent": 1708112,
+        "pid": 39044,
+        "visible": false
+      }
+    },
+    {
+      "class": "ComboBox",
+      "event": "native_address_state",
+      "observed_at_ms": 1795029607341,
+      "phase": "before",
+      "state": {
+        "alive": true,
+        "class": "ComboBox",
+        "hwnd": 3017586,
+        "owner": null,
+        "parent": 3540886,
+        "pid": 39044,
+        "visible": false
+      }
+    },
+    {
+      "class": "Edit",
+      "event": "native_address_state",
+      "observed_at_ms": 1795029607341,
+      "phase": "before",
+      "state": {
+        "alive": true,
+        "class": "Edit",
+        "hwnd": 1248524,
+        "owner": null,
+        "parent": 3017586,
+        "pid": 39044,
+        "visible": false
+      }
+    },
+    {
+      "class": "ComboBoxEx32",
+      "event": "native_address_state",
+      "observed_at_ms": 1795029610602,
+      "phase": "final",
+      "state": {
+        "alive": true,
+        "class": "ComboBoxEx32",
+        "hwnd": 3540886,
+        "owner": null,
+        "parent": 1708112,
+        "pid": 39044,
+        "visible": false
+      }
+    },
+    {
+      "class": "ComboBox",
+      "event": "native_address_state",
+      "observed_at_ms": 1795029610602,
+      "phase": "final",
+      "state": {
+        "alive": true,
+        "class": "ComboBox",
+        "hwnd": 3017586,
+        "owner": null,
+        "parent": 3540886,
+        "pid": 39044,
+        "visible": false
+      }
+    },
+    {
+      "class": "Edit",
+      "event": "native_address_state",
+      "observed_at_ms": 1795029610602,
+      "phase": "final",
+      "state": {
+        "alive": true,
+        "class": "Edit",
+        "hwnd": 1248524,
+        "owner": null,
+        "parent": 3017586,
+        "pid": 39044,
+        "visible": false
+      }
+    }
+  ],
+  "focus_foreground": [
+    {
+      "event": "focus_foreground",
+      "focused_pid": {
+        "status": "ok",
+        "value": 4304
+      },
+      "foreground": {
+        "alive": true,
+        "class": "CASCADIA_HOSTING_WINDOW_CLASS",
+        "hwnd": 4721418,
+        "owner": null,
+        "parent": null,
+        "pid": 4304,
+        "visible": true
+      },
+      "observed_at_ms": 1795029607345,
+      "phase": "before"
+    },
+    {
+      "event": "focus_foreground",
+      "focused_pid": {
+        "status": "ok",
+        "value": 39044
+      },
+      "foreground": {
+        "alive": true,
+        "class": "#32770",
+        "hwnd": 5310948,
+        "owner": null,
+        "parent": null,
+        "pid": 39044,
+        "visible": true
+      },
+      "observed_at_ms": 1795029610603,
+      "phase": "after"
+    }
+  ],
+  "fresh_native_polls_during_case": [
+    {
+      "dialog_alive": true,
+      "dialog_visible": true,
+      "event": "host_poll",
+      "file_type": 2,
+      "filename": "pending-prototype-name.csv",
+      "folder": "PROTOTYPE_ROOT\\A",
+      "hwnd": 5310948,
+      "observed_at_ms": 1795029607331
+    },
+    {
+      "dialog_alive": true,
+      "dialog_visible": true,
+      "event": "host_poll",
+      "file_type": 2,
+      "filename": "pending-prototype-name.csv",
+      "folder": "PROTOTYPE_ROOT\\A",
+      "hwnd": 5310948,
+      "observed_at_ms": 1795029607441
+    },
+    {
+      "dialog_alive": true,
+      "dialog_visible": true,
+      "event": "host_poll",
+      "file_type": 2,
+      "filename": "pending-prototype-name.csv",
+      "folder": "PROTOTYPE_ROOT\\A",
+      "hwnd": 5310948,
+      "observed_at_ms": 1795029607551
+    },
+    {
+      "dialog_alive": true,
+      "dialog_visible": true,
+      "event": "host_poll",
+      "file_type": 2,
+      "filename": "pending-prototype-name.csv",
+      "folder": "PROTOTYPE_ROOT\\A",
+      "hwnd": 5310948,
+      "observed_at_ms": 1795029607661
+    },
+    {
+      "dialog_alive": true,
+      "dialog_visible": true,
+      "event": "host_poll",
+      "file_type": 2,
+      "filename": "pending-prototype-name.csv",
+      "folder": "PROTOTYPE_ROOT\\A",
+      "hwnd": 5310948,
+      "observed_at_ms": 1795029607771
+    },
+    {
+      "dialog_alive": true,
+      "dialog_visible": true,
+      "event": "host_poll",
+      "file_type": 2,
+      "filename": "pending-prototype-name.csv",
+      "folder": "PROTOTYPE_ROOT\\A",
+      "hwnd": 5310948,
+      "observed_at_ms": 1795029607883
+    },
+    {
+      "dialog_alive": true,
+      "dialog_visible": true,
+      "event": "host_poll",
+      "file_type": 2,
+      "filename": "pending-prototype-name.csv",
+      "folder": "PROTOTYPE_ROOT\\A",
+      "hwnd": 5310948,
+      "observed_at_ms": 1795029607994
+    },
+    {
+      "dialog_alive": true,
+      "dialog_visible": true,
+      "event": "host_poll",
+      "file_type": 2,
+      "filename": "pending-prototype-name.csv",
+      "folder": "PROTOTYPE_ROOT\\A",
+      "hwnd": 5310948,
+      "observed_at_ms": 1795029608094
+    },
+    {
+      "dialog_alive": true,
+      "dialog_visible": true,
+      "event": "host_poll",
+      "file_type": 2,
+      "filename": "pending-prototype-name.csv",
+      "folder": "PROTOTYPE_ROOT\\A",
+      "hwnd": 5310948,
+      "observed_at_ms": 1795029608207
+    },
+    {
+      "dialog_alive": true,
+      "dialog_visible": true,
+      "event": "host_poll",
+      "file_type": 2,
+      "filename": "pending-prototype-name.csv",
+      "folder": "PROTOTYPE_ROOT\\A",
+      "hwnd": 5310948,
+      "observed_at_ms": 1795029608314
+    },
+    {
+      "dialog_alive": true,
+      "dialog_visible": true,
+      "event": "host_poll",
+      "file_type": 2,
+      "filename": "pending-prototype-name.csv",
+      "folder": "PROTOTYPE_ROOT\\A",
+      "hwnd": 5310948,
+      "observed_at_ms": 1795029608425
+    },
+    {
+      "dialog_alive": true,
+      "dialog_visible": true,
+      "event": "host_poll",
+      "file_type": 2,
+      "filename": "pending-prototype-name.csv",
+      "folder": "PROTOTYPE_ROOT\\A",
+      "hwnd": 5310948,
+      "observed_at_ms": 1795029608542
+    },
+    {
+      "dialog_alive": true,
+      "dialog_visible": true,
+      "event": "host_poll",
+      "file_type": 2,
+      "filename": "pending-prototype-name.csv",
+      "folder": "PROTOTYPE_ROOT\\A",
+      "hwnd": 5310948,
+      "observed_at_ms": 1795029608639
+    },
+    {
+      "dialog_alive": true,
+      "dialog_visible": true,
+      "event": "host_poll",
+      "file_type": 2,
+      "filename": "pending-prototype-name.csv",
+      "folder": "PROTOTYPE_ROOT\\A",
+      "hwnd": 5310948,
+      "observed_at_ms": 1795029608749
+    },
+    {
+      "dialog_alive": true,
+      "dialog_visible": true,
+      "event": "host_poll",
+      "file_type": 2,
+      "filename": "pending-prototype-name.csv",
+      "folder": "PROTOTYPE_ROOT\\A",
+      "hwnd": 5310948,
+      "observed_at_ms": 1795029608861
+    },
+    {
+      "dialog_alive": true,
+      "dialog_visible": true,
+      "event": "host_poll",
+      "file_type": 2,
+      "filename": "pending-prototype-name.csv",
+      "folder": "PROTOTYPE_ROOT\\A",
+      "hwnd": 5310948,
+      "observed_at_ms": 1795029608971
+    },
+    {
+      "dialog_alive": true,
+      "dialog_visible": true,
+      "event": "host_poll",
+      "file_type": 2,
+      "filename": "pending-prototype-name.csv",
+      "folder": "PROTOTYPE_ROOT\\A",
+      "hwnd": 5310948,
+      "observed_at_ms": 1795029609086
+    },
+    {
+      "dialog_alive": true,
+      "dialog_visible": true,
+      "event": "host_poll",
+      "file_type": 2,
+      "filename": "pending-prototype-name.csv",
+      "folder": "PROTOTYPE_ROOT\\A",
+      "hwnd": 5310948,
+      "observed_at_ms": 1795029609197
+    },
+    {
+      "dialog_alive": true,
+      "dialog_visible": true,
+      "event": "host_poll",
+      "file_type": 2,
+      "filename": "pending-prototype-name.csv",
+      "folder": "PROTOTYPE_ROOT\\A",
+      "hwnd": 5310948,
+      "observed_at_ms": 1795029609307
+    },
+    {
+      "dialog_alive": true,
+      "dialog_visible": true,
+      "event": "host_poll",
+      "file_type": 2,
+      "filename": "pending-prototype-name.csv",
+      "folder": "PROTOTYPE_ROOT\\A",
+      "hwnd": 5310948,
+      "observed_at_ms": 1795029609418
+    },
+    {
+      "dialog_alive": true,
+      "dialog_visible": true,
+      "event": "host_poll",
+      "file_type": 2,
+      "filename": "pending-prototype-name.csv",
+      "folder": "PROTOTYPE_ROOT\\A",
+      "hwnd": 5310948,
+      "observed_at_ms": 1795029609513
+    },
+    {
+      "dialog_alive": true,
+      "dialog_visible": true,
+      "event": "host_poll",
+      "file_type": 2,
+      "filename": "pending-prototype-name.csv",
+      "folder": "PROTOTYPE_ROOT\\A",
+      "hwnd": 5310948,
+      "observed_at_ms": 1795029609624
+    },
+    {
+      "dialog_alive": true,
+      "dialog_visible": true,
+      "event": "host_poll",
+      "file_type": 2,
+      "filename": "pending-prototype-name.csv",
+      "folder": "PROTOTYPE_ROOT\\A",
+      "hwnd": 5310948,
+      "observed_at_ms": 1795029609740
+    },
+    {
+      "dialog_alive": true,
+      "dialog_visible": true,
+      "event": "host_poll",
+      "file_type": 2,
+      "filename": "pending-prototype-name.csv",
+      "folder": "PROTOTYPE_ROOT\\A",
+      "hwnd": 5310948,
+      "observed_at_ms": 1795029609850
+    },
+    {
+      "dialog_alive": true,
+      "dialog_visible": true,
+      "event": "host_poll",
+      "file_type": 2,
+      "filename": "pending-prototype-name.csv",
+      "folder": "PROTOTYPE_ROOT\\A",
+      "hwnd": 5310948,
+      "observed_at_ms": 1795029609960
+    },
+    {
+      "dialog_alive": true,
+      "dialog_visible": true,
+      "event": "host_poll",
+      "file_type": 2,
+      "filename": "pending-prototype-name.csv",
+      "folder": "PROTOTYPE_ROOT\\A",
+      "hwnd": 5310948,
+      "observed_at_ms": 1795029610071
+    },
+    {
+      "dialog_alive": true,
+      "dialog_visible": true,
+      "event": "host_poll",
+      "file_type": 2,
+      "filename": "pending-prototype-name.csv",
+      "folder": "PROTOTYPE_ROOT\\A",
+      "hwnd": 5310948,
+      "observed_at_ms": 1795029610181
+    },
+    {
+      "dialog_alive": true,
+      "dialog_visible": true,
+      "event": "host_poll",
+      "file_type": 2,
+      "filename": "pending-prototype-name.csv",
+      "folder": "PROTOTYPE_ROOT\\A",
+      "hwnd": 5310948,
+      "observed_at_ms": 1795029610292
+    },
+    {
+      "dialog_alive": true,
+      "dialog_visible": true,
+      "event": "host_poll",
+      "file_type": 2,
+      "filename": "pending-prototype-name.csv",
+      "folder": "PROTOTYPE_ROOT\\A",
+      "hwnd": 5310948,
+      "observed_at_ms": 1795029610402
+    },
+    {
+      "dialog_alive": true,
+      "dialog_visible": true,
+      "event": "host_poll",
+      "file_type": 2,
+      "filename": "pending-prototype-name.csv",
+      "folder": "PROTOTYPE_ROOT\\A",
+      "hwnd": 5310948,
+      "observed_at_ms": 1795029610497
+    }
+  ],
+  "fresh_native_polls_during_case_count": 30,
+  "all_during_case_native_states_match_baseline": true,
+  "post_baseline_native_drift": [],
+  "final_native_observation": {
+    "event": "native_observation",
+    "fresh_polls": 3,
+    "phase": "after_client",
+    "started_at_ms": 1795029610621,
+    "state": {
+      "dialog_alive": true,
+      "dialog_visible": true,
+      "event": "host_poll",
+      "file_type": 2,
+      "filename": "pending-prototype-name.csv",
+      "folder": "PROTOTYPE_ROOT\\A",
+      "hwnd": 5310948,
+      "observed_at_ms": 1795029610941
+    }
+  },
+  "native_verdict": {
+    "after": {
+      "dialog_alive": true,
+      "dialog_visible": true,
+      "event": "host_poll",
+      "file_type": 2,
+      "filename": "pending-prototype-name.csv",
+      "folder": "PROTOTYPE_ROOT\\A",
+      "hwnd": 5310948,
+      "observed_at_ms": 1795029610941
+    },
+    "before": {
+      "dialog_alive": true,
+      "dialog_visible": true,
+      "event": "host_poll",
+      "file_type": 2,
+      "filename": "pending-prototype-name.csv",
+      "folder": "PROTOTYPE_ROOT\\A",
+      "hwnd": 5310948,
+      "observed_at_ms": 1795029607301
+    },
+    "event": "native_verdict",
+    "file_type_preserved": true,
+    "filename_preserved": true,
+    "folder_unchanged": true,
+    "same_dialog_alive": true,
+    "successful_jump_tested": false
+  },
+  "folder_callbacks": [
+    {
+      "dialog_alive": true,
+      "dialog_visible": false,
+      "event": "folder_snapshot",
+      "file_type": 2,
+      "filename": "",
+      "folder": "PROTOTYPE_ROOT\\A",
+      "hwnd": 5310948,
+      "observed_at_ms": 1795029607126
+    }
+  ],
+  "client_exit": {
+    "elapsed_ms": 3315,
+    "event": "client_exit",
+    "note": "A timeout leaves the active query incomplete; there is no retry.",
+    "success": true,
+    "timed_out": false,
+    "total_timeout_ms": 15000
+  },
+  "fixture_cleanup": {
+    "event": "fixture_cleanup",
+    "host_exited": true
+  },
+  "source_sha256_verified_after_analysis": "40a6b2b6550b17f75deb881470b992fc1f4d9fa8b01fbfea23c274bb363d6f2f",
+  "limitations": [
+    "No eligible Edit-address command was observed in the inspected scopes; reused pre-existing nonstandard native popup HWNDs were excluded by an implementation mistake.",
+    "The program's complete=true describes execution and budgets, not complete popup coverage; no negative claim about all context-menu mechanisms is supported.",
+    "One successful high-level ShowContextMenu request does not prove a menu was shown; raw success HRESULT was not separately retained.",
+    "Only before/final native editor visibility was sampled because no Edit-address command was invoked.",
+    "Foreground changed from another process to the owned dialog; no explicit foreground forcing was used, and causality was not isolated.",
+    "Listary desktop helpers were absent but its Session 0 service remained. Integrity levels were not measured.",
+    "No target folder change, commit, successful-jump preservation or production-available arrival verification was attempted."
+  ]
+}

@@ -1,0 +1,64 @@
+{
+  "protocol": "one initial-A context-menu entry case; <=1 ShowContextMenu and <=1 strictly guarded Edit-address Invoke; no rerun",
+  "source": "src/bin/uia_address_context_edit_prototype.rs",
+  "binary": "uia_address_context_edit_prototype.exe",
+  "source_sha256_before": "40a6b2b6550b17f75deb881470b992fc1f4d9fa8b01fbfea23c274bb363d6f2f",
+  "binary_sha256_before": "cfb90e9191ee8eb30e2299eaa35d5df4f479a4b8c33b3c0a60a9c8537469f6d1",
+  "os": {
+    "build": "26300",
+    "ubr": 9974,
+    "ui_culture": "zh-CN",
+    "architecture": "AMD64",
+    "display_version": "26H2"
+  },
+  "rustc": "rustc 1.100.0 (0ef1bc386 2026-11-09)",
+  "token_note": "Processes inherit the invoking user token; integrity levels were not independently measured.",
+  "environment_note": "Pre/post process/service snapshots; no service shutdown, explicit foreground forcing or complete component isolation.",
+  "before": {
+    "remaining_prototype_processes": [],
+    "observed_utc": "2026-11-18T19:20:06.7333501Z",
+    "listary_services": [
+      {
+        "Name": "ListaryServiceV2",
+        "State": "Running",
+        "StartMode": "Auto",
+        "ProcessId": 6176
+      }
+    ],
+    "listary_processes": [
+      {
+        "ProcessName": "Listary.Service",
+        "Id": 6176,
+        "SessionId": 0,
+        "main_window_handle": 0
+      }
+    ]
+  },
+  "started_utc": "2026-11-18T19:20:06.8088974Z",
+  "ended_utc": "2026-11-18T19:20:11.2436228Z",
+  "exit_code": 0,
+  "stderr_empty": true,
+  "after": {
+    "remaining_prototype_processes": [],
+    "observed_utc": "2026-11-18T19:20:11.4488644Z",
+    "listary_services": [
+      {
+        "Name": "ListaryServiceV2",
+        "State": "Running",
+        "StartMode": "Auto",
+        "ProcessId": 6176
+      }
+    ],
+    "listary_processes": [
+      {
+        "ProcessName": "Listary.Service",
+        "Id": 6176,
+        "SessionId": 0,
+        "main_window_handle": 0
+      }
+    ]
+  },
+  "source_sha256_after": "40a6b2b6550b17f75deb881470b992fc1f4d9fa8b01fbfea23c274bb363d6f2f",
+  "binary_sha256_after": "cfb90e9191ee8eb30e2299eaa35d5df4f479a4b8c33b3c0a60a9c8537469f6d1",
+  "hashes_unchanged": true
+}
