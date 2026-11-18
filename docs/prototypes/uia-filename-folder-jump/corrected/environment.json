@@ -1,0 +1,73 @@
+{
+  "source_commit": "a918d46c5c156642e95c6dd035c479fa3594a835",
+  "source_sha256": "f999586dd02450313c99d687a1308f576839e4a1088798ecae87f27cec6f1092",
+  "executable_sha256": "37a3156438401b5fa6dc538ab2dfeef10eab862d8a0be141357eaa5ca2463970",
+  "rust": "rustc 1.100.0 (0ef1bc386 2026-11-09)",
+  "architecture": "AMD64",
+  "ui_culture": "zh-CN",
+  "windows_build": "26300",
+  "windows_ubr": 9974,
+  "windows_display_version": "26H2",
+  "observed_before_utc": "2026-11-18T20:42:43.4420631Z",
+  "relevant_processes_before": [
+    {
+      "ProcessName": "Listary.Service",
+      "Id": 6176,
+      "SessionId": 0
+    }
+  ],
+  "listary_service_before": [
+    {
+      "Name": "ListaryServiceV2",
+      "State": "Running",
+      "StartMode": "Auto",
+      "ProcessId": 6176
+    }
+  ],
+  "integrity_levels": "not independently measured",
+  "execution_scope": "one explicitly authorized corrected Open retry and first Save case; no further automatic repeat",
+  "human_retry_authorization": "The human said: 你可以重试, after the toolbar ancestry defect and proposed correction were explained.",
+  "open_execution": {
+    "start_utc": "2026-11-18T20:43:13.4253376Z",
+    "end_utc": "2026-11-18T20:43:15.773502Z",
+    "exit_code": 0,
+    "source_sha256_before": "f999586dd02450313c99d687a1308f576839e4a1088798ecae87f27cec6f1092",
+    "executable_sha256_before": "37a3156438401b5fa6dc538ab2dfeef10eab862d8a0be141357eaa5ca2463970",
+    "source_sha256_after": "f999586dd02450313c99d687a1308f576839e4a1088798ecae87f27cec6f1092",
+    "executable_sha256_after": "37a3156438401b5fa6dc538ab2dfeef10eab862d8a0be141357eaa5ca2463970",
+    "stderr_bytes": 0
+  },
+  "save_execution": {
+    "start_utc": "2026-11-18T20:43:25.7606468Z",
+    "end_utc": "2026-11-18T20:43:28.2836957Z",
+    "exit_code": 0,
+    "source_sha256_before": "f999586dd02450313c99d687a1308f576839e4a1088798ecae87f27cec6f1092",
+    "executable_sha256_before": "37a3156438401b5fa6dc538ab2dfeef10eab862d8a0be141357eaa5ca2463970",
+    "source_sha256_after": "f999586dd02450313c99d687a1308f576839e4a1088798ecae87f27cec6f1092",
+    "executable_sha256_after": "37a3156438401b5fa6dc538ab2dfeef10eab862d8a0be141357eaa5ca2463970",
+    "stderr_bytes": 0
+  },
+  "process_service_baseline_observed_utc": "2026-11-18T20:38:12.2297388Z",
+  "observed_after_utc": "2026-11-18T20:44:45.8435867Z",
+  "relevant_processes_after": [
+    {
+      "ProcessName": "Listary.Service",
+      "Id": 6176,
+      "SessionId": 0
+    }
+  ],
+  "listary_service_after": [
+    {
+      "Name": "ListaryServiceV2",
+      "State": "Running",
+      "StartMode": "Auto",
+      "ProcessId": 6176
+    }
+  ],
+  "owned_processes_remaining_after": [],
+  "source_sha256_after": "f999586dd02450313c99d687a1308f576839e4a1088798ecae87f27cec6f1092",
+  "executable_sha256_after": "37a3156438401b5fa6dc538ab2dfeef10eab862d8a0be141357eaa5ca2463970",
+  "committed_source_sha256_lf": "f999586dd02450313c99d687a1308f576839e4a1088798ecae87f27cec6f1092",
+  "committed_source_matches_executed_source_after_line_ending_normalization": true,
+  "process_service_baseline_note": "Process/service baseline was sampled before the first original Open case; its original timestamp is retained separately. It was not freshly resampled before each corrected case."
+}

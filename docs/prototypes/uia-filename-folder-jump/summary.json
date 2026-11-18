@@ -1,0 +1,454 @@
+{
+  "question": "Do filename Value write + named button Invoke + Value restoration produce a preserved folder jump?",
+  "status": "two corrected controlled successes; awaiting human acceptance",
+  "original_open_preflight": {
+    "trace": "open.jsonl",
+    "mode": "open",
+    "worker": {
+      "event": "worker_result",
+      "foreground": {
+        "alive": true,
+        "class": "Chrome_WidgetWin_1",
+        "enabled": true,
+        "hwnd": 3149496,
+        "pid": 33448,
+        "visible": true
+      },
+      "observed_at_ms": 1795034363902,
+      "stop_reason": "full-path toolbar count 0, expected one",
+      "success": false,
+      "uia_calls": 119
+    },
+    "worker_start_to_result_ms": 268,
+    "calls": 119,
+    "read_calls": 119,
+    "actions": [],
+    "query_errors": [],
+    "bound_hits": [],
+    "all_call_pairs_matched": true,
+    "native_baseline": {
+      "dialog_alive": true,
+      "dialog_visible": true,
+      "event": "host_poll",
+      "file_ok_attempts": 0,
+      "file_type": 2,
+      "filename": "pending-prototype-name.csv",
+      "folder": "PROTOTYPE_ROOT\\A",
+      "hwnd": 3215088,
+      "observed_at_ms": 1795034363612
+    },
+    "native_state_transitions": [
+      {
+        "folder": "PROTOTYPE_ROOT\\A",
+        "filename": "pending-prototype-name.csv",
+        "file_type": 2,
+        "file_ok_attempts": 0
+      }
+    ],
+    "native_final_sample_count": 5,
+    "native_final_sample_first": {
+      "dialog_alive": true,
+      "dialog_visible": true,
+      "event": "host_poll",
+      "file_ok_attempts": 0,
+      "file_type": 2,
+      "filename": "pending-prototype-name.csv",
+      "folder": "PROTOTYPE_ROOT\\A",
+      "hwnd": 3215088,
+      "observed_at_ms": 1795034364015
+    },
+    "native_final_sample_last": {
+      "dialog_alive": true,
+      "dialog_visible": true,
+      "event": "host_poll",
+      "file_ok_attempts": 0,
+      "file_type": 2,
+      "filename": "pending-prototype-name.csv",
+      "folder": "PROTOTYPE_ROOT\\A",
+      "hwnd": 3215088,
+      "observed_at_ms": 1795034364458
+    },
+    "native_full_chain_preserved": false,
+    "timed_out": false,
+    "file_accept_callback_events": 0,
+    "external_folder_observations": [
+      {
+        "event": "external_folder_observation",
+        "observed_at_ms": 1795034363902,
+        "phase": "before",
+        "toolbar_names": []
+      }
+    ],
+    "external_arrival_gates": [],
+    "foreground_before": {
+      "alive": true,
+      "class": "Chrome_WidgetWin_1",
+      "enabled": true,
+      "hwnd": 3149496,
+      "pid": 33448,
+      "visible": true
+    },
+    "foreground_after": {
+      "alive": true,
+      "class": "Chrome_WidgetWin_1",
+      "enabled": true,
+      "hwnd": 3149496,
+      "pid": 33448,
+      "visible": true
+    },
+    "cleanup": {
+      "case_error": null,
+      "event": "fixture_cleanup",
+      "host_exited": true,
+      "scratch_directories_removed": true
+    },
+    "supervisor_elapsed_including_final_native_observation_ms": 951
+  },
+  "corrected_cases": [
+    {
+      "trace": "corrected/open.jsonl",
+      "mode": "open",
+      "worker": {
+        "event": "worker_result",
+        "foreground": {
+          "alive": true,
+          "class": "#32770",
+          "enabled": true,
+          "hwnd": 24381166,
+          "pid": 38944,
+          "visible": true
+        },
+        "observed_at_ms": 1795034594944,
+        "stop_reason": null,
+        "success": true,
+        "uia_calls": 383
+      },
+      "worker_start_to_result_ms": 1035,
+      "calls": 383,
+      "read_calls": 380,
+      "actions": [
+        {
+          "operation": "Value.SetValue.target_directory",
+          "call_id": 168,
+          "ok": true,
+          "elapsed_us": 34620,
+          "observed_at_ms": 1795034594308
+        },
+        {
+          "operation": "Invoke.IDOK",
+          "call_id": 293,
+          "ok": true,
+          "elapsed_us": 16648,
+          "observed_at_ms": 1795034594566
+        },
+        {
+          "operation": "Value.SetValue.restore_filename",
+          "call_id": 347,
+          "ok": true,
+          "elapsed_us": 679,
+          "observed_at_ms": 1795034594829
+        }
+      ],
+      "query_errors": [],
+      "bound_hits": [],
+      "all_call_pairs_matched": true,
+      "native_baseline": {
+        "dialog_alive": true,
+        "dialog_visible": true,
+        "event": "host_poll",
+        "file_ok_attempts": 0,
+        "file_type": 2,
+        "filename": "pending-prototype-name.csv",
+        "folder": "PROTOTYPE_ROOT\\A",
+        "hwnd": 24381166,
+        "observed_at_ms": 1795034593887
+      },
+      "native_state_transitions": [
+        {
+          "folder": "PROTOTYPE_ROOT\\A",
+          "filename": "pending-prototype-name.csv",
+          "file_type": 2,
+          "file_ok_attempts": 0
+        },
+        {
+          "folder": "PROTOTYPE_ROOT\\A",
+          "filename": "PROTOTYPE_ROOT\\B\\",
+          "file_type": 2,
+          "file_ok_attempts": 0
+        },
+        {
+          "folder": "PROTOTYPE_ROOT\\B",
+          "filename": "pending-prototype-name.csv",
+          "file_type": 2,
+          "file_ok_attempts": 0
+        }
+      ],
+      "native_final_sample_count": 6,
+      "native_final_sample_first": {
+        "dialog_alive": true,
+        "dialog_visible": true,
+        "event": "host_poll",
+        "file_ok_attempts": 0,
+        "file_type": 2,
+        "filename": "pending-prototype-name.csv",
+        "folder": "PROTOTYPE_ROOT\\B",
+        "hwnd": 24381166,
+        "observed_at_ms": 1795034595053
+      },
+      "native_final_sample_last": {
+        "dialog_alive": true,
+        "dialog_visible": true,
+        "event": "host_poll",
+        "file_ok_attempts": 0,
+        "file_type": 2,
+        "filename": "pending-prototype-name.csv",
+        "folder": "PROTOTYPE_ROOT\\B",
+        "hwnd": 24381166,
+        "observed_at_ms": 1795034595592
+      },
+      "native_full_chain_preserved": true,
+      "timed_out": false,
+      "file_accept_callback_events": 0,
+      "external_folder_observations": [
+        {
+          "event": "external_folder_observation",
+          "observed_at_ms": 1795034594163,
+          "phase": "before",
+          "toolbar_names": [
+            "地址: PROTOTYPE_ROOT\\A"
+          ]
+        },
+        {
+          "event": "external_folder_observation",
+          "observed_at_ms": 1795034594615,
+          "phase": "await_B",
+          "toolbar_names": [
+            "地址: PROTOTYPE_ROOT\\A"
+          ]
+        },
+        {
+          "event": "external_folder_observation",
+          "observed_at_ms": 1795034594718,
+          "phase": "await_B",
+          "toolbar_names": [
+            "地址: PROTOTYPE_ROOT\\B"
+          ]
+        },
+        {
+          "event": "external_folder_observation",
+          "observed_at_ms": 1795034594943,
+          "phase": "after_restore",
+          "toolbar_names": [
+            "地址: PROTOTYPE_ROOT\\B"
+          ]
+        }
+      ],
+      "external_arrival_gates": [
+        {
+          "elapsed_ms": 151,
+          "event": "external_arrival_gate",
+          "matched_B": true,
+          "observed_at_ms": 1795034594718
+        }
+      ],
+      "foreground_before": {
+        "alive": true,
+        "class": "Chrome_WidgetWin_1",
+        "enabled": true,
+        "hwnd": 3149496,
+        "pid": 33448,
+        "visible": true
+      },
+      "foreground_after": {
+        "alive": true,
+        "class": "#32770",
+        "enabled": true,
+        "hwnd": 24381166,
+        "pid": 38944,
+        "visible": true
+      },
+      "cleanup": {
+        "case_error": null,
+        "event": "fixture_cleanup",
+        "host_exited": true,
+        "scratch_directories_removed": true
+      },
+      "supervisor_elapsed_including_final_native_observation_ms": 1701
+    },
+    {
+      "trace": "corrected/save.jsonl",
+      "mode": "save",
+      "worker": {
+        "event": "worker_result",
+        "foreground": {
+          "alive": true,
+          "class": "#32770",
+          "enabled": true,
+          "hwnd": 5115782,
+          "pid": 39920,
+          "visible": true
+        },
+        "observed_at_ms": 1795034607353,
+        "stop_reason": null,
+        "success": true,
+        "uia_calls": 422
+      },
+      "worker_start_to_result_ms": 1112,
+      "calls": 422,
+      "read_calls": 419,
+      "actions": [
+        {
+          "operation": "Value.SetValue.target_directory",
+          "call_id": 186,
+          "ok": true,
+          "elapsed_us": 13007,
+          "observed_at_ms": 1795034606662
+        },
+        {
+          "operation": "Invoke.IDOK",
+          "call_id": 319,
+          "ok": true,
+          "elapsed_us": 16982,
+          "observed_at_ms": 1795034606945
+        },
+        {
+          "operation": "Value.SetValue.restore_filename",
+          "call_id": 380,
+          "ok": true,
+          "elapsed_us": 30060,
+          "observed_at_ms": 1795034607193
+        }
+      ],
+      "query_errors": [],
+      "bound_hits": [],
+      "all_call_pairs_matched": true,
+      "native_baseline": {
+        "dialog_alive": true,
+        "dialog_visible": true,
+        "event": "host_poll",
+        "file_ok_attempts": 0,
+        "file_type": 2,
+        "filename": "pending-prototype-name.csv",
+        "folder": "PROTOTYPE_ROOT\\A",
+        "hwnd": 5115782,
+        "observed_at_ms": 1795034606218
+      },
+      "native_state_transitions": [
+        {
+          "folder": "PROTOTYPE_ROOT\\A",
+          "filename": "pending-prototype-name.csv",
+          "file_type": 2,
+          "file_ok_attempts": 0
+        },
+        {
+          "folder": "PROTOTYPE_ROOT\\A",
+          "filename": "PROTOTYPE_ROOT\\B\\",
+          "file_type": 2,
+          "file_ok_attempts": 0
+        },
+        {
+          "folder": "PROTOTYPE_ROOT\\B",
+          "filename": "pending-prototype-name.csv",
+          "file_type": 2,
+          "file_ok_attempts": 0
+        }
+      ],
+      "native_final_sample_count": 6,
+      "native_final_sample_first": {
+        "dialog_alive": true,
+        "dialog_visible": true,
+        "event": "host_poll",
+        "file_ok_attempts": 0,
+        "file_type": 2,
+        "filename": "pending-prototype-name.csv",
+        "folder": "PROTOTYPE_ROOT\\B",
+        "hwnd": 5115782,
+        "observed_at_ms": 1795034607390
+      },
+      "native_final_sample_last": {
+        "dialog_alive": true,
+        "dialog_visible": true,
+        "event": "host_poll",
+        "file_ok_attempts": 0,
+        "file_type": 2,
+        "filename": "pending-prototype-name.csv",
+        "folder": "PROTOTYPE_ROOT\\B",
+        "hwnd": 5115782,
+        "observed_at_ms": 1795034607944
+      },
+      "native_full_chain_preserved": true,
+      "timed_out": false,
+      "file_accept_callback_events": 0,
+      "external_folder_observations": [
+        {
+          "event": "external_folder_observation",
+          "observed_at_ms": 1795034606520,
+          "phase": "before",
+          "toolbar_names": [
+            "地址: PROTOTYPE_ROOT\\A"
+          ]
+        },
+        {
+          "event": "external_folder_observation",
+          "observed_at_ms": 1795034607015,
+          "phase": "await_B",
+          "toolbar_names": [
+            "地址: PROTOTYPE_ROOT\\B"
+          ]
+        },
+        {
+          "event": "external_folder_observation",
+          "observed_at_ms": 1795034607353,
+          "phase": "after_restore",
+          "toolbar_names": [
+            "地址: PROTOTYPE_ROOT\\B"
+          ]
+        }
+      ],
+      "external_arrival_gates": [
+        {
+          "elapsed_ms": 70,
+          "event": "external_arrival_gate",
+          "matched_B": true,
+          "observed_at_ms": 1795034607015
+        }
+      ],
+      "foreground_before": {
+        "alive": true,
+        "class": "CASCADIA_HOSTING_WINDOW_CLASS",
+        "enabled": true,
+        "hwnd": 1837554,
+        "pid": 4304,
+        "visible": true
+      },
+      "foreground_after": {
+        "alive": true,
+        "class": "#32770",
+        "enabled": true,
+        "hwnd": 5115782,
+        "pid": 39920,
+        "visible": true
+      },
+      "cleanup": {
+        "case_error": null,
+        "event": "fixture_cleanup",
+        "host_exited": true,
+        "scratch_directories_removed": true
+      },
+      "supervisor_elapsed_including_final_native_observation_ms": 1829
+    }
+  ],
+  "total_executed_cases": 3,
+  "source_commit": "a918d46c5c156642e95c6dd035c479fa3594a835",
+  "production_contract_established": false,
+  "product_implementation_changed": false,
+  "limitations": [
+    "One corrected modern Open and one corrected modern Save sample on one Windows build and locale.",
+    "Local existing B directory, one trailing-separator spelling, one nonempty filename and CSV index 2 only.",
+    "No failure/restoration-error, stale/replaced-session, user-switch, path-variation or broader host-compatibility tests.",
+    "Toolbar full-path Name agreed with independent host truth in these cases; its production completion contract remains a separate decision.",
+    "Foreground changed without explicit forcing; causality was not isolated.",
+    "Listary desktop processes absent at overall pre/post samples; its Session 0 service remained. Integrity levels unmeasured.",
+    "Native observations are sampled. The supervisor worker_lifetime_ms field also includes final native sampling; use its qualified summary name."
+  ]
+}
