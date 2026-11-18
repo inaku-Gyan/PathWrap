@@ -1,0 +1,29 @@
+{
+  "base_commit": "17ea89b43d96f09499213f4745be476db885bc0e",
+  "branch": "feat/verified-uia-navigation",
+  "recorded_before_final_gui_utc": "2026-11-18T22:54:12.3383595Z",
+  "product_executable_sha256": "1b3d5e7f0145cf8f14babed0600e9eaea1b6c996bafd59bf13088c5182369950",
+  "acceptance_executable_sha256": "e9c549be095333b31f53735a2c377a05c49f0e43eb626f4d4218a9e434dc3cd8",
+  "source_sha256": {
+    "src\\main.rs": "b33a928cdfce531540b2e8d182ab9512c9f1592edd999d451565502af3e94b14",
+    "src\\app.rs": "cb0119543fdec03f3697e4acf41e5f0f734b91948f0ae76862234fa77dbdd1a0",
+    "src\\core\\controller.rs": "63bdf802c01a8b293a5329e0a16f1e0c2d3a4c1034f83fba8a341db0f2bbd0ce",
+    "src\\core\\navigation.rs": "b9429dc34aea1bc093e04ff64f1572ab2af1207f7f7130fb896fa43031c4b204",
+    "src\\core\\types.rs": "6653575c6ff7bb61d6a701fe0ebb8f7eeb0ffc43f9b8c4b543489cc80e6d5847",
+    "src\\os\\dialog.rs": "a7cfe7115af4d12c117c18089f5dbe92722ae165f3077f1b68962014d9d31d32",
+    "src\\os\\dialog\\uia.rs": "52d4c33186923b49bad900c2a53133cae3430b316b145b4339b835baf5388a93",
+    "src\\os\\monitor.rs": "13e5d0cd704d09d08dd84afafcebe95da08a4ee79834669047196136c734f315",
+    "src\\os\\window_ext.rs": "15f2d478b7cbac3a5db2785a359cd48c610c4557569563f6adef6fe644d8083c",
+    "src\\ui\\window.rs": "cd7b31ea26a3e59f0dbb7380d474c06a5190bf1c97ac186641f1927a243a0adf",
+    "src\\bin\\navigation_acceptance.rs": "f16b6381d85ac4a4d62c704a6b809a9ca5c3951e4932a498a6d2e9180215de50"
+  },
+  "required_checks": [
+    "just check --ci",
+    "just build",
+    "just test"
+  ],
+  "tests_passed": 64,
+  "tests_ignored": 6,
+  "final_gui_worker": "Actual PathWarp.exe entry point and worker, launched by acceptance supervisor.",
+  "foreground_setup": "User activates the named owned fixture; production does not force foreground."
+}

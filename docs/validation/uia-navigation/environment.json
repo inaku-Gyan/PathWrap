@@ -1,0 +1,18 @@
+{
+  "base_commit": "17ea89b43d96f09499213f4745be476db885bc0e",
+  "branch": "feat/verified-uia-navigation",
+  "recorded_at_utc": "2026-11-18T22:38:27.7801567Z",
+  "os_build": "26300.9974",
+  "display_version": "26H2",
+  "culture": "zh-CN",
+  "executable_sha256": "831f3ce3cffe3498110d30c5ac96053c115cad42e0942e4ef82c6908d3254cac",
+  "worker_source_sha256": {
+    "src\\core\\navigation.rs": "5cc2589291d73f9fa0ffce42c19c7ba839df1386913db5eebf0bf3c06a0e4a59",
+    "src\\os\\dialog.rs": "8dfdc75dd759dd39cdbbf94aa671e531a4de8b6c22bad4428114b617ed3f81e7",
+    "src\\os\\dialog\\uia.rs": "506aa1b09c075a688dddd0c1484741c181b76174a4b4519275380bfc9177ecd2",
+    "src\\bin\\navigation_acceptance.rs": "ef91287d29399efacbda41e23b400535c569c6be35a4cb9e5f014518aabfa5da"
+  },
+  "setup": "Computer Use activation attempts ended; successful Open/Save runs required one user title-bar click per owned fixture. No navigation input was synthesized.",
+  "evidence_scope": "Same acceptance executable and same navigation engine/adapter/supervisor for both successful GUI cases. Controller/app integration was being changed separately and is not established by these runs.",
+  "controls": "Both owned modern dialogs exposed selected type as semantic native ComboBox AutomationId 1136, ValuePattern.CurrentValue CSV (*.csv); this replaces the locator assumption FileTypeControlHost without changing the getter."
+}

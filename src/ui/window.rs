@@ -310,6 +310,20 @@ pub fn render_with_theme(
             // TextEdit mutates the controller's source buffer directly. Re-clamp the selected
             // row before laying out the filtered list so edits take effect in the same frame.
             controller.query_edited();
+            if controller.is_navigating() {
+                ui.horizontal(|ui| {
+                    ui.spinner();
+                    ui.label("正在跳转…");
+                });
+            }
+            if let Some(message) = controller.navigation_message() {
+                egui::ScrollArea::vertical()
+                    .id_salt("navigation_status")
+                    .max_height(48.0)
+                    .show(ui, |ui| {
+                        ui.colored_label(ui.visuals().warn_fg_color, message);
+                    });
+            }
             let filtered = controller.filtered_paths();
             let selected = controller.selected_index();
             ui.add_space(4.0);
@@ -542,5 +556,53 @@ mod tests {
             typed.get_by_role(egui::accesskit::Role::TextInput).value(),
             Some("wo".to_string())
         );
+    }
+    #[test]
+    fn navigation_failure_renders_original_filename_for_recovery() {
+        use crate::core::controller::{Effect, Env, Event};
+        use crate::core::navigation::{Outcome, Report, Snapshot};
+        use crate::core::types::DialogInfo;
+        let mut controller = controller_with(&["C:\\B"], "");
+        let env = Env {
+            now: std::time::Instant::now(),
+            foreground_hwnd: 1,
+        };
+        controller.step(
+            env,
+            Event::DialogUpdate(Some(DialogInfo {
+                hwnd: 1,
+                pid: 2,
+                process_created: 3,
+                x: 0,
+                y: 0,
+                width: 600,
+                height: 400,
+                dpi: 96,
+            })),
+        );
+        controller.set_paths(vec!["C:\\B".into()]);
+        let request = controller
+            .step(env, Event::Key(KeyAction::Enter))
+            .into_iter()
+            .find_map(|effect| match effect {
+                Effect::Navigate(request) => Some(request),
+                _ => None,
+            })
+            .unwrap();
+        let mut report = Report::new(request);
+        report.outcome = Outcome::PreservationFailed;
+        report.worker_retired = true;
+        report.writes = 2;
+        report.original = Some(Snapshot {
+            folder: "C:\\A".into(),
+            filename: "pending.csv".into(),
+            file_type: "CSV".into(),
+        });
+        controller.step(env, Event::NavigationFinished(report));
+        let expected = controller.navigation_message().unwrap().to_owned();
+        let mut harness = harness_for(controller);
+        harness.run();
+        assert!(harness.query_by_label(&expected).is_some());
+        assert!(expected.contains("原文件名：pending.csv"));
     }
 }

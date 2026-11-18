@@ -1,0 +1,48 @@
+{
+  "base_commit": "17ea89b43d96f09499213f4745be476db885bc0e",
+  "branch": "feat/verified-uia-navigation",
+  "recorded_before_final_gui_utc": "2026-11-18T23:00:01.3295826Z",
+  "product_executable_sha256": "1b3d5e7f0145cf8f14babed0600e9eaea1b6c996bafd59bf13088c5182369950",
+  "acceptance_executable_sha256": "5637538637b1a1fc42037ef1bce5f883a94ba9f0d2ac3a4e8d091957ab0e788d",
+  "source_sha256": {
+    "Cargo.toml": "91c0bb3eb551145e30bedf60d492970989d3ee07a0bf60bd5a652a296092b4ad",
+    "Cargo.lock": "08e7022b56211c70b6b62eeb31192d4f21359b60f4d134de15bcf25dbfd5ae63",
+    "src\\lib.rs": "c8929070bd1140f9b21786ffc6d866fb096ab255e022c43f2963542ae825b3f5",
+    "src\\main.rs": "b33a928cdfce531540b2e8d182ab9512c9f1592edd999d451565502af3e94b14",
+    "src\\app.rs": "cb0119543fdec03f3697e4acf41e5f0f734b91948f0ae76862234fa77dbdd1a0",
+    "src\\core\\mod.rs": "ef05ec9a9fafedf94353c5d604ec1f3cbba6326088ef4217c306edeadf797de2",
+    "src\\core\\controller.rs": "63bdf802c01a8b293a5329e0a16f1e0c2d3a4c1034f83fba8a341db0f2bbd0ce",
+    "src\\core\\navigation.rs": "b9429dc34aea1bc093e04ff64f1572ab2af1207f7f7130fb896fa43031c4b204",
+    "src\\core\\types.rs": "6653575c6ff7bb61d6a701fe0ebb8f7eeb0ffc43f9b8c4b543489cc80e6d5847",
+    "src\\os\\dialog.rs": "a7cfe7115af4d12c117c18089f5dbe92722ae165f3077f1b68962014d9d31d32",
+    "src\\os\\dialog\\uia.rs": "52d4c33186923b49bad900c2a53133cae3430b316b145b4339b835baf5388a93",
+    "src\\os\\monitor.rs": "13e5d0cd704d09d08dd84afafcebe95da08a4ee79834669047196136c734f315",
+    "src\\os\\window_ext.rs": "15f2d478b7cbac3a5db2785a359cd48c610c4557569563f6adef6fe644d8083c",
+    "src\\ui\\window.rs": "cd7b31ea26a3e59f0dbb7380d474c06a5190bf1c97ac186641f1927a243a0adf",
+    "src\\bin\\navigation_acceptance.rs": "4240e35b6398efeae819242dec85bcce4557eec30d9f7d8e3471825d39a78097",
+    "tests\\navigation_worker.rs": "92b3fd36f792fca1c335a072df1bd0bf9163bb76e1879964f74d34af1e52ea54"
+  },
+  "required_checks": [
+    "just check --ci",
+    "just build",
+    "just test"
+  ],
+  "tests_passed": 64,
+  "tests_ignored": 6,
+  "e2e": {
+    "finished_utc": "2026-11-18T22:57:22.5718832Z",
+    "passed": 5,
+    "duration_seconds": 12.11,
+    "product_executable_unchanged": true,
+    "user_approved_invocations": 1
+  },
+  "final_gui_worker": "Actual PathWarp.exe entry point and worker, launched by acceptance supervisor.",
+  "foreground_setup": "User activates the named owned fixture; production does not force foreground.",
+  "fixture_precondition": "Initial UIA filename must exactly match pending-prototype-name.csv before any full-chain navigation.",
+  "verified_after_final_cases_utc": "2026-11-18T23:04:30.7062622Z",
+  "source_and_binary_hashes_verified": true,
+  "final_cases_passed": [
+    "open",
+    "save"
+  ]
+}

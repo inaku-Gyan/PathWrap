@@ -1,0 +1,1 @@
+Error: "normal owned-fixture activation denied; no navigation selected"

@@ -37,6 +37,7 @@ pub struct PathWarpApp {
     theme_mode: ThemeMode,
     config_store: ConfigStore,
     controller: Controller,
+    navigator: crate::os::dialog::Navigator,
 }
 
 impl PathWarpApp {
@@ -58,6 +59,7 @@ impl PathWarpApp {
             theme_preference,
             config_store,
             controller: Controller::new(),
+            navigator: crate::os::dialog::Navigator::default(),
         };
         // 尽早应用窗口样式并停靠到屏幕外，避免启动时窗口在默认位置可见。
         app.ensure_overlay_window(None);
@@ -130,7 +132,41 @@ impl PathWarpApp {
                     height,
                 } => window_ext::dock(self.overlay_hwnd, x, y, width, height),
                 Effect::Park => window_ext::park(self.overlay_hwnd),
-                Effect::Inject { hwnd, path } => crate::os::dialog::inject_folder_path(hwnd, &path),
+                Effect::Navigate(mut request) => {
+                    request.overlay_hwnd = self.overlay_hwnd;
+                    if !self.navigator.start(request.clone()) {
+                        let mut report = crate::core::navigation::Report::new(request);
+                        report.reason = "navigation supervisor is busy".into();
+                        let effects = self.controller.step(
+                            Env {
+                                now: Instant::now(),
+                                foreground_hwnd: monitor::foreground_hwnd(),
+                            },
+                            Event::NavigationFinished(report),
+                        );
+                        self.apply_effects(effects);
+                    }
+                }
+                Effect::Activate {
+                    session,
+                    dialog,
+                    overlay,
+                } => {
+                    let foreground = monitor::foreground_hwnd();
+                    if self.controller.active_session() == Some(session)
+                        && crate::os::dialog::identity(dialog.hwnd) == Some(dialog)
+                        && (foreground == dialog.hwnd || foreground == self.overlay_hwnd)
+                    {
+                        let target = if overlay {
+                            self.overlay_hwnd
+                        } else {
+                            dialog.hwnd
+                        };
+                        if !window_ext::activate(target) {
+                            self.controller.activation_failed();
+                        }
+                    }
+                }
                 Effect::RefreshPaths => self.controller.set_paths(explorer::get_open_windows()),
             }
         }
@@ -162,6 +198,19 @@ impl eframe::App for PathWarpApp {
         }
         // 2. 心跳，推进去抖/宽限计时并做显隐收敛。
         effects.extend(self.controller.step(env, Event::Tick));
+        self.navigator
+            .fence(self.controller.active_session(), monitor::foreground_hwnd());
+        if let Some(report) = self.navigator.poll() {
+            if !report.outcome.is_success() {
+                log::warn!(
+                    "navigation {:?} at {:?}: {}",
+                    report.outcome,
+                    report.stage,
+                    report.reason
+                );
+            }
+            effects.extend(self.controller.step(env, Event::NavigationFinished(report)));
+        }
         self.apply_effects(effects);
 
         // 4. 可见时渲染，并把鼠标交互回喂控制器。

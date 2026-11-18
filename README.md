@@ -4,7 +4,7 @@ PathWarp is a Windows desktop application for quickly switching target folders w
 
 The app listens to file dialog state and shows a lightweight overlay with paths from currently opened Explorer windows, reducing manual folder navigation.
 
-The current code implements the core flow: Explorer path collection, foreground file-dialog detection, an activating overlay editor, and UI Automation based folder injection. Windows interactive verification is still required for the real dialog and focus hand-off paths.
+The source implementation collects Explorer paths, tracks the active file dialog and runs verified folder jumps in an isolated UI Automation worker. Supported jumps preserve the pending filename and selected file type. See the limited support scope below and the [Windows validation record](docs/validation/uia-navigation/README.md).
 
 ## Download and run
 
@@ -33,6 +33,22 @@ If a download is incomplete, download the ZIP again from [GitHub Releases](https
   right-click it to follow the Windows theme or choose a fixed palette
 - Focus-aware: clicking the overlay makes it the foreground editor while the current file-dialog session remains visible and tracked
 - Built with Rust + egui/eframe + windows-rs
+
+### Folder-jump support
+
+The first adapter supports uniquely identifiable modern filesystem Open/Save dialogs,
+one nonempty pending filename, and an existing local absolute folder path. An empty
+filename, multiple selected filenames, UNC/shell paths, ambiguous controls or an
+unreadable selected file type stop before any write. Enter the pending filename in
+the file dialog before requesting a jump. The measured path-caption and command
+matching covers Chinese and English; other hosts and path spellings may be unsupported.
+
+Only one jump runs at a time. A folder already selected produces a no-op result.
+Success requires fresh complete-path observations before and after filename
+reassertion, unchanged filename/type and the original live dialog. API return or
+assigned filename text alone is insufficient. Errors stay visible in PathWarp;
+an incomplete operation may already have changed the dialog, and the original
+filename is shown for recovery. There is no automatic retry or rollback.
 
 ## Architecture
 
@@ -67,11 +83,16 @@ decoupled by channels. Key design decisions:
   selection, clipboard, paste, backspace, and platform text/IME events; navigation, Enter, and
   Escape are mapped to controller actions. There is no custom caret glyph and no global keyboard
   hook competing with the focused editor.
-- **UI Automation injection** ([src/os/dialog.rs](src/os/dialog.rs)): locates the filename edit
-  and the default button via UIA, then `ValuePattern::SetValue` + `InvokePattern::Invoke`.
-  If no suitable button is found, it falls back to sending Enter to the filename edit.
-  The operation is synchronous, has no sleeps, and does not intentionally take focus on
-  modern `IFileDialog` dialogs.
+- **Verified UIA navigation** ([src/core/navigation.rs](src/core/navigation.rs),
+  [src/os/dialog.rs](src/os/dialog.rs)): a session/request-bound worker snapshots filename,
+  selected type and complete folder path. It uses at most two filename Value writes and
+  one named Open/Save Invoke, with fresh arrival and preservation checks. The supervisor
+  fences late results, retires its owned child on cancellation/deadline and blocks further
+  mutations if retirement cannot be confirmed. UIA calls stay off the UI event handler.
+  Read-only control/ownership guards live in [src/os/dialog/uia.rs](src/os/dialog/uia.rs).
+  The app requests normal target activation after verified completion, displays errors in
+  an active PathWarp interaction and respects unrelated foreground apps. A provider call
+  already in flight cannot be assumed canceled or undone.
 - **Dialog detection** ([src/os/monitor.rs](src/os/monitor.rs)): `SetWinEventHook` wakeups +
   adaptive polling, matching class `#32770` plus structural child-class evidence to avoid
   false positives on generic message boxes.
@@ -136,7 +157,7 @@ The suite is a three-layer pyramid:
 
 1. **Controller unit tests** ([src/core/controller.rs](src/core/controller.rs)): the state
    machine's full behavior — docking, foreground debounce, `None`-grace hide, ESC suppression,
-   injection ordering (hook off before inject) with the overlay staying docked afterwards,
+   request identity, busy rejection, stale-result fencing, completion focus and the overlay staying docked afterwards,
    following the active dialog when several are open, dock de-duplication — driven with injected
    time. Pure and millisecond-fast.
 2. **Glue-layer UI tests** ([src/ui/window.rs](src/ui/window.rs)): [`egui_kittest`] drives the
@@ -148,6 +169,19 @@ The suite is a three-layer pyramid:
    interactive desktop and are sensitive to other foreground-grabbing tools) and run locally via
    `just e2e`. The GitHub CI workflow covers formatting, Clippy, build, and
    the non-ignored test suite; it does not run E2E.
+
+The navigation policy also tests unsupported preflight, no-op, type drift, failed
+Invoke, filename interference and preservation failure. An owned blocking child
+checks actual watchdog retirement and retention of the original filename.
+[tests/navigation_worker.rs](tests/navigation_worker.rs) exercises the product's
+worker entry point without opening a dialog.
+
+For the selected-type/native correspondence and full Open/Save chains, build all
+targets and run `cargo run --bin navigation_acceptance -- --case open` and then
+the `save` case. The runner launches the product `PathWarp.exe` worker, creates
+only owned fixtures and records independent native truth; it never uses that
+truth as the worker's gate. Activate the named acceptance window if normal
+activation is denied. These checks change foreground and must be announced.
 
 Run layers 1–2 with `cargo test` (or `just test`); run layer 3 manually with
 `just e2e`. The GitHub CI workflow does not run E2E: it runs formatting,

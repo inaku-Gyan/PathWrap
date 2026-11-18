@@ -5,6 +5,7 @@
 //! 单测。[`crate::app`] 只负责把外部事件喂进来、并执行返回的 [`Effect`]，
 //! 自身不做任何显隐/停靠/注入判断。
 
+use crate::core::navigation::{DialogIdentity, Report, Request};
 use crate::core::types::{DialogInfo, KeyAction};
 use std::time::{Duration, Instant};
 
@@ -37,6 +38,7 @@ pub enum Event {
     ItemDoubleClicked(usize),
     /// 无外部事件的心跳帧，用于推进去抖/宽限计时。
     Tick,
+    NavigationFinished(Report),
 }
 
 /// 控制器要求宿主执行的一个副作用。
@@ -52,7 +54,12 @@ pub enum Effect {
     /// 隐藏悬浮条（移到屏幕外）。
     Park,
     /// 把 `path` 注入 `hwnd` 指向的对话框并确认。
-    Inject { hwnd: isize, path: String },
+    Navigate(Request),
+    Activate {
+        session: u64,
+        dialog: DialogIdentity,
+        overlay: bool,
+    },
     /// 重新读取已打开的 Explorer 路径列表。
     RefreshPaths,
 }
@@ -61,11 +68,16 @@ pub enum Effect {
 pub struct Controller {
     // ---- 会话/显隐状态 ----
     target_dialog: Option<DialogInfo>,
-    session_hwnd: Option<isize>,
+    session_identity: Option<DialogIdentity>,
+    session_id: u64,
+    next_request: u64,
+    in_flight: Option<Request>,
+    navigation_message: Option<String>,
+    busy_rejected: bool,
     pending_none_since: Option<Instant>,
     fg_lost_since: Option<Instant>,
     /// 用户按 ESC 后被抑制的对话框，避免同一会话立即被重新拉起。
-    user_hidden_hwnd: Option<isize>,
+    user_hidden_identity: Option<DialogIdentity>,
 
     // ---- 已下发效果的去重基线 ----
     visible: bool,
@@ -89,7 +101,6 @@ impl Controller {
 
     // ---- 供渲染层读取的模型快照 ----
 
-    #[cfg(test)]
     pub fn query(&self) -> &str {
         &self.query
     }
@@ -119,9 +130,30 @@ impl Controller {
         self.visible
     }
 
+    pub fn active_session(&self) -> Option<u64> {
+        (self.target_dialog.is_some() && self.pending_none_since.is_none())
+            .then_some(self.session_id)
+    }
+
+    pub fn is_navigating(&self) -> bool {
+        self.in_flight.is_some()
+    }
+
+    pub fn navigation_message(&self) -> Option<&str> {
+        self.navigation_message
+            .as_deref()
+            .or_else(|| self.busy_rejected.then_some("正在处理上一次跳转，请稍候。"))
+    }
+
+    pub fn activation_failed(&mut self) {
+        self.navigation_message = Some("窗口未取得焦点，请点击目标窗口。".into());
+    }
+
     /// 会话进行中（有目标对话框或正在去抖），宿主应继续心跳重绘以推进计时。
     pub fn needs_tick(&self) -> bool {
-        self.target_dialog.is_some() || self.pending_none_since.is_some()
+        self.target_dialog.is_some()
+            || self.pending_none_since.is_some()
+            || self.in_flight.is_some()
     }
 
     /// 大小写不敏感地按查询过滤后的路径列表。
@@ -146,13 +178,14 @@ impl Controller {
         let mut fx = Vec::new();
         match event {
             Event::DialogUpdate(update) => self.on_dialog_update(update, &env),
-            Event::Key(key) => self.on_key(key, &mut fx),
+            Event::Key(key) => self.on_key(key, &env, &mut fx),
             Event::ItemClicked(index) => self.select_filtered(index),
             Event::ItemDoubleClicked(index) => {
                 self.select_filtered(index);
-                self.confirm(&mut fx);
+                self.confirm(&env, &mut fx);
             }
             Event::Tick => {}
+            Event::NavigationFinished(report) => self.on_navigation_finished(report, &env, &mut fx),
         }
         self.reconcile(&env, &mut fx);
         fx
@@ -162,22 +195,24 @@ impl Controller {
         match update {
             Some(info) => {
                 // 抑制中的同一对话框：不重新拉起。
-                if self.user_hidden_hwnd == Some(info.hwnd) {
+                if self.user_hidden_identity == Some(info.identity()) {
                     self.target_dialog = None;
                     self.pending_none_since = None;
                     return;
                 }
                 // 切到了不同对话框：解除上一次的抑制。
-                if self.user_hidden_hwnd.is_some() {
-                    self.user_hidden_hwnd = None;
+                if self.user_hidden_identity.is_some() {
+                    self.user_hidden_identity = None;
                 }
 
                 self.target_dialog = Some(info);
                 self.pending_none_since = None;
 
                 // 新会话（对话框句柄变化）：刷新路径并重置筛选。
-                if self.session_hwnd != Some(info.hwnd) {
-                    self.session_hwnd = Some(info.hwnd);
+                if self.session_identity != Some(info.identity()) {
+                    self.session_identity = Some(info.identity());
+                    self.session_id = self.session_id.wrapping_add(1);
+                    self.navigation_message = None;
                     self.query.clear();
                     self.selected = 0;
                     self.pending_refresh = true;
@@ -191,35 +226,88 @@ impl Controller {
         }
     }
 
-    fn on_key(&mut self, key: KeyAction, fx: &mut Vec<Effect>) {
+    fn on_key(&mut self, key: KeyAction, env: &Env, fx: &mut Vec<Effect>) {
         match key {
             KeyAction::Up => self.move_selection(true, false),
             KeyAction::Down => self.move_selection(false, true),
-            KeyAction::Enter => self.confirm(fx),
+            KeyAction::Enter => self.confirm(env, fx),
             KeyAction::Escape => self.suppress_current_session(),
         }
     }
 
     /// 完成选择：注入选中路径并保持停靠，让用户可继续挑选/输入。收起悬浮条是 ESC
     /// 的职责，不在此处。
-    fn confirm(&mut self, fx: &mut Vec<Effect>) {
+    fn confirm(&mut self, env: &Env, fx: &mut Vec<Effect>) {
         let Some(dialog) = self.target_dialog else {
             return;
         };
+        if self.active_session().is_none()
+            || (!self.overlay_focused && env.foreground_hwnd != dialog.hwnd)
+        {
+            return;
+        }
+        if self.in_flight.is_some() {
+            self.busy_rejected = true;
+            return;
+        }
         let Some(path) = self.selected_path() else {
             return;
         };
-        fx.push(Effect::Inject {
-            hwnd: dialog.hwnd,
-            path,
-        });
+        self.next_request = self.next_request.wrapping_add(1);
+        let request = Request {
+            id: self.next_request,
+            session: self.session_id,
+            dialog: dialog.identity(),
+            overlay_hwnd: 0,
+            target: path,
+        };
+        self.in_flight = Some(request.clone());
+        self.busy_rejected = false;
+        self.navigation_message = None;
+        fx.push(Effect::Navigate(request));
+    }
+
+    fn on_navigation_finished(&mut self, report: Report, env: &Env, fx: &mut Vec<Effect>) {
+        let Some(pending) = &self.in_flight else {
+            return;
+        };
+        if pending.id != report.request.id
+            || pending.session != report.request.session
+            || pending.dialog != report.request.dialog
+            || pending.target != report.request.target
+        {
+            return;
+        }
+        if report.worker_retired {
+            self.in_flight = None;
+        }
+        self.busy_rejected = false;
+        if self.active_session() != Some(report.request.session)
+            || self.target_dialog.map(DialogInfo::identity) != Some(report.request.dialog)
+        {
+            return;
+        }
+        if !report.worker_retired {
+            self.navigation_message =
+                Some("后台操作尚未确认退出，已阻止新的跳转。请检查原对话框。".into());
+            return;
+        }
+        self.navigation_message = (!report.outcome.is_success()).then(|| report.failure_message());
+        if env.foreground_hwnd == report.request.dialog.hwnd || self.overlay_focused {
+            fx.push(Effect::Activate {
+                session: report.request.session,
+                dialog: report.request.dialog,
+                overlay: !report.outcome.is_success(),
+            });
+        }
     }
 
     /// ESC：抑制当前对话框会话，收起悬浮条。
     fn suppress_current_session(&mut self) {
-        self.user_hidden_hwnd = self.target_dialog.map(|d| d.hwnd);
+        self.user_hidden_identity = self.target_dialog.map(DialogInfo::identity);
         self.target_dialog = None;
-        self.session_hwnd = None;
+        self.session_identity = None;
+        self.navigation_message = None;
         self.pending_none_since = None;
         self.fg_lost_since = None;
         self.query.clear();
@@ -229,10 +317,11 @@ impl Controller {
     /// 会话彻底结束（对话框消失并超过去抖）：清空一切并解除抑制。
     fn end_session(&mut self) {
         self.target_dialog = None;
-        self.session_hwnd = None;
+        self.session_identity = None;
+        self.navigation_message = None;
         self.pending_none_since = None;
         self.fg_lost_since = None;
-        self.user_hidden_hwnd = None;
+        self.user_hidden_identity = None;
         self.query.clear();
         self.selected = 0;
     }
@@ -343,12 +432,15 @@ fn dock_geometry(dialog: &DialogInfo) -> (i32, i32, i32, i32) {
 }
 
 #[cfg(test)]
+#[allow(clippy::expect_used)]
 mod tests {
     use super::*;
 
     fn dialog(hwnd: isize) -> DialogInfo {
         DialogInfo {
             hwnd,
+            pid: 42,
+            process_created: 1,
             x: 100,
             y: 200,
             width: 600,
@@ -366,7 +458,7 @@ mod tests {
     }
     fn inject_path(fx: &[Effect]) -> Option<String> {
         fx.iter().find_map(|e| match e {
-            Effect::Inject { path, .. } => Some(path.clone()),
+            Effect::Navigate(request) => Some(request.target.clone()),
             _ => None,
         })
     }
@@ -750,7 +842,17 @@ mod tests {
         assert!(!has_park(&fx), "overlay must stay docked after injection");
         assert!(c.is_visible());
 
-        // 注入后仍可再次注入（会话未被抑制 → 与 ESC 的收起行为区分开）。
+        // A second mutation must wait for the first transaction to finish.
+        let fx = c.step(env, Event::Key(KeyAction::Enter));
+        assert!(
+            inject_path(&fx).is_none(),
+            "busy submissions must not overlap"
+        );
+        let request = c.in_flight.clone().expect("first request");
+        let mut report = Report::new(request);
+        report.outcome = crate::core::navigation::Outcome::Jumped;
+        report.worker_retired = true;
+        c.step(env, Event::NavigationFinished(report));
         let fx = c.step(env, Event::Key(KeyAction::Enter));
         assert!(
             inject_path(&fx).is_some(),
@@ -804,5 +906,153 @@ mod tests {
         }));
         assert!(fx.contains(&Effect::RefreshPaths));
         assert!(c.is_visible());
+    }
+    fn pending_report(c: &Controller, outcome: crate::core::navigation::Outcome) -> Report {
+        let mut report = Report::new(c.in_flight.clone().expect("pending request"));
+        report.outcome = outcome;
+        report.worker_retired = true;
+        report
+    }
+    #[test]
+    fn stale_completion_releases_busy_without_touching_new_session() {
+        let mut c = Controller::new();
+        let now = dock_at(&mut c, 1);
+        c.set_paths(vec!["C:\\B".into()]);
+        let env = Env {
+            now,
+            foreground_hwnd: 1,
+        };
+        c.step(env, Event::Key(KeyAction::Enter));
+        let report = pending_report(&c, crate::core::navigation::Outcome::Jumped);
+        let next_env = Env {
+            now,
+            foreground_hwnd: 2,
+        };
+        c.step(next_env, Event::DialogUpdate(Some(dialog(2))));
+        assert!(inject_path(&c.step(next_env, Event::Key(KeyAction::Enter))).is_none());
+        let fx = c.step(next_env, Event::NavigationFinished(report));
+        assert!(
+            !fx.iter()
+                .any(|effect| matches!(effect, Effect::Activate { .. }))
+        );
+        assert!(!c.is_navigating());
+        assert!(c.navigation_message().is_none());
+        c.set_paths(vec!["C:\\B".into()]);
+        assert!(inject_path(&c.step(next_env, Event::Key(KeyAction::Enter))).is_some());
+    }
+    #[test]
+    fn completion_does_not_focus_after_user_switches_apps() {
+        let mut c = Controller::new();
+        let now = dock_at(&mut c, 1);
+        c.set_paths(vec!["C:\\B".into()]);
+        c.step(
+            Env {
+                now,
+                foreground_hwnd: 1,
+            },
+            Event::Key(KeyAction::Enter),
+        );
+        let report = pending_report(&c, crate::core::navigation::Outcome::Jumped);
+        let fx = c.step(
+            Env {
+                now,
+                foreground_hwnd: 999,
+            },
+            Event::NavigationFinished(report),
+        );
+        assert!(
+            !fx.iter()
+                .any(|effect| matches!(effect, Effect::Activate { .. }))
+        );
+    }
+    #[test]
+    fn active_failure_is_visible_and_requests_overlay_focus() {
+        let mut c = Controller::new();
+        let now = dock_at(&mut c, 1);
+        c.set_paths(vec!["C:\\B".into()]);
+        let env = Env {
+            now,
+            foreground_hwnd: 1,
+        };
+        c.step(env, Event::Key(KeyAction::Enter));
+        let report = pending_report(&c, crate::core::navigation::Outcome::Unverified);
+        let fx = c.step(env, Event::NavigationFinished(report));
+        assert!(
+            c.navigation_message()
+                .is_some_and(|text| text.contains("无法确认"))
+        );
+        assert!(
+            fx.iter()
+                .any(|effect| matches!(effect, Effect::Activate { overlay: true, .. }))
+        );
+    }
+    #[test]
+    fn process_identity_change_and_escape_invalidate_pending_result() {
+        let mut c = Controller::new();
+        let now = dock_at(&mut c, 1);
+        c.set_paths(vec!["C:\\B".into()]);
+        let env = Env {
+            now,
+            foreground_hwnd: 1,
+        };
+        c.step(env, Event::Key(KeyAction::Enter));
+        let report = pending_report(&c, crate::core::navigation::Outcome::Jumped);
+        let old_session = c.active_session();
+        let mut replacement = dialog(1);
+        replacement.process_created = 2;
+        c.step(env, Event::DialogUpdate(Some(replacement)));
+        assert_ne!(c.active_session(), old_session);
+        assert!(
+            !c.step(env, Event::NavigationFinished(report))
+                .iter()
+                .any(|effect| matches!(effect, Effect::Activate { .. }))
+        );
+        c.set_paths(vec!["C:\\B".into()]);
+        c.step(env, Event::Key(KeyAction::Enter));
+        let report = pending_report(&c, crate::core::navigation::Outcome::Jumped);
+        c.step(env, Event::Key(KeyAction::Escape));
+        assert!(
+            !c.step(env, Event::NavigationFinished(report))
+                .iter()
+                .any(|effect| matches!(effect, Effect::Activate { .. }))
+        );
+        assert!(!c.is_visible());
+        assert!(c.active_session().is_none());
+    }
+    #[test]
+    fn wrong_request_result_cannot_release_current_transaction() {
+        let mut c = Controller::new();
+        let now = dock_at(&mut c, 1);
+        c.set_paths(vec!["C:\\B".into()]);
+        let env = Env {
+            now,
+            foreground_hwnd: 1,
+        };
+        c.step(env, Event::Key(KeyAction::Enter));
+        let mut wrong = pending_report(&c, crate::core::navigation::Outcome::Jumped);
+        wrong.request.id += 1;
+        c.step(env, Event::NavigationFinished(wrong));
+        assert!(c.is_navigating());
+        assert!(inject_path(&c.step(env, Event::Key(KeyAction::Enter))).is_none());
+    }
+    #[test]
+    fn unretired_worker_keeps_new_mutations_blocked() {
+        let mut c = Controller::new();
+        let now = dock_at(&mut c, 1);
+        c.set_paths(vec!["C:\\B".into()]);
+        let env = Env {
+            now,
+            foreground_hwnd: 1,
+        };
+        c.step(env, Event::Key(KeyAction::Enter));
+        let mut report = pending_report(&c, crate::core::navigation::Outcome::Unverified);
+        report.worker_retired = false;
+        c.step(env, Event::NavigationFinished(report));
+        assert!(c.is_navigating());
+        assert!(
+            c.navigation_message()
+                .is_some_and(|text| text.contains("尚未确认退出"))
+        );
+        assert!(inject_path(&c.step(env, Event::Key(KeyAction::Enter))).is_none());
     }
 }

@@ -355,10 +355,13 @@ pub fn get_dialog_info_by_hwnd(hwnd_isize: isize) -> Option<DialogInfo> {
 }
 
 fn get_dialog_info(hwnd: HWND) -> Option<DialogInfo> {
+    let identity = crate::os::dialog::identity(hwnd.0 as isize)?;
     if let Some(rect) = get_window_visual_rect(hwnd) {
         let dpi = get_window_dpi(hwnd);
         Some(DialogInfo {
             hwnd: hwnd.0 as isize,
+            pid: identity.pid,
+            process_created: identity.process_created,
             x: rect.left,
             y: rect.top,
             width: rect.right - rect.left,

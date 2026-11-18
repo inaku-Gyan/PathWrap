@@ -1,0 +1,2 @@
+{"activation_requested":false,"actual_foreground":17238190,"case":"open","expected_hwnd":12781316}
+{"case":"open","cleanup":true,"error":"normal owned-fixture activation denied; no navigation selected"}

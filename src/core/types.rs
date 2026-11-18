@@ -4,11 +4,23 @@
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct DialogInfo {
     pub hwnd: isize,
+    pub pid: u32,
+    pub process_created: u64,
     pub x: i32,
     pub y: i32,
     pub width: i32,
     pub height: i32,
     pub dpi: u32,
+}
+
+impl DialogInfo {
+    pub fn identity(self) -> super::navigation::DialogIdentity {
+        super::navigation::DialogIdentity {
+            hwnd: self.hwnd,
+            pid: self.pid,
+            process_created: self.process_created,
+        }
+    }
 }
 
 /// 文本编辑器之外的键盘动作，由 UI 层转交给控制器。
