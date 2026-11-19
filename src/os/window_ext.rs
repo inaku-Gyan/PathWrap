@@ -19,18 +19,45 @@ use windows::Win32::UI::WindowsAndMessaging::{
 /// 隐藏时把窗口挪到的屏幕外坐标（与系统最小化窗口所用坐标一致，安全越界）。
 const OFFSCREEN: i32 = -32000;
 
+/// Observe the top-level interaction window, including its native child controls.
+pub fn foreground_hwnd() -> isize {
+    use windows::Win32::UI::WindowsAndMessaging::GetForegroundWindow;
+    interaction_window(unsafe { GetForegroundWindow() }.0 as isize)
+}
+
+fn interaction_window(raw: isize) -> isize {
+    use windows::Win32::UI::WindowsAndMessaging::{GA_ROOT, GetAncestor, GetWindowThreadProcessId};
+    if raw == 0 {
+        return 0;
+    }
+    let window = hwnd(raw);
+    let root = unsafe { GetAncestor(window, GA_ROOT) };
+    if root.is_invalid() || root == window {
+        return raw;
+    }
+    let mut window_pid = 0;
+    let mut root_pid = 0;
+    unsafe {
+        GetWindowThreadProcessId(window, Some(&mut window_pid));
+        GetWindowThreadProcessId(root, Some(&mut root_pid));
+    }
+    if window_pid != 0 && window_pid == root_pid {
+        root.0 as isize
+    } else {
+        raw
+    }
+}
+
 /// Request normal activation once and report the observed result. No focus fallback.
 pub fn activate(handle: isize) -> bool {
-    use windows::Win32::UI::WindowsAndMessaging::{
-        GetForegroundWindow, IsWindow, SetForegroundWindow,
-    };
+    use windows::Win32::UI::WindowsAndMessaging::{IsWindow, SetForegroundWindow};
     if handle == 0 || !unsafe { IsWindow(Some(hwnd(handle))).as_bool() } {
         return false;
     }
-    if unsafe { GetForegroundWindow() } != hwnd(handle) {
+    if foreground_hwnd() != handle {
         let _ = unsafe { SetForegroundWindow(hwnd(handle)) };
     }
-    (unsafe { GetForegroundWindow() }) == hwnd(handle)
+    foreground_hwnd() == handle
 }
 
 fn hwnd(handle: isize) -> HWND {
@@ -178,5 +205,45 @@ mod tests {
         assert!(!apply_overlay_ex_styles(0));
         dock(0, 1, 2, 3, 4);
         park(0);
+    }
+
+    #[test]
+    fn foreground_child_belongs_to_its_root_but_owned_popup_stays_separate() {
+        use windows::Win32::UI::WindowsAndMessaging::{WS_CHILD, WS_POPUP};
+        let root = create_hidden_window();
+        let create = |style| unsafe {
+            CreateWindowExW(
+                WINDOW_EX_STYLE::default(),
+                w!("EDIT"),
+                PCWSTR::null(),
+                style,
+                0,
+                0,
+                20,
+                20,
+                Some(hwnd(root)),
+                None,
+                None,
+                None,
+            )
+            .unwrap()
+        };
+        let child = create(WS_CHILD);
+        let popup = create(WS_POPUP);
+        let observed_child = interaction_window(child.0 as isize);
+        let observed_popup = interaction_window(popup.0 as isize);
+        unsafe {
+            let _ = DestroyWindow(popup);
+            let _ = DestroyWindow(hwnd(root));
+        }
+        assert_eq!(
+            observed_child, root,
+            "the real Edit stays in its original dialog"
+        );
+        assert_eq!(
+            observed_popup, popup.0 as isize,
+            "an owned top-level popup stays separate"
+        );
+        assert_eq!(interaction_window(0), 0);
     }
 }

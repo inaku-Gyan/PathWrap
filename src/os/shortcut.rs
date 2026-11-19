@@ -14,7 +14,7 @@ use windows::Win32::UI::Input::KeyboardAndMouse::{
     IsWindowEnabled, MOD_CONTROL, MOD_NOREPEAT, RegisterHotKey, UnregisterHotKey, VK_G,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
-    CallNextHookEx, DispatchMessageW, EVENT_SYSTEM_FOREGROUND, GetForegroundWindow, GetMessageW,
+    CallNextHookEx, DispatchMessageW, EVENT_SYSTEM_FOREGROUND, GetMessageW,
     GetWindowThreadProcessId, IsWindowVisible, KBDLLHOOKSTRUCT, MSG, PM_NOREMOVE, PeekMessageW,
     PostQuitMessage, PostThreadMessageW, SetWindowsHookExW, TranslateMessage, UnhookWindowsHookEx,
     WH_KEYBOARD_LL, WINEVENT_OUTOFCONTEXT, WM_APP, WM_HOTKEY, WM_KEYDOWN, WM_QUIT, WM_SYSKEYDOWN,
@@ -47,8 +47,8 @@ impl Scope {
             {
                 return false;
             }
-            let foreground = GetForegroundWindow();
-            foreground == dialog || foreground == overlay
+            let foreground = super::window_ext::foreground_hwnd();
+            foreground == self.request.dialog.hwnd || foreground == self.overlay
         }
     }
 }

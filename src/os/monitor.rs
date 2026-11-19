@@ -215,7 +215,7 @@ pub fn start_monitor(sender: Sender<Option<DialogInfo>>, ctx: egui::Context) {
 }
 
 pub fn get_active_file_dialog() -> Option<DialogInfo> {
-    let hwnd = unsafe { GetForegroundWindow() };
+    let hwnd = HWND(foreground_hwnd() as *mut _);
     if !hwnd.is_invalid()
         && let Some(info) = get_dialog_info_if_match(hwnd)
     {
@@ -229,7 +229,7 @@ pub fn get_active_file_dialog() -> Option<DialogInfo> {
 
 /// 当前前台窗口的 HWND（供控制器判定“对话框是否仍前台”）。
 pub fn foreground_hwnd() -> isize {
-    unsafe { GetForegroundWindow().0 as isize }
+    super::window_ext::foreground_hwnd()
 }
 
 fn get_dialog_info_if_match(hwnd: HWND) -> Option<DialogInfo> {
