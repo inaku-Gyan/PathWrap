@@ -45,3 +45,9 @@ The two new cases use the actual product executable and an owned host:
 The test driver's existing forced foreground helper is fixture setup only. Test keyboard/mouse input remains confined to the driver; product activation uses no AttachThreadInput, simulated input, or retry. These cases do not establish arbitrary host/elevation/desktop compatibility or every focus race.
 
 The prior [navigation acceptance record](../uia-navigation/README.md) belongs to its recorded source/binary hashes. This Ctrl+G validation does not reclassify those earlier runs as tests of the new executable.
+
+## PR review follow-up
+
+The branch now builds on navigation review commit `f15d0d972498720aaee6e19cef7be9072e153b7b`. Independent Standards review had no material findings. Both Spec findings were in the navigation base and are corrected there: same-frame cancellation signalling after UI session invalidation, and recovery messages retaining the stopping stage plus last-read/unknown operation state. The Ctrl+G increment had no additional finding.
+
+On the rebased stack, `just check --ci`, `just build` and `just test` passed: **73 noninteractive tests passed, 8 ignored** (41 library, 31 app/config/UI and one product worker entry-point case). [Review-build source and executable hashes](pr-review-environment.json) identify this distinct build. A fresh seven-case desktop run has been requested and is not yet claimed. The four earlier interactive runs above retain their original provenance.
