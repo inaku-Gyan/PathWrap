@@ -17,6 +17,7 @@ const THEME_ICON_SIZE: f32 = 18.0;
 /// 本帧产生的一次鼠标交互（下标为过滤后列表中的位置）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum UiEvent {
+    Settings,
     /// 用户点击搜索行，确保搜索框获得 egui 焦点。
     Search,
     /// 文本编辑控件产生的导航/确认/收起动作。
@@ -195,6 +196,11 @@ fn render_theme_button(
                 ui.close();
             }
         }
+        ui.separator();
+        if ui.button("设置…").clicked() {
+            action = Some(UiEvent::Settings);
+            ui.close();
+        }
     });
 
     if response.hovered() || response.has_focus() || response.context_menu_opened() {
@@ -292,6 +298,16 @@ pub fn render_with_theme(
     theme_preference: ThemePreference,
     theme_mode: ThemeMode,
 ) -> Option<UiEvent> {
+    render_with_status(root, controller, theme_preference, theme_mode, None)
+}
+
+pub fn render_with_status(
+    root: &mut Ui,
+    controller: &mut Controller,
+    theme_preference: ThemePreference,
+    theme_mode: ThemeMode,
+    status: Option<&str>,
+) -> Option<UiEvent> {
     let mut event = None;
     let mut editor_id = None;
 
@@ -310,6 +326,9 @@ pub fn render_with_theme(
             // TextEdit mutates the controller's source buffer directly. Re-clamp the selected
             // row before laying out the filtered list so edits take effect in the same frame.
             controller.query_edited();
+            if let Some(status) = status {
+                ui.colored_label(ui.visuals().warn_fg_color, status);
+            }
             if controller.is_navigating() {
                 ui.horizontal(|ui| {
                     ui.spinner();

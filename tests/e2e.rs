@@ -36,9 +36,9 @@ use windows::Win32::UI::Input::KeyboardAndMouse::{
 };
 use windows::Win32::UI::WindowsAndMessaging::{
     BringWindowToTop, GUITHREADINFO, GWL_EXSTYLE, GetForegroundWindow, GetGUIThreadInfo,
-    GetWindowLongPtrW, GetWindowRect, GetWindowTextW, GetWindowThreadProcessId, IsWindowVisible,
-    SWP_NOACTIVATE, SWP_NOSENDCHANGING, SWP_NOZORDER, SetCursorPos, SetForegroundWindow,
-    SetWindowPos, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW, WS_EX_TOPMOST,
+    GetWindowLongPtrW, GetWindowRect, GetWindowThreadProcessId, IsWindowVisible, SWP_NOACTIVATE,
+    SWP_NOSENDCHANGING, SWP_NOZORDER, SetCursorPos, SetForegroundWindow, SetWindowPos,
+    WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW, WS_EX_TOPMOST,
 };
 use windows::Win32::UI::WindowsAndMessaging::{EnumWindows, GetClassNameW};
 use windows::core::BOOL;
@@ -50,9 +50,374 @@ struct Proc(Child);
 
 impl Drop for Proc {
     fn drop(&mut self) {
+        // Let the owned app remove its notification icon before force-kill fallback.
+        if let Some(window) = overlay_of_pid(self.0.id()) {
+            unsafe {
+                let _ = windows::Win32::UI::WindowsAndMessaging::PostMessageW(
+                    Some(hwnd_of(window)),
+                    windows::Win32::UI::WindowsAndMessaging::WM_CLOSE,
+                    Default::default(),
+                    Default::default(),
+                );
+            }
+            let deadline = Instant::now() + Duration::from_millis(1500);
+            while Instant::now() < deadline {
+                if self.0.try_wait().ok().flatten().is_some() {
+                    return;
+                }
+                std::thread::sleep(Duration::from_millis(15));
+            }
+        }
         let _ = self.0.kill();
         let _ = self.0.wait();
     }
+}
+
+struct SettingsStorage(std::path::PathBuf);
+impl SettingsStorage {
+    fn new() -> Self {
+        let directory = std::env::temp_dir().join(format!(
+            "PathWarp-settings-e2e-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir(&directory).unwrap();
+        Self(directory)
+    }
+    fn spawn(&self) -> (Proc, u32) {
+        let child = Command::new(env!("CARGO_BIN_EXE_PathWarp"))
+            .args([std::ffi::OsStr::new("--storage-dir"), self.0.as_os_str()])
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .unwrap();
+        let pid = child.id();
+        (Proc(child), pid)
+    }
+}
+impl Drop for SettingsStorage {
+    fn drop(&mut self) {
+        // Only our one named file/directory; leave unexpected contents for diagnosis.
+        let config = self.0.join("config.json");
+        let _ = std::fs::remove_file(&config);
+        let _ = std::fs::remove_dir(&config);
+        let _ = std::fs::remove_dir(&self.0);
+    }
+}
+
+fn native_settings(pid: u32) -> Option<isize> {
+    windows_of_pid(pid)
+        .into_iter()
+        .find(|&window| class_of(window) == pathwarp::os::desktop::SETTINGS_CLASS)
+}
+
+fn tray_owner(pid: u32) -> Option<isize> {
+    windows_of_pid(pid)
+        .into_iter()
+        .find(|&window| class_of(window) == pathwarp::os::desktop::TRAY_CLASS)
+}
+
+/// Deliver one explicit open intent through the native command queue. This
+/// validates hidden-ROOT wakeup, not an actual Shell gesture on the tray icon.
+fn open_native_settings(pid: u32) -> isize {
+    let owner = wait_for(Duration::from_secs(5), || tray_owner(pid)).unwrap();
+    let thread = unsafe { GetWindowThreadProcessId(hwnd_of(owner), None) };
+    unsafe {
+        windows::Win32::UI::WindowsAndMessaging::PostThreadMessageW(
+            thread,
+            windows::Win32::UI::WindowsAndMessaging::WM_APP + 21,
+            Default::default(),
+            Default::default(),
+        )
+        .unwrap();
+    }
+    wait_for(Duration::from_secs(5), || {
+        native_settings(pid).filter(|&window| is_visible(window))
+    })
+    .unwrap()
+}
+
+fn native_control(window: isize, id: i32) -> isize {
+    unsafe {
+        windows::Win32::UI::WindowsAndMessaging::GetDlgItem(Some(hwnd_of(window)), id)
+            .unwrap()
+            .0 as isize
+    }
+}
+
+fn click_native_control(window: isize, id: i32) {
+    force_foreground(window); // Establish fixture focus before the actual click.
+    let point = center_of(&rect_of(native_control(window, id)));
+    click_at(point.x, point.y);
+}
+
+fn close_native_settings(window: isize, pid: u32) {
+    unsafe {
+        windows::Win32::UI::WindowsAndMessaging::PostMessageW(
+            Some(hwnd_of(window)),
+            windows::Win32::UI::WindowsAndMessaging::WM_CLOSE,
+            Default::default(),
+            Default::default(),
+        )
+        .unwrap();
+    }
+    assert!(wait_until(Duration::from_secs(3), || native_settings(pid).is_none()));
+}
+
+#[test]
+#[ignore = "opens owned settings and clicks controls; run via `just e2e`"]
+fn settings_without_dialog_reuses_restores_reopens_and_persists() {
+    let _dpi = DpiContext::physical_pixels();
+    use pathwarp::startup::Backend;
+    use windows::Win32::UI::WindowsAndMessaging::{IsIconic, SW_MINIMIZE, ShowWindow};
+    let before = pathwarp::os::startup::RunRegistration::default().read();
+    let storage = SettingsStorage::new();
+    let (mut app, pid) = storage.spawn();
+    let window = open_native_settings(pid);
+    assert!(overlay_onscreen(pid).is_none());
+    let style = unsafe { GetWindowLongPtrW(hwnd_of(window), GWL_EXSTYLE) };
+    assert_eq!(
+        style & (WS_EX_TOPMOST.0 | WS_EX_TOOLWINDOW.0 | WS_EX_NOACTIVATE.0) as isize,
+        0
+    );
+    assert_eq!(open_native_settings(pid), window);
+    unsafe {
+        let _ = ShowWindow(hwnd_of(window), SW_MINIMIZE);
+    }
+    assert!(wait_until(Duration::from_secs(2), || unsafe {
+        IsIconic(hwnd_of(window)).as_bool()
+    }));
+    assert_eq!(open_native_settings(pid), window);
+    assert!(wait_until(Duration::from_secs(3), || unsafe {
+        !IsIconic(hwnd_of(window)).as_bool()
+    }));
+    for (id, theme) in [(103, "dark"), (102, "light"), (101, "auto")] {
+        click_native_control(window, id);
+        assert!(wait_until(Duration::from_secs(3), || {
+            std::fs::read_to_string(storage.0.join("config.json"))
+                .ok()
+                .is_some_and(|text| text.contains(theme))
+        }));
+        assert!(wait_until(Duration::from_secs(3), || title_of(
+            native_control(window, 104)
+        )
+        .contains("已保存")));
+    }
+    close_native_settings(window, pid);
+    assert!(
+        app.0.try_wait().unwrap().is_none(),
+        "closing settings exited the app"
+    );
+    let reopened = open_native_settings(pid);
+    assert!(is_visible(reopened));
+    close_native_settings(reopened, pid);
+    assert_eq!(
+        pathwarp::os::startup::RunRegistration::default().read(),
+        before,
+        "theme actions changed the real login registration"
+    );
+}
+
+#[test]
+#[ignore = "opens owned settings and verifies save recovery; run via `just e2e`"]
+fn settings_show_load_save_failure_and_explicit_retry() {
+    let _dpi = DpiContext::physical_pixels();
+    let storage = SettingsStorage::new();
+    std::fs::create_dir(storage.0.join("config.json")).unwrap();
+    let (_app, pid) = storage.spawn();
+    let window = open_native_settings(pid);
+    assert!(wait_until(Duration::from_secs(3), || title_of(
+        native_control(window, 104)
+    )
+    .contains("加载提示")));
+    click_native_control(window, 103);
+    assert!(wait_until(Duration::from_secs(3), || title_of(
+        native_control(window, 104)
+    )
+    .contains("未保存，仅本次生效")));
+    std::fs::remove_dir(storage.0.join("config.json")).unwrap();
+    click_native_control(window, 105);
+    assert!(wait_until(Duration::from_secs(3), || title_of(
+        native_control(window, 104)
+    )
+    .contains("主题已保存")));
+    assert_eq!(
+        pathwarp::config::AppConfig::load_from(&storage.0.join("config.json")).theme,
+        pathwarp::config::ThemePreference::Dark
+    );
+}
+
+#[test]
+#[ignore = "opens owned dialog/settings and inputs Ctrl+G; run via `just e2e`"]
+fn settings_park_search_preserve_query_and_do_not_claim_ctrl_g() {
+    let _dpi = DpiContext::physical_pixels();
+    let storage = SettingsStorage::new();
+    let (_app, pid) = storage.spawn();
+    let mut host = DialogHost::spawn();
+    let dialog = host.open_dialog();
+    let (overlay, _) = wait_for(Duration::from_secs(5), || overlay_onscreen(pid)).unwrap();
+    let automation = UIAutomation::new().unwrap();
+    automation.element_from_handle(overlay.into()).unwrap();
+    assert_shortcut_focus(&automation, pid, overlay);
+    type_text("preserved-query");
+    let window = open_native_settings(pid);
+    click_native_control(window, 102);
+    assert!(wait_until(Duration::from_secs(3), || overlay_onscreen(pid).is_none()));
+    press_ctrl_g();
+    std::thread::sleep(Duration::from_millis(250));
+    assert!(is_foreground(window));
+    assert!(overlay_onscreen(pid).is_none());
+    force_foreground(dialog); // A user return to the original owned fixture.
+    wait_for(Duration::from_secs(3), || overlay_onscreen(pid)).unwrap();
+    assert_shortcut_focus(&automation, pid, overlay);
+    assert!(wait_until(Duration::from_secs(3), || focused_editor(
+        &automation,
+        pid
+    )
+    .and_then(|edit| edit.get_pattern::<UIValuePattern>().ok())
+    .and_then(|pattern| pattern.get_value().ok())
+    .as_deref()
+        == Some("preserved-query")));
+}
+
+#[test]
+#[ignore = "locks the owned dialog foreground and opens settings; run via `just e2e`"]
+fn settings_report_unfocused_open_without_bypassing_foreground_lock() {
+    let _dpi = DpiContext::physical_pixels();
+    let storage = SettingsStorage::new();
+    let (_app, pid) = storage.spawn();
+    let mut host = DialogHost::spawn();
+    let dialog = host.open_dialog();
+    wait_for(Duration::from_secs(5), || overlay_onscreen(pid)).unwrap();
+    host.send("lock");
+    assert!(wait_until(Duration::from_secs(2), || title_of(dialog)
+        .contains("locked")));
+    let window = open_native_settings(pid);
+    assert!(wait_until(Duration::from_secs(3), || title_of(
+        native_control(window, 110)
+    )
+    .contains("尚未确认取得焦点")));
+    assert!(is_foreground(dialog));
+    assert!(overlay_onscreen(pid).is_none());
+    host.send("unlock");
+}
+
+#[test]
+#[ignore = "opens native tray menus with real keyboard/mouse; run via `just e2e`"]
+fn tray_callbacks_open_settings_cancel_and_recover_after_shell_notification() {
+    let _dpi = DpiContext::physical_pixels();
+    use windows::Win32::Foundation::WPARAM;
+    use windows::Win32::UI::Input::KeyboardAndMouse::{VK_DOWN, VK_ESCAPE, VK_RETURN};
+    use windows::Win32::UI::WindowsAndMessaging::{
+        PostMessageW, RegisterWindowMessageW, WM_APP, WM_CONTEXTMENU,
+    };
+    let storage = SettingsStorage::new();
+    let (_app, pid) = storage.spawn();
+    let owner = wait_for(Duration::from_secs(5), || tray_owner(pid)).unwrap();
+    for (event, select) in [(WM_CONTEXTMENU, false), (pathwarp_tray_keyselect(), true)] {
+        // A synthetic callback lacks Shell's normal foreground grant. Supply
+        // that fixture condition through an owned, non-file-dialog window.
+        let mut host = DialogHost::spawn();
+        host.send("probe");
+        let probe = wait_for(Duration::from_secs(3), || {
+            windows_of_pid(host.pid)
+                .into_iter()
+                .find(|&window| class_of(window) == "PathWarpShortcutProbe")
+        })
+        .unwrap();
+        force_foreground(probe);
+        host.send(&format!("allow {pid}"));
+        assert!(wait_until(Duration::from_secs(2), || title_of(probe)
+            == "PathWarp focus grant: allowed"));
+        // Deliver the documented Shell callback to our owned notification window.
+        unsafe {
+            PostMessageW(
+                Some(hwnd_of(owner)),
+                WM_APP + 23,
+                WPARAM(0),
+                LPARAM(isize::try_from((1u32 << 16) | event).unwrap()),
+            )
+            .unwrap();
+        }
+        let menu = wait_for(Duration::from_secs(3), || {
+            windows_of_pid(pid)
+                .into_iter()
+                .find(|&window| class_of(window) == "#32768" && is_visible(window))
+        })
+        .unwrap();
+        let mut info = GUITHREADINFO {
+            cbSize: size_of::<GUITHREADINFO>() as u32,
+            ..Default::default()
+        };
+        unsafe {
+            GetGUIThreadInfo(GetWindowThreadProcessId(hwnd_of(menu), None), &mut info).unwrap();
+        }
+        assert_eq!(
+            info.hwndMenuOwner,
+            hwnd_of(owner),
+            "the menu owner must receive keyboard input"
+        );
+        let keys = if select {
+            vec![VK_DOWN, VK_RETURN]
+        } else {
+            vec![VK_ESCAPE]
+        };
+        for key in keys {
+            let input = [
+                keyboard_input(key, 0, KEYBD_EVENT_FLAGS::default()),
+                keyboard_input(key, 0, KEYEVENTF_KEYUP),
+            ];
+            assert_eq!(unsafe { SendInput(&input, size_of::<INPUT>() as i32) }, 2);
+        }
+        if select {
+            wait_for(Duration::from_secs(3), || native_settings(pid)).unwrap();
+        } else {
+            assert!(native_settings(pid).is_none());
+        }
+    }
+    close_native_settings(native_settings(pid).unwrap(), pid);
+    // Simulate Shell losing only this test process's icon, not an Explorer restart.
+    let data = windows::Win32::UI::Shell::NOTIFYICONDATAW {
+        cbSize: size_of::<windows::Win32::UI::Shell::NOTIFYICONDATAW>() as u32,
+        hWnd: hwnd_of(owner),
+        uID: 1,
+        ..Default::default()
+    };
+    unsafe {
+        assert!(
+            windows::Win32::UI::Shell::Shell_NotifyIconW(
+                windows::Win32::UI::Shell::NIM_DELETE,
+                &data
+            )
+            .as_bool()
+        );
+    }
+    let message = unsafe { RegisterWindowMessageW(windows::core::w!("TaskbarCreated")) };
+    unsafe {
+        PostMessageW(Some(hwnd_of(owner)), message, WPARAM(0), LPARAM(0)).unwrap();
+    }
+    let identifier = windows::Win32::UI::Shell::NOTIFYICONIDENTIFIER {
+        cbSize: size_of::<windows::Win32::UI::Shell::NOTIFYICONIDENTIFIER>() as u32,
+        hWnd: hwnd_of(owner),
+        uID: 1,
+        ..Default::default()
+    };
+    assert!(wait_until(Duration::from_secs(3), || unsafe {
+        windows::Win32::UI::Shell::Shell_NotifyIconGetRect(&identifier).is_ok()
+    }));
+    assert!(
+        native_settings(pid).is_none(),
+        "Shell recreation opened settings"
+    );
+    assert!(overlay_onscreen(pid).is_none());
+    open_native_settings(pid);
+}
+
+fn pathwarp_tray_keyselect() -> u32 {
+    windows::Win32::UI::Shell::NIN_SELECT | windows::Win32::UI::Shell::NINF_KEY
 }
 
 fn spawn_pathwarp() -> (Proc, u32) {
@@ -313,11 +678,28 @@ fn inside(rect: &RECT, area: &RECT) -> bool {
 }
 
 fn title_of(raw: isize) -> String {
-    let mut buf = [0u16; 256];
-    let len = unsafe { GetWindowTextW(hwnd_of(raw), &mut buf) };
-    usize::try_from(len)
-        .map(|n| String::from_utf16_lossy(&buf[..n]))
-        .unwrap_or_default()
+    use windows::Win32::Foundation::WPARAM;
+    use windows::Win32::UI::WindowsAndMessaging::{
+        SMTO_ABORTIFHUNG, SMTO_BLOCK, SendMessageTimeoutW, WM_GETTEXT,
+    };
+    // GetWindowText cannot retrieve Edit text from another process.
+    let mut buffer = vec![0u16; 4096];
+    let mut copied = 0;
+    let result = unsafe {
+        SendMessageTimeoutW(
+            hwnd_of(raw),
+            WM_GETTEXT,
+            WPARAM(buffer.len()),
+            LPARAM(buffer.as_mut_ptr() as isize),
+            SMTO_ABORTIFHUNG | SMTO_BLOCK,
+            500,
+            Some(&mut copied),
+        )
+    };
+    if result.0 == 0 {
+        return String::new();
+    }
+    String::from_utf16_lossy(&buffer[..copied.min(buffer.len() - 1)])
 }
 
 fn is_visible(raw: isize) -> bool {
@@ -477,6 +859,8 @@ fn focused_editor(automation: &UIAutomation, app_pid: u32) -> Option<uiautomatio
 }
 
 fn assert_shortcut_focus(automation: &UIAutomation, app_pid: u32, overlay: isize) {
+    // Settle fixture foreground notifications before the single chord; no post-chord assistance.
+    std::thread::sleep(Duration::from_millis(100));
     press_ctrl_g();
     let ready = wait_until(Duration::from_secs(3), || {
         is_foreground(overlay) && focused_editor(automation, app_pid).is_some()
@@ -517,6 +901,7 @@ fn wait_for<T>(timeout: Duration, mut probe: impl FnMut() -> Option<T>) -> Optio
 #[test]
 #[ignore = "diagnostic helper; run manually"]
 fn diagnose_overlay_activation() {
+    let _dpi = DpiContext::physical_pixels();
     let ex_flags = |raw: isize| -> String {
         let ex = unsafe { GetWindowLongPtrW(hwnd_of(raw), GWL_EXSTYLE) } as u32;
         let mut names = Vec::new();
@@ -571,6 +956,7 @@ fn diagnose_overlay_activation() {
 #[test]
 #[ignore = "diagnostic helper; run manually"]
 fn dump_windows() {
+    let _dpi = DpiContext::physical_pixels();
     let dump = |pid: u32, label: &str| {
         println!("--- {label} (pid={pid}) ---");
         for h in windows_of_pid(pid) {
@@ -610,6 +996,7 @@ fn dump_windows() {
 #[test]
 #[ignore = "requires a clean interactive desktop (close Listary etc.); run via `just e2e`"]
 fn clicking_overlay_activates_it_and_keeps_it_docked() {
+    let _dpi = DpiContext::physical_pixels();
     let (_app, app_pid) = spawn_pathwarp();
     let mut host = DialogHost::spawn();
 
@@ -626,8 +1013,10 @@ fn clicking_overlay_activates_it_and_keeps_it_docked() {
 
     let fg = unsafe { GetForegroundWindow().0 as isize };
     assert_eq!(
-        fg, overlay_hwnd,
-        "overlay window did not become the foreground window after click"
+        fg,
+        overlay_hwnd,
+        "overlay click failed: foreground class={} expected_rect={overlay_rect:?}",
+        class_of(fg)
     );
     assert!(
         !is_foreground(dialog),
@@ -644,6 +1033,7 @@ fn clicking_overlay_activates_it_and_keeps_it_docked() {
 #[test]
 #[ignore = "requires interactive desktop; run via `just e2e`"]
 fn overlay_recovers_after_click_and_reopen() {
+    let _dpi = DpiContext::physical_pixels();
     let (_app, app_pid) = spawn_pathwarp();
     let mut host = DialogHost::spawn();
 
@@ -670,6 +1060,7 @@ fn overlay_recovers_after_click_and_reopen() {
 #[test]
 #[ignore = "requires interactive desktop; run via `just e2e`"]
 fn overlay_survives_dialog_reopen() {
+    let _dpi = DpiContext::physical_pixels();
     let (_app, app_pid) = spawn_pathwarp();
     let mut host = DialogHost::spawn();
 
@@ -742,6 +1133,8 @@ fn overlay_stays_in_each_monitor_work_area_at_dialog_edges() {
             ("cover", work.left + 20, work.top, width, work_height),
         ];
         for (label, x, y, width, height) in cases {
+            force_foreground(dialog); // Arrange the owned target before the move.
+            assert!(is_foreground(dialog));
             move_dialog(dialog, x, y, width, height);
             assert_eq!(
                 unsafe { MonitorFromWindow(hwnd_of(dialog), MONITOR_DEFAULTTONEAREST) },
@@ -780,8 +1173,10 @@ fn overlay_stays_in_each_monitor_work_area_at_dialog_edges() {
             });
             assert!(
                 sample.is_some(),
-                "monitor {index} {label}: work={work:?} dialog={visual:?} overlay={:?}",
-                overlay_onscreen(app_pid).map(|(_, rect)| rect)
+                "monitor {index} {label}: work={work:?} dialog={visual:?} overlay={:?} foreground={} class={}",
+                overlay_onscreen(app_pid).map(|(_, rect)| rect),
+                unsafe { GetForegroundWindow().0 as isize },
+                class_of(unsafe { GetForegroundWindow().0 as isize })
             );
             eprintln!(
                 "monitor={index} case={label} dpi={dpi} work={work:?} overlay={:?}",
@@ -794,6 +1189,7 @@ fn overlay_stays_in_each_monitor_work_area_at_dialog_edges() {
 #[test]
 #[ignore = "requires interactive keyboard/mouse input; run via `just e2e`"]
 fn ctrl_g_focuses_editor_repeats_and_leaves_unrelated_windows_alone() {
+    let _dpi = DpiContext::physical_pixels();
     let (_app, app_pid) = spawn_pathwarp();
     let mut host = DialogHost::spawn();
     host.open_dialog();
@@ -860,6 +1256,7 @@ fn ctrl_g_focuses_editor_repeats_and_leaves_unrelated_windows_alone() {
 #[test]
 #[ignore = "requires interactive keyboard input; run via `just e2e`"]
 fn ctrl_g_reports_denied_activation_then_recovers_normally() {
+    let _dpi = DpiContext::physical_pixels();
     let (_app, app_pid) = spawn_pathwarp();
     let mut host = DialogHost::spawn();
     let dialog = host.open_dialog();
