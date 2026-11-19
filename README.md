@@ -81,6 +81,7 @@ decoupled by channels. Key design decisions:
   from the dialog's DWM frame bounds. The preferred height is scaled using the dialog DPI;
   [pure geometry rules](src/core/geometry.rs) select below/above placement and clip the
   rectangle to the target monitor's current work area, including negative coordinates.
+  See the [work-area validation record](docs/validation/overlay-work-area/README.md).
 - **glow renderer** ([src/main.rs](src/main.rs), `Cargo.toml`): eframe is pinned to the glow
   (OpenGL) backend instead of the default wgpu. wgpu's Windows HWND surface only advertises an
   opaque `CompositeAlphaMode`, so a transparent window renders its transparent pixels as black;

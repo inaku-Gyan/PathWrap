@@ -1,0 +1,186 @@
+﻿{
+    "source_commit":  "f2204415f508499d1486e6bd3a6e14eb488c9174",
+    "rust_toolchain":  "1.100.0",
+    "windows":  {
+                    "build":  "26300",
+                    "ubr":  9974,
+                    "display_version":  "26H2"
+                },
+    "noninteractive":  {
+                           "check":  "passed",
+                           "build":  "passed",
+                           "ignored":  9,
+                           "tests_passed":  85
+                       },
+    "desktop":  {
+                    "command":  "just e2e",
+                    "authorized_invocations":  1,
+                    "started_utc":  "2026-11-19T02:06:12.2167791+00:00",
+                    "finished_utc":  "2026-11-19T02:06:30.6703589+00:00",
+                    "wrapper_elapsed_seconds":  18.4535798,
+                    "harness_elapsed_seconds":  17.67,
+                    "passed":  8,
+                    "failed":  0,
+                    "monitor_samples":  12
+                },
+    "monitors":  [
+                     {
+                         "dpi":  192,
+                         "work_area":  [
+                                           0,
+                                           0,
+                                           3072,
+                                           1824
+                                       ],
+                         "samples":  6,
+                         "scale_percent":  200,
+                         "index":  0
+                     },
+                     {
+                         "dpi":  144,
+                         "work_area":  [
+                                           -3840,
+                                           -249,
+                                           0,
+                                           1839
+                                       ],
+                         "samples":  6,
+                         "scale_percent":  150,
+                         "index":  1
+                     }
+                 ],
+    "source_hashes":  [
+                          {
+                              "sha256":  "d20e64f3c7908cbf6dedbb05e1bff732167237b6dda8f8625f95ff152d40500f",
+                              "path":  "Cargo.lock"
+                          },
+                          {
+                              "sha256":  "c358ba99f6491a7a85dc363729595d4da81eb02af4d3d9b88bb02a900a777a21",
+                              "path":  "Cargo.toml"
+                          },
+                          {
+                              "sha256":  "102f1129beb51faa29ae42a9e0530f073b112d0ecf2055107629ae0caadd3eba",
+                              "path":  "justfile"
+                          },
+                          {
+                              "sha256":  "2e7bfc36e7ef39ec19e051151c333e4f21d821028fa31394f05cc7d16b836c0f",
+                              "path":  "rust-toolchain.toml"
+                          },
+                          {
+                              "sha256":  "1c0d85221637222ee309cdf7f2b5384bff7ce733dce0f8da30f80c1609c7aa09",
+                              "path":  "src/app.rs"
+                          },
+                          {
+                              "sha256":  "0b028a825f842e8091e2d597c84f187c5312a4e1283a9211f405dc0f39d74424",
+                              "path":  "src/bin/dialog_host.rs"
+                          },
+                          {
+                              "sha256":  "b1e7c31971829d6c804133d0dd6e347de90ea36ec226b40a1e1d1143ee7541c0",
+                              "path":  "src/bin/navigation_acceptance.rs"
+                          },
+                          {
+                              "sha256":  "6196bb77d888db85ee877361749017854d187c6d373f8651d58b72e9d107bdfc",
+                              "path":  "src/config.rs"
+                          },
+                          {
+                              "sha256":  "b545a499b52973a90480d407a1a6b54c3afe26f8bfb1c14cc7c49c0931f782b4",
+                              "path":  "src/core/controller.rs"
+                          },
+                          {
+                              "sha256":  "13b7cac626ee6bac5c2d81394d01efe9ee5c3ae4eda39315cc7545ff04394b45",
+                              "path":  "src/core/geometry.rs"
+                          },
+                          {
+                              "sha256":  "88bcbceba4e36c80b4ae22fd82c187955b6e674a7408c0a45ab0bfc656ee547a",
+                              "path":  "src/core/mod.rs"
+                          },
+                          {
+                              "sha256":  "1977038d7f98b2bda281025d99c21dd7010887f20ff6fee6f45a66148b574358",
+                              "path":  "src/core/navigation.rs"
+                          },
+                          {
+                              "sha256":  "1ed9c1679ccb59c3c3f296bd541a3ab0e0b4ff9612f4ce5ab66360877748032a",
+                              "path":  "src/core/types.rs"
+                          },
+                          {
+                              "sha256":  "cd155740f012316ff2a5e11d6b2a01506a5a2034db12e57132638f0f517af18b",
+                              "path":  "src/lib.rs"
+                          },
+                          {
+                              "sha256":  "9679ea897672ca2002e81f57711691120f58cc2b89b8caf6b0759f1d382b3c79",
+                              "path":  "src/logging.rs"
+                          },
+                          {
+                              "sha256":  "b33a928cdfce531540b2e8d182ab9512c9f1592edd999d451565502af3e94b14",
+                              "path":  "src/main.rs"
+                          },
+                          {
+                              "sha256":  "b55a5ede9ce036884223f575927e3cdbde4cb886dbce204b69805d879ebe0d7a",
+                              "path":  "src/os/dialog.rs"
+                          },
+                          {
+                              "sha256":  "3b6f53e3c49da206f0ba1949f3fd77a84c9431717ac17949b9fa6faee62b779b",
+                              "path":  "src/os/dialog/uia.rs"
+                          },
+                          {
+                              "sha256":  "3ecd11768ea945e6d6e7d0e9dd4dc2611ea02ff56f69f96c3362ed1fa78ed452",
+                              "path":  "src/os/explorer.rs"
+                          },
+                          {
+                              "sha256":  "cfce6d2e276e7495f8c982038d5fc16705692e5746237c6e856261fa3ebfae74",
+                              "path":  "src/os/mod.rs"
+                          },
+                          {
+                              "sha256":  "4dd3d760329677048e9446fb62a04bcb719ae1eaf57f2861c68cf79e272a48a6",
+                              "path":  "src/os/monitor.rs"
+                          },
+                          {
+                              "sha256":  "033b9237dd724d8fe24acadf8d1ef75c79a165ec9dc8e4db8502e62b821cac6c",
+                              "path":  "src/os/shortcut.rs"
+                          },
+                          {
+                              "sha256":  "ca863e98c1dbb5a5df9a00561c411ce711d66e6d4646d29cba4339e6510ec2ea",
+                              "path":  "src/os/window_ext.rs"
+                          },
+                          {
+                              "sha256":  "c941fe424c0ed16d1e1a92183c662c4cfd820c4a96a64d701642b662684d3b5a",
+                              "path":  "src/ui/mod.rs"
+                          },
+                          {
+                              "sha256":  "2876f0e6dbfc33cb6cbe43d26d2ec5c691804dec02d71549adea658edb21391f",
+                              "path":  "src/ui/theme.rs"
+                          },
+                          {
+                              "sha256":  "e62c21b20f4ea8fc3c989cc2a696acd0d1845f365c1c72fb21268d6733dca26a",
+                              "path":  "src/ui/window.rs"
+                          },
+                          {
+                              "sha256":  "ca73e1a5ed9f3e4534982781094f59286b012ae295c2bf82ca372267e85e9258",
+                              "path":  "tests/e2e.rs"
+                          },
+                          {
+                              "sha256":  "aa4153428cecff6dddf9dc94d40da2669bbc008b873bceb6fd6e60e4c7a6cc3e",
+                              "path":  "tests/navigation_worker.rs"
+                          }
+                      ],
+    "executable_hashes":  [
+                              {
+                                  "sha256":  "6635b8088a1b88f2500ef64e545337dcf80c28b27a5737d7bf65f2cfd1cc0f60",
+                                  "name":  "PathWarp.exe"
+                              },
+                              {
+                                  "sha256":  "e730e9bdd0ceb7acbcf24ef3ae93ce0ca74a5872bcd99d80ae63f3ee233a83e2",
+                                  "name":  "dialog_host.exe"
+                              },
+                              {
+                                  "sha256":  "4b4b920ad2fe1d11def414485f914c0048466f3332a10f9232b60ff51f561a02",
+                                  "name":  "e2e"
+                              }
+                          ],
+    "verification":  {
+                         "new_remaining_test_processes":  0,
+                         "executable_hashes_matched":  3,
+                         "source_hashes_matched":  28
+                     },
+    "implementation_ci":  "https://github.com/inaku-Gyan/PathWrap/actions/runs/44441422876"
+}
