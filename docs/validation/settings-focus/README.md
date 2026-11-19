@@ -63,9 +63,34 @@ UIA guards and normal activation share this observation.
 A hidden native Edit regression failed with direct handle comparison and passes
 with parent resolution. It also checks an independent owned popup and a null
 handle. `just check --ci`, `just build`, and all **104** automated tests pass.
-Desktop and Open/Save acceptance of this second fix are pending. The 13/13 result
-above predates it. Temporary guard diagnostics are removed; the owned fixture
-now records foreground PID alongside its existing folder/filename/type samples.
+Temporary guard diagnostics are removed; the owned fixture records foreground
+PID/root alongside its existing folder/filename/type samples.
 
 The distinction follows
 [GetAncestor](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-getancestor).
+
+## Final interactive result
+
+Product code `528fc51` passed the full desktop suite **13/13** in **26.25 s**,
+approval `call_cc41e47026c246f4b5150873ecc32471`. The later changes only add
+fixture observations and this report.
+
+| Entry | Result |
+| --- | --- |
+| Open double-click | Passed; 94 independent samples confirmed target, pending CSV name/type, original HWND and foreground ownership |
+| Save single-click then Enter | Passed; 70 independent samples confirmed the same conditions |
+
+The user performed these inputs because the CUA app permission was denied.
+They waited before replying; host snapshots establish arrival and preservation
+before the eventual return to chat. Both hosts stayed open and recorded zero
+file acceptance attempts. Owned processes were closed after recording results.
+These are two entry samples, not every Open/Save and input-method combination.
+
+Tested executable SHA256:
+`D7A9E05E4AEB43C40E5346D23CC5FBAE8B9B4BF8F589E7C659B11ADB2C557E8F`.
+The first failure and both unsuccessful retests are preserved in the acceptance
+issue. The early switch-to-chat explanation was not established; later evidence
+identified the original dialog's Edit instead.
+
+This is Windows 11 build 26300 with mixed 192/144 DPI. No physical single-display
+or Windows 10 test is claimed. The remaining acceptance stays on the open issue.
