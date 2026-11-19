@@ -104,12 +104,30 @@ impl Report {
             Outcome::PreservationFailed => "原文件名或文件类型未通过保留核验，请检查对话框。",
             Outcome::Jumped | Outcome::AlreadyAtTarget => return String::new(),
         };
-        match &self.original {
-            Some(original) if self.may_have_changed() => {
-                format!("{message}\n原文件名：{}", original.filename)
-            }
-            _ => message.to_owned(),
+        self.recovery_message(message)
+    }
+
+    pub fn recovery_message(&self, message: &str) -> String {
+        let stage = match self.stage {
+            Stage::Preflight => "检查跳转条件",
+            Stage::Assign => "填写目标目录",
+            Stage::Invoke => "打开目标目录",
+            Stage::Arrival => "确认目标目录",
+            Stage::Reassert => "恢复原文件名",
+            Stage::Verify => "核对原内容",
+            Stage::Complete => "完成核验",
+        };
+        let mut message = format!("{message}\n停止于：{stage}");
+        if let Some(original) = &self.original {
+            message.push_str(&format!("\n原文件名：{}", original.filename));
         }
+        message.push_str(&format!(
+            "\n上次读取的目录：{}\n上次读取的文件名：{}\n上次读取的文件类型：{}",
+            self.folder.as_deref().unwrap_or("未知"),
+            self.filename.as_deref().unwrap_or("未知"),
+            self.file_type.as_deref().unwrap_or("未知"),
+        ));
+        message
     }
 }
 
@@ -482,8 +500,27 @@ mod tests {
         let result = execute(&mut fake, request(), |_| {});
         assert_eq!(result.outcome, Outcome::PreservationFailed);
         assert_eq!(result.folder.as_deref(), Some("C:\\B"));
-        assert_eq!(result.original.unwrap().filename, "pending.csv");
+        assert_eq!(result.original.as_ref().unwrap().filename, "pending.csv");
+        let recovery = result.failure_message();
+        assert!(recovery.contains("停止于：恢复原文件名"));
+        assert!(recovery.contains("原文件名：pending.csv"));
+        assert!(recovery.contains("上次读取的目录：C:\\B"));
+        assert!(recovery.contains("上次读取的文件名：C:\\B\\"));
+        assert!(recovery.contains("上次读取的文件类型：CSV"));
         assert_eq!(fake.writes.len(), 1);
+    }
+    #[test]
+    fn recovery_does_not_present_unread_state_as_known() {
+        let mut report = Report::new(request());
+        report.outcome = Outcome::Interrupted;
+        let recovery = report.failure_message();
+        assert!(recovery.contains("停止于：检查跳转条件"));
+        assert!(recovery.contains("上次读取的目录：未知"));
+        assert!(recovery.contains("上次读取的文件名：未知"));
+        assert!(recovery.contains("上次读取的文件类型：未知"));
+        assert!(!recovery.contains("原文件名："));
+        report.outcome = Outcome::AlreadyAtTarget;
+        assert!(report.failure_message().is_empty());
     }
     #[test]
     fn path_matching_cannot_accept_basename_prefix_or_relative_path() {

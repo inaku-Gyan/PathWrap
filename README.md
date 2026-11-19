@@ -48,7 +48,9 @@ Success requires fresh complete-path observations before and after filename
 reassertion, unchanged filename/type and the original live dialog. API return or
 assigned filename text alone is insufficient. Errors stay visible in PathWarp;
 an incomplete operation may already have changed the dialog, and the original
-filename is shown for recovery. There is no automatic retry or rollback.
+filename, stopping stage and last-read folder/filename/type are shown for
+recovery, with unread observations marked unknown. There is no automatic retry
+or rollback.
 
 ## Architecture
 

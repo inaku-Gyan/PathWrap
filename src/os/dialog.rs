@@ -342,8 +342,7 @@ mod tests {
             std::thread::park();
         }
     }
-    #[test]
-    fn timeout_retires_only_owned_worker_and_keeps_original_snapshot() {
+    fn blocking_fixture() -> (std::path::PathBuf, Command) {
         let marker = std::env::temp_dir().join(format!(
             "pathwarp-supervisor-{}-{}.pid",
             std::process::id(),
@@ -362,20 +361,10 @@ mod tests {
             ])
             .env("PATHWARP_SUPERVISOR_FIXTURE", "1")
             .env("PATHWARP_SUPERVISOR_MARKER", &marker);
-        let started = Instant::now();
-        let report = supervise_command(
-            request(),
-            &AtomicBool::new(false),
-            command,
-            Duration::from_secs(2),
-        );
-        assert!(started.elapsed() < Duration::from_secs(8));
-        assert_eq!(report.outcome, Outcome::Unverified);
-        assert!(report.worker_retired);
-        assert_eq!(report.stage, Stage::Assign);
-        assert_eq!(report.writes, 1);
-        assert_eq!(report.original.unwrap().filename, "pending.csv");
-        let pid: u32 = std::fs::read_to_string(&marker).unwrap().parse().unwrap();
+        (marker, command)
+    }
+    fn assert_owned_worker_retired(marker: &std::path::Path) {
+        let pid: u32 = std::fs::read_to_string(marker).unwrap().parse().unwrap();
         std::fs::remove_file(marker).unwrap();
         if let Ok(handle) = unsafe {
             windows::Win32::System::Threading::OpenProcess(
@@ -393,6 +382,80 @@ mod tests {
             result.unwrap();
             assert_ne!(code, 259, "owned worker must no longer be running");
         }
+    }
+    #[test]
+    fn timeout_retires_only_owned_worker_and_keeps_original_snapshot() {
+        let (marker, command) = blocking_fixture();
+        let started = Instant::now();
+        let report = supervise_command(
+            request(),
+            &AtomicBool::new(false),
+            command,
+            Duration::from_secs(2),
+        );
+        assert!(started.elapsed() < Duration::from_secs(8));
+        assert_eq!(report.outcome, Outcome::Unverified);
+        assert!(report.worker_retired);
+        assert_eq!(report.stage, Stage::Assign);
+        assert_eq!(report.writes, 1);
+        assert_eq!(report.original.unwrap().filename, "pending.csv");
+        assert_owned_worker_retired(&marker);
+    }
+    #[test]
+    fn session_fence_retires_owned_worker_with_unchanged_foreground() {
+        let (marker, command) = blocking_fixture();
+        let request = request();
+        let cancel = Arc::new(AtomicBool::new(false));
+        let worker_cancel = Arc::clone(&cancel);
+        let worker_request = request.clone();
+        let (sender, receiver) = mpsc::channel();
+        let supervisor = std::thread::spawn(move || {
+            let report = supervise_command(
+                worker_request,
+                &worker_cancel,
+                command,
+                Duration::from_secs(15),
+            );
+            let _ = sender.send(report);
+        });
+        let mut navigator = Navigator {
+            running: Some(Running {
+                request: request.clone(),
+                cancel: Arc::clone(&cancel),
+                receiver,
+                supervisor,
+            }),
+            blocked: false,
+            executable: None,
+        };
+        let started = Instant::now();
+        while !marker.exists() {
+            assert!(
+                started.elapsed() < Duration::from_secs(4),
+                "fixture startup"
+            );
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        navigator.fence(Some(request.session), request.dialog.hwnd);
+        assert!(!cancel.load(Ordering::Acquire));
+        // Escape ends the controller session while the parked overlay can
+        // remain foreground. Session invalidation alone must retire the child.
+        navigator.fence(None, request.dialog.hwnd);
+        assert!(cancel.load(Ordering::Acquire));
+        let canceled = Instant::now();
+        let report = loop {
+            if let Some(report) = navigator.poll() {
+                break report;
+            }
+            assert!(
+                canceled.elapsed() < Duration::from_secs(4),
+                "worker retirement"
+            );
+            std::thread::sleep(Duration::from_millis(10));
+        };
+        assert_eq!(report.outcome, Outcome::Interrupted);
+        assert!(report.worker_retired);
+        assert_owned_worker_retired(&marker);
     }
     #[test]
     fn canceled_request_never_launches_a_worker() {

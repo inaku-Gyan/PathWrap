@@ -558,9 +558,9 @@ mod tests {
         );
     }
     #[test]
-    fn navigation_failure_renders_original_filename_for_recovery() {
+    fn navigation_failure_renders_original_filename_and_last_observations() {
         use crate::core::controller::{Effect, Env, Event};
-        use crate::core::navigation::{Outcome, Report, Snapshot};
+        use crate::core::navigation::{Outcome, Report, Snapshot, Stage};
         use crate::core::types::DialogInfo;
         let mut controller = controller_with(&["C:\\B"], "");
         let env = Env {
@@ -591,8 +591,11 @@ mod tests {
             .unwrap();
         let mut report = Report::new(request);
         report.outcome = Outcome::PreservationFailed;
+        report.stage = Stage::Reassert;
         report.worker_retired = true;
         report.writes = 2;
+        report.folder = Some("C:\\B".into());
+        report.filename = Some("C:\\B\\".into());
         report.original = Some(Snapshot {
             folder: "C:\\A".into(),
             filename: "pending.csv".into(),
@@ -604,5 +607,9 @@ mod tests {
         harness.run();
         assert!(harness.query_by_label(&expected).is_some());
         assert!(expected.contains("原文件名：pending.csv"));
+        assert!(expected.contains("停止于：恢复原文件名"));
+        assert!(expected.contains("上次读取的目录：C:\\B"));
+        assert!(expected.contains("上次读取的文件名：C:\\B\\"));
+        assert!(expected.contains("上次读取的文件类型：未知"));
     }
 }

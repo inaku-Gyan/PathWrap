@@ -66,3 +66,11 @@ Coverage is a controlled local directory and one stable nonempty filename/type s
 Navigation runs in an owned process with a three-second soft arrival observation, twelve-second soft worker budget, fifteen-second supervisor boundary, at most 2048 budgeted UIA calls after initial binding, 64 elements per typed lookup, 16 ancestry steps and 256 native children. Successful completion also requires confirmed child retirement. App shutdown signals cancellation and joins its supervisor; unconfirmed retirement blocks another mutation.
 
 Completion/error focus follows the accepted simple focus policy. [Session-scoped Ctrl+G](https://github.com/inaku-Gyan/PathWrap/issues/67) remains its separate implementation ticket; this change does not add a global keyboard hook or claim that shortcut is delivered. Product release, PR publication and merge into main are separate from this checked implementation branch.
+
+## PR review follow-up
+
+Independent Standards review found no material issues. Spec review found two gaps: Escape notified the navigation supervisor only on the next UI frame, and recovery text omitted separately observed operation state. Both are corrected. UI events now fence navigation before their effects run; cancellation does not depend on native foreground changing. Failure and unretired-worker notices retain the original filename, stopping stage and explicitly last-read folder/filename/type, with unread observations marked unknown.
+
+`just check --ci`, `just build` and `just test` passed after these fixes: **66 noninteractive tests passed, 6 ignored** (34 library, 31 app/config/UI and one actual product-worker entry-point test). Expanded UI/controller checks retain the recovery observations, an unread-state regression checks unknown markers, and an actual owned blocking-child test checks session cancellation and confirmed retirement while foreground is unchanged. Both review axes rechecked the fixes with no remaining findings.
+
+The full native Open/Save evidence above remains tied to its original source/executable hashes; those GUI cases were not repeated for this follow-up. Same-frame cancellation signalling reduces an avoidable delay and does not guarantee cancellation or undo of a provider call already in flight.

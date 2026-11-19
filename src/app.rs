@@ -238,6 +238,10 @@ impl eframe::App for PathWarpApp {
             };
             if let Some(event) = event {
                 let fx = self.controller.step(env, event);
+                // Escape invalidates the interaction before parking. Notify the
+                // worker now, even when the native foreground is unchanged.
+                self.navigator
+                    .fence(self.controller.active_session(), monitor::foreground_hwnd());
                 self.apply_effects(fx);
             }
         }

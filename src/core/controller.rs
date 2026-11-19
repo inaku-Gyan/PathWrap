@@ -288,8 +288,9 @@ impl Controller {
             return;
         }
         if !report.worker_retired {
-            self.navigation_message =
-                Some("后台操作尚未确认退出，已阻止新的跳转。请检查原对话框。".into());
+            self.navigation_message = Some(
+                report.recovery_message("后台操作尚未确认退出，已阻止新的跳转。请检查原对话框。"),
+            );
             return;
         }
         self.navigation_message = (!report.outcome.is_success()).then(|| report.failure_message());
@@ -1047,12 +1048,23 @@ mod tests {
         c.step(env, Event::Key(KeyAction::Enter));
         let mut report = pending_report(&c, crate::core::navigation::Outcome::Unverified);
         report.worker_retired = false;
+        report.original = Some(crate::core::navigation::Snapshot {
+            folder: "C:\\A".into(),
+            filename: "pending.csv".into(),
+            file_type: "CSV".into(),
+        });
+        report.folder = Some("C:\\B".into());
         c.step(env, Event::NavigationFinished(report));
         assert!(c.is_navigating());
         assert!(
             c.navigation_message()
                 .is_some_and(|text| text.contains("尚未确认退出"))
         );
+        assert!(c.navigation_message().is_some_and(|text| {
+            text.contains("原文件名：pending.csv")
+                && text.contains("上次读取的目录：C:\\B")
+                && text.contains("上次读取的文件名：未知")
+        }));
         assert!(inject_path(&c.step(env, Event::Key(KeyAction::Enter))).is_none());
     }
 }
