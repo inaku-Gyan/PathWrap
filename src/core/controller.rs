@@ -51,6 +51,8 @@ pub enum Event {
     Tick,
     NavigationFinished(Report),
     FocusFinished(FocusResult),
+    /// Settings/tray are independent interactions, not part of the search pair.
+    SettingsInteraction(bool),
 }
 
 /// 控制器要求宿主执行的一个副作用。
@@ -101,6 +103,9 @@ pub struct Controller {
     /// 悬浮层是否是当前 Windows 前台窗口。真实激活后，它仍属于当前对话框会话，
     /// 不应被“对话框失去前台”的去抖逻辑隐藏。
     overlay_focused: bool,
+    settings_active: bool,
+    settings_suspended: bool,
+    navigation_interrupted: bool,
 
     // ---- 交互模型 ----
     paths: Vec<String>,
@@ -150,6 +155,9 @@ impl Controller {
     }
 
     pub fn focus_request(&self) -> Option<FocusRequest> {
+        if self.settings_active || self.settings_suspended {
+            return None;
+        }
         Some(FocusRequest {
             session: self.active_session()?,
             dialog: self.target_dialog?.identity(),
@@ -226,6 +234,14 @@ impl Controller {
                     self.activation_finished(result.activated);
                 }
             }
+            Event::SettingsInteraction(active) => {
+                self.settings_active = active;
+                if active {
+                    self.settings_suspended = true;
+                    self.overlay_focused = false;
+                    self.navigation_interrupted |= self.in_flight.is_some();
+                }
+            }
         }
         self.reconcile(&env, &mut fx);
         fx
@@ -283,6 +299,8 @@ impl Controller {
             return;
         };
         if self.active_session().is_none()
+            || self.settings_active
+            || self.settings_suspended
             || (!self.overlay_focused && env.foreground_hwnd != dialog.hwnd)
         {
             return;
@@ -303,6 +321,7 @@ impl Controller {
             target: path,
         };
         self.in_flight = Some(request.clone());
+        self.navigation_interrupted = false;
         self.busy_rejected = false;
         self.navigation_message = None;
         fx.push(Effect::Navigate(request));
@@ -319,8 +338,10 @@ impl Controller {
         {
             return;
         }
+        let interrupted = self.navigation_interrupted;
         if report.worker_retired {
             self.in_flight = None;
+            self.navigation_interrupted = false;
         }
         self.busy_rejected = false;
         if self.active_session() != Some(report.request.session)
@@ -332,6 +353,13 @@ impl Controller {
             self.navigation_message = Some(
                 report.recovery_message("后台操作尚未确认退出，已阻止新的跳转。请检查原对话框。"),
             );
+            return;
+        }
+        if interrupted {
+            self.navigation_message =
+                Some(report.recovery_message(
+                    "设置交互已请求停止上一次跳转；请核对原对话框，不会自动续跑。",
+                ));
             return;
         }
         self.navigation_message = (!report.outcome.is_success()).then(|| report.failure_message());
@@ -368,6 +396,7 @@ impl Controller {
         self.user_hidden_identity = None;
         self.query.clear();
         self.selected = 0;
+        self.settings_suspended = false;
     }
 
     fn reconcile(&mut self, env: &Env, fx: &mut Vec<Effect>) {
@@ -384,19 +413,29 @@ impl Controller {
             self.end_session();
         }
 
+        // Only a user return to the original, still-live dialog resumes search.
+        if !self.settings_active
+            && self
+                .target_dialog
+                .is_some_and(|dialog| dialog.hwnd == env.foreground_hwnd)
+        {
+            self.settings_suspended = false;
+        }
         // 计算期望显隐：目标存在且（目标对话框或悬浮层在前台，或前台丢失仍在宽限内）。
-        let desired_visible = match self.target_dialog {
-            None => false,
-            Some(dialog) => {
-                if env.foreground_hwnd == dialog.hwnd || self.overlay_focused {
-                    self.fg_lost_since = None;
-                    true
-                } else {
-                    let since = *self.fg_lost_since.get_or_insert(env.now);
-                    env.now.duration_since(since) < FG_LOST_GRACE
+        let desired_visible = !self.settings_active
+            && !self.settings_suspended
+            && match self.target_dialog {
+                None => false,
+                Some(dialog) => {
+                    if env.foreground_hwnd == dialog.hwnd || self.overlay_focused {
+                        self.fg_lost_since = None;
+                        true
+                    } else {
+                        let since = *self.fg_lost_since.get_or_insert(env.now);
+                        env.now.duration_since(since) < FG_LOST_GRACE
+                    }
                 }
-            }
-        };
+            };
 
         let geometry = self
             .target_dialog
@@ -468,6 +507,66 @@ impl Controller {
 #[allow(clippy::expect_used)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn settings_park_immediately_and_only_return_to_the_original_dialog_restores_query() {
+        let mut controller = Controller::new();
+        let now = dock_at(&mut controller, 1);
+        controller.set_paths(vec!["C:\\WorkOne".into(), "C:\\WorkTwo".into()]);
+        controller.query_mut().push_str("work");
+        controller.query_edited();
+        let env = Env {
+            now,
+            foreground_hwnd: 1,
+        };
+        controller.step(env, Event::Key(KeyAction::Down));
+        assert!(has_park(
+            &controller.step(env, Event::SettingsInteraction(true))
+        ));
+        assert_eq!(controller.query(), "work");
+        assert_eq!(controller.selected_index(), 1);
+        assert!(controller.focus_request().is_none());
+        let unrelated = Env {
+            foreground_hwnd: 55,
+            ..env
+        };
+        controller.step(unrelated, Event::SettingsInteraction(false));
+        assert!(!controller.is_visible());
+        assert!(inject_path(&controller.step(unrelated, Event::Key(KeyAction::Enter))).is_none());
+        assert!(has_dock(&controller.step(env, Event::Tick)));
+        assert_eq!(controller.query(), "work");
+        assert_eq!(controller.selected_index(), 1);
+        assert!(controller.focus_request().is_some());
+    }
+
+    #[test]
+    fn settings_interruption_retires_before_new_navigation_and_late_results_never_activate() {
+        let mut controller = Controller::new();
+        let now = dock_at(&mut controller, 1);
+        controller.set_paths(vec!["C:\\B".into()]);
+        let env = Env {
+            now,
+            foreground_hwnd: 1,
+        };
+        controller.step(env, Event::Key(KeyAction::Enter));
+        let report = pending_report(&controller, crate::core::navigation::Outcome::Jumped);
+        controller.step(env, Event::SettingsInteraction(true));
+        controller.step(env, Event::SettingsInteraction(false));
+        assert!(inject_path(&controller.step(env, Event::Key(KeyAction::Enter))).is_none());
+        let effects = controller.step(env, Event::NavigationFinished(report));
+        assert!(
+            !effects
+                .iter()
+                .any(|effect| matches!(effect, Effect::Activate { .. }))
+        );
+        assert!(!controller.is_navigating());
+        assert!(
+            controller
+                .navigation_message()
+                .is_some_and(|message| message.contains("不会自动续跑"))
+        );
+        assert!(inject_path(&controller.step(env, Event::Key(KeyAction::Enter))).is_some());
+    }
 
     fn dialog(hwnd: isize) -> DialogInfo {
         DialogInfo {

@@ -32,6 +32,13 @@ pub struct Navigator {
     executable: Option<std::path::PathBuf>,
 }
 impl Navigator {
+    /// Native settings/menu notifications can cancel immediately, including
+    /// while their modal menu loop prevents ROOT from draining its queue.
+    pub fn cancellation(&self) -> Option<Arc<AtomicBool>> {
+        self.running
+            .as_ref()
+            .map(|running| Arc::clone(&running.cancel))
+    }
     /// Use the product executable from an owned acceptance runner.
     pub fn with_worker(executable: std::path::PathBuf) -> Self {
         Self {

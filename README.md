@@ -16,7 +16,15 @@ Download the latest Windows release from [GitHub Releases](https://github.com/in
 
 ### Upgrade
 
-PathWarp stores its settings in `pathwrap-store\config.json` beside `PathWarp.exe`. Keep that directory when replacing the executable if you want the saved theme preference and other settings to remain. If you start PathWarp with `--storage-dir <PATH>`, that directory is used instead; relative paths are resolved beside the executable. If the selected directory cannot be used, PathWarp warns and continues in memory without saving settings.
+PathWarp stores its settings in `pathwrap-store\config.json` beside `PathWarp.exe`. Keep that directory when replacing the executable if you want the saved theme preference to remain. If you start PathWarp with `--storage-dir <PATH>`, that directory is used instead; relative paths are resolved beside the executable. An unavailable or malformed configuration is reported in Settings. A theme save failure keeps the current palette for this run and offers an explicit retry at the original location.
+
+### Settings and login startup
+
+Right-click the PathWarp notification icon and choose **设置…**, or choose it from the overlay's theme menu. Settings is a normal window, available without a file dialog. Reopening reuses it; closing it leaves PathWarp running in the notification area. Theme choices apply immediately and save automatically.
+
+Settings can add, replace or remove one shared login startup registration for the current user. It records the selected executable and an explicit absolute configuration directory. Starting another portable copy only reads this registration. A recognized other copy is shown before an explicit replacement/removal; unknown same-name content stays read-only. Moving the app does not migrate the registration automatically.
+
+“已登记” confirms the registration was read back, not that Windows allows it to run. Check Windows Settings or Task Manager for that permission. Uncertain paths or commands exceeding the conservative 260-character budget are rejected before writing. Theme saving and startup registration report their results independently; an unconfirmed result requires a refresh, with no automatic retry or rollback. [Implementation validation](docs/validation/settings/README.md) records the tested scope and remaining Windows checks.
 
 ### Download and run problems
 
@@ -34,6 +42,8 @@ If a download is incomplete, download the ZIP again from [GitHub Releases](https
   caret communicates keyboard focus
 - Use the sun/moon control beside the search frame to switch between light and dark palettes;
   right-click it to follow the Windows theme or choose a fixed palette
+- Open independent settings from the notification area or theme menu to manage the palette
+  and current-user login startup registration, with visible save failures and explicit retry
 - Focus-aware: clicking the overlay makes it the foreground editor while the current file-dialog session remains visible and tracked
 - Press Ctrl+G while the tracked dialog or PathWarp is active to focus its search
   editor. The shortcut passes through in other applications and does not reopen
@@ -76,8 +86,8 @@ decoupled by channels. Key design decisions:
   blocks activation. Clicking the overlay therefore gives the embedded `TextEdit` a real
   Windows foreground/focus path. The controller treats the overlay as part of the tracked
   dialog session while it is foreground, so the row stays visible. "Hiding" moves the window
-  off-screen while keeping it `WS_VISIBLE` (never `SW_HIDE`) — a hidden window stops receiving
-  paints and would starve eframe's event loop. Docking uses `SetWindowPos` in **physical pixels**
+  off-screen, preserving its existing visibility. Native settings commands also wake the
+  initially hidden ROOT through `App::logic`; they do not wait for a file dialog. Docking uses `SetWindowPos` in **physical pixels**
   from the dialog's DWM frame bounds. The preferred height is scaled using the dialog DPI;
   [pure geometry rules](src/core/geometry.rs) select below/above placement and clip the
   rectangle to the target monitor's current work area, including negative coordinates.
@@ -99,6 +109,15 @@ decoupled by channels. Key design decisions:
   TextEdit focus path selects the editor. There is no simulated product input or
   activation fallback. See the
   [Ctrl+G validation record](docs/validation/ctrl-g/README.md).
+- **Settings and registration** ([src/os/desktop.rs](src/os/desktop.rs),
+  [src/settings.rs](src/settings.rs), [src/startup.rs](src/startup.rs)):
+  one native message thread owns a hidden notification window and a separate modeless
+  settings HWND. Native controls enqueue commands into the app's shared configuration
+  state; no simulated product input or child-viewport handle discovery is needed.
+  Settings interactions park search and cancel its worker without clearing the valid
+  query/selection. Only a return to the live dialog resumes search; interrupted outcomes
+  cannot restore focus. The registration model compares fresh raw snapshots, serializes
+  product actions with a current-user mutex and verifies each write/delete by readback.
 - **Verified UIA navigation** ([src/core/navigation.rs](src/core/navigation.rs),
   [src/os/dialog.rs](src/os/dialog.rs)): a session/request-bound worker snapshots filename,
   selected type and complete folder path. It uses at most two filename Value writes and

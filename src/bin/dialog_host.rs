@@ -26,6 +26,7 @@ use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::System::Threading::GetCurrentProcessId;
 use windows::Win32::UI::Input::KeyboardAndMouse::VK_G;
 use windows::Win32::UI::Shell::{FileOpenDialog, IFileOpenDialog};
+use windows::Win32::UI::WindowsAndMessaging::AllowSetForegroundWindow;
 use windows::Win32::UI::WindowsAndMessaging::{
     CW_USEDEFAULT, CreateWindowExW, DefWindowProcW, DestroyWindow, DispatchMessageW, EnumWindows,
     GWLP_USERDATA, GetClassNameW, GetForegroundWindow, GetMessageW, GetWindowLongPtrW,
@@ -73,6 +74,20 @@ fn main() {
             }
             "lock" => set_focus_lock(true),
             "unlock" => set_focus_lock(false),
+            command if command.starts_with("allow ") => {
+                if let Ok(allowed_pid) = command[6..].parse::<u32>() {
+                    unsafe {
+                        let foreground = GetForegroundWindow();
+                        let mut owner_pid = 0;
+                        GetWindowThreadProcessId(foreground, Some(&mut owner_pid));
+                        if owner_pid == GetCurrentProcessId()
+                            && AllowSetForegroundWindow(allowed_pid).is_ok()
+                        {
+                            let _ = SetWindowTextW(foreground, w!("PathWarp focus grant: allowed"));
+                        }
+                    }
+                }
+            }
             "exit" => break,
             _ => {}
         }

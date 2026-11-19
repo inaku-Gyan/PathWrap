@@ -10,7 +10,6 @@ use std::fmt;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
-#[cfg(test)]
 use std::sync::atomic::{AtomicU64, Ordering};
 
 const DEFAULT_STORAGE_DIRECTORY: &str = "pathwrap-store";
@@ -194,15 +193,22 @@ impl AppConfig {
     }
 }
 
-/// Owns the selected configuration path and the process-local persistence mode.
-///
-/// Once a storage operation fails, the store remains memory-only until the next
-/// launch. This keeps the UI responsive without repeatedly warning on every
-/// theme change or risking a partial configuration write.
+/// Owns the selected path and reports loading and persistence separately. A
+/// failed automatic save pauses further writes until the user's explicit retry.
 #[derive(Debug)]
 pub struct ConfigStore {
     config_path: Option<PathBuf>,
     memory_only: bool,
+    load_diagnostic: Option<String>,
+    save_state: SaveState,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub enum SaveState {
+    #[default]
+    Unchanged,
+    Saved,
+    Unsaved(String),
 }
 
 impl ConfigStore {
@@ -210,7 +216,10 @@ impl ConfigStore {
     pub fn open(storage_directory: Option<PathBuf>) -> (Self, AppConfig) {
         let Some(storage_directory) = storage_directory else {
             log::warn!("configuration storage is unavailable; running in memory-only mode");
-            return (Self::memory_only(None), AppConfig::default());
+            return (
+                Self::unavailable(None, "无法确认配置目录，仅本次生效。".into()),
+                AppConfig::default(),
+            );
         };
 
         if let Err(error) = fs::create_dir_all(&storage_directory) {
@@ -219,12 +228,16 @@ impl ConfigStore {
                 storage_directory.display()
             );
             return (
-                Self::memory_only(Some(storage_directory.join(CONFIG_FILE))),
+                Self::unavailable(
+                    Some(storage_directory.join(CONFIG_FILE)),
+                    format!("无法创建配置目录：{error}"),
+                ),
                 AppConfig::default(),
             );
         }
 
         let config_path = storage_directory.join(CONFIG_FILE);
+        let mut load_diagnostic = None;
         let config = match read_config_file(&config_path) {
             Ok(Some(config)) => config,
             Ok(None) => AppConfig::default(),
@@ -233,7 +246,19 @@ impl ConfigStore {
                     "could not access configuration {}: {error}; running in memory-only mode",
                     config_path.display()
                 );
-                return (Self::memory_only(Some(config_path)), AppConfig::default());
+                if error.kind() == io::ErrorKind::InvalidData {
+                    load_diagnostic =
+                        Some(format!("配置损坏，已使用默认值；原文件未修改：{error}"));
+                    AppConfig::default()
+                } else {
+                    return (
+                        Self::unavailable(
+                            Some(config_path),
+                            format!("无法读取配置，仅本次生效：{error}"),
+                        ),
+                        AppConfig::default(),
+                    );
+                }
             }
         };
 
@@ -241,16 +266,32 @@ impl ConfigStore {
             Self {
                 config_path: Some(config_path),
                 memory_only: false,
+                load_diagnostic,
+                save_state: SaveState::Unchanged,
             },
             config,
         )
     }
 
-    fn memory_only(config_path: Option<PathBuf>) -> Self {
+    fn unavailable(config_path: Option<PathBuf>, reason: String) -> Self {
         Self {
             config_path,
             memory_only: true,
+            load_diagnostic: Some(reason.clone()),
+            save_state: SaveState::Unsaved(reason),
         }
+    }
+
+    pub fn storage_directory(&self) -> Option<&Path> {
+        self.config_path.as_deref()?.parent()
+    }
+
+    pub fn load_diagnostic(&self) -> Option<&str> {
+        self.load_diagnostic.as_deref()
+    }
+
+    pub fn save_state(&self) -> &SaveState {
+        &self.save_state
     }
 
     /// Whether this process has stopped attempting persistence.
@@ -261,22 +302,29 @@ impl ConfigStore {
 
     /// Save the current configuration, disabling persistence after the first
     /// failure while retaining the caller's in-memory state.
-    pub fn save(&mut self, config: &AppConfig) {
+    pub fn save(&mut self, config: &AppConfig) -> &SaveState {
         if self.memory_only {
-            return;
+            return &self.save_state;
         }
+        self.retry_save(config)
+    }
 
-        let Some(config_path) = self.config_path.as_deref() else {
-            self.memory_only = true;
-            return;
+    /// Re-attempt the original selected path; never silently choose a new store.
+    pub fn retry_save(&mut self, config: &AppConfig) -> &SaveState {
+        let result = self
+            .config_path
+            .as_deref()
+            .ok_or_else(|| io::Error::other("无法确认配置目录"))
+            .and_then(|path| config.save_to(path));
+        self.memory_only = result.is_err();
+        self.save_state = match result {
+            Ok(()) => SaveState::Saved,
+            Err(error) => {
+                log::warn!("could not persist configuration: {error}");
+                SaveState::Unsaved(error.to_string())
+            }
         };
-        if let Err(error) = write_config_atomic(config_path, config) {
-            log::warn!(
-                "could not persist configuration {}: {error}; switching to memory-only mode",
-                config_path.display()
-            );
-            self.memory_only = true;
-        }
+        &self.save_state
     }
 }
 
@@ -289,34 +337,34 @@ fn read_config_file(path: &Path) -> io::Result<Option<AppConfig>> {
 
     match serde_json::from_str(&contents) {
         Ok(config) => Ok(Some(config)),
-        Err(error) => {
-            log::warn!(
-                "could not parse configuration {}: {error}; using defaults",
-                path.display()
-            );
-            Ok(Some(AppConfig::default()))
-        }
+        Err(error) => Err(io::Error::new(io::ErrorKind::InvalidData, error)),
     }
 }
 
 fn write_config_atomic(path: &Path, config: &AppConfig) -> io::Result<()> {
     let encoded = serde_json::to_vec_pretty(config)
         .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
-    let temporary_path = path.with_file_name(format!("{CONFIG_FILE}.tmp"));
+    static NEXT_WRITE: AtomicU64 = AtomicU64::new(0);
+    let temporary_path = path.with_file_name(format!(
+        "{CONFIG_FILE}.{}.{}.tmp",
+        std::process::id(),
+        NEXT_WRITE.fetch_add(1, Ordering::Relaxed)
+    ));
 
+    let mut created = false;
     let write_result = (|| {
         let mut file = fs::OpenOptions::new()
-            .create(true)
-            .truncate(true)
+            .create_new(true)
             .write(true)
             .open(&temporary_path)?;
+        created = true;
         io::Write::write_all(&mut file, &encoded)?;
         file.sync_all()?;
         drop(file);
         replace_file(&temporary_path, path)
     })();
 
-    if write_result.is_err() {
+    if write_result.is_err() && created {
         let _ = fs::remove_file(&temporary_path);
     }
     write_result
@@ -362,6 +410,72 @@ mod tests {
     use super::*;
 
     static NEXT_TEST_ID: AtomicU64 = AtomicU64::new(0);
+
+    #[test]
+    fn malformed_load_reports_diagnostic_and_preserves_original_until_explicit_save() {
+        let storage = temporary_directory("diagnostic");
+        fs::create_dir_all(&storage).unwrap();
+        let path = storage.join(CONFIG_FILE);
+        let original = br#"{"theme":"unknown","future":true}"#;
+        fs::write(&path, original).unwrap();
+        let (mut store, config) = ConfigStore::open(Some(storage.clone()));
+        assert_eq!(config, AppConfig::default());
+        assert!(store.load_diagnostic().is_some());
+        assert_eq!(store.save_state(), &SaveState::Unchanged);
+        assert_eq!(fs::read(&path).unwrap(), original);
+        assert_eq!(store.retry_save(&config), &SaveState::Saved);
+        assert_eq!(AppConfig::load_from(&path), config);
+        fs::remove_dir_all(storage).unwrap();
+    }
+
+    #[test]
+    fn memory_only_store_can_retry_the_original_location_after_repair() {
+        let blocker = temporary_directory("retry");
+        fs::write(&blocker, b"blocked").unwrap();
+        let (mut store, _) = ConfigStore::open(Some(blocker.clone()));
+        assert!(store.is_memory_only());
+        assert!(store.load_diagnostic().is_some());
+        let expected = AppConfig {
+            theme: ThemePreference::Dark,
+        };
+        fs::remove_file(&blocker).unwrap();
+        assert!(matches!(store.save(&expected), SaveState::Unsaved(_)));
+        assert!(!blocker.exists(), "automatic saving remains paused");
+        assert_eq!(store.retry_save(&expected), &SaveState::Saved);
+        assert!(!store.is_memory_only());
+        assert_eq!(AppConfig::load_from(&blocker.join(CONFIG_FILE)), expected);
+        fs::remove_dir_all(blocker).unwrap();
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn failed_replacement_preserves_old_file_and_explicit_retry_saves_current_theme() {
+        use std::os::windows::fs::OpenOptionsExt;
+        let storage = temporary_directory("locked-file");
+        let path = storage.join(CONFIG_FILE);
+        AppConfig {
+            theme: ThemePreference::Dark,
+        }
+        .save_to(&path)
+        .unwrap();
+        let original = fs::read(&path).unwrap();
+        let (mut store, _) = ConfigStore::open(Some(storage.clone()));
+        let lock = fs::OpenOptions::new()
+            .read(true)
+            .share_mode(1)
+            .open(&path)
+            .unwrap();
+        let current = AppConfig {
+            theme: ThemePreference::Light,
+        };
+        assert!(matches!(store.save(&current), SaveState::Unsaved(_)));
+        assert_eq!(fs::read(&path).unwrap(), original);
+        assert_eq!(fs::read_dir(&storage).unwrap().count(), 1);
+        drop(lock);
+        assert_eq!(store.retry_save(&current), &SaveState::Saved);
+        assert_eq!(AppConfig::load_from(&path), current);
+        fs::remove_dir_all(storage).unwrap();
+    }
 
     fn executable_path() -> PathBuf {
         PathBuf::from("portable").join("PathWarp.exe")

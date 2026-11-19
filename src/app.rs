@@ -39,6 +39,9 @@ pub struct PathWarpApp {
     controller: Controller,
     navigator: crate::os::dialog::Navigator,
     shortcut: Option<crate::os::shortcut::Listener>,
+    desktop: Option<crate::os::desktop::Desktop>,
+    registration: pathwarp::startup::Registration<crate::os::startup::RunRegistration>,
+    settings_error: Option<String>,
 }
 
 impl PathWarpApp {
@@ -53,6 +56,19 @@ impl PathWarpApp {
             .ok();
         let mut controller = Controller::new();
         controller.set_shortcut_available(shortcut.is_some());
+        let registration = pathwarp::startup::Registration::new(
+            crate::os::startup::RunRegistration::default(),
+            startup_target(&config_store),
+        );
+        let view = pathwarp::settings::View::new(theme_preference, &config_store, &registration);
+        let (desktop, settings_error) =
+            match crate::os::desktop::Desktop::start(cc.egui_ctx.clone(), extract_hwnd(cc), view) {
+                Ok(desktop) => (Some(desktop), None),
+                Err(error) => {
+                    log::error!("settings/tray unavailable: {error}");
+                    (None, Some(format!("设置入口不可用：{error}")))
+                }
+            };
         let mut app = Self {
             overlay_hwnd: extract_hwnd(cc),
             parked_once: false,
@@ -67,6 +83,9 @@ impl PathWarpApp {
             controller,
             navigator: crate::os::dialog::Navigator::default(),
             shortcut,
+            desktop,
+            registration,
+            settings_error,
         };
         // 尽早应用窗口样式并停靠到屏幕外，避免启动时窗口在默认位置可见。
         app.ensure_overlay_window(None);
@@ -128,6 +147,98 @@ impl PathWarpApp {
         }
     }
 
+    fn process_settings(&mut self, ctx: &egui::Context) {
+        use crate::os::desktop::Command;
+        let commands = self
+            .desktop
+            .as_ref()
+            .map(|desktop| desktop.drain())
+            .unwrap_or_default();
+        for command in commands {
+            match command {
+                Command::Interaction(active) => {
+                    let effects = self.controller.step(
+                        Env {
+                            now: Instant::now(),
+                            foreground_hwnd: monitor::foreground_hwnd(),
+                        },
+                        Event::SettingsInteraction(active),
+                    );
+                    if active {
+                        self.navigator.fence(None, monitor::foreground_hwnd());
+                    }
+                    self.apply_effects(effects);
+                    if let Some(shortcut) = &self.shortcut {
+                        shortcut.set_scope(self.controller.focus_request(), self.overlay_hwnd);
+                    }
+                }
+                Command::Opened | Command::Refresh => {
+                    self.registration.target = startup_target(&self.config_store);
+                    self.registration.refresh();
+                }
+                Command::Theme(preference) => self.set_theme_preference(ctx, preference),
+                Command::RetrySave => {
+                    self.config_store.retry_save(&AppConfig {
+                        theme: self.theme_preference,
+                    });
+                }
+                Command::Startup(action, revision) => {
+                    self.registration.target = startup_target(&self.config_store);
+                    self.registration.execute(action, revision);
+                }
+                Command::Diagnostic(error) => {
+                    if let Some(error) = &error {
+                        log::warn!("{error}");
+                    }
+                    self.settings_error = error;
+                }
+            }
+        }
+        if let Some(desktop) = &self.desktop {
+            let mut view = pathwarp::settings::View::new(
+                self.theme_preference,
+                &self.config_store,
+                &self.registration,
+            );
+            if let Some(error) = &self.settings_error {
+                view.theme_status.push_str(&format!("\r\n{error}"));
+            }
+            desktop.update(view);
+        }
+    }
+
+    fn open_settings(&mut self, ctx: &egui::Context) {
+        if self.desktop.is_none() {
+            let view = pathwarp::settings::View::new(
+                self.theme_preference,
+                &self.config_store,
+                &self.registration,
+            );
+            match crate::os::desktop::Desktop::start(ctx.clone(), self.overlay_hwnd, view) {
+                Ok(desktop) => {
+                    self.desktop = Some(desktop);
+                    self.settings_error = None;
+                }
+                Err(error) => {
+                    self.settings_error = Some(format!("设置入口不可用：{error}"));
+                    return;
+                }
+            }
+        }
+        let effects = self.controller.step(
+            Env {
+                now: Instant::now(),
+                foreground_hwnd: monitor::foreground_hwnd(),
+            },
+            Event::SettingsInteraction(true),
+        );
+        self.navigator.fence(None, monitor::foreground_hwnd());
+        self.apply_effects(effects);
+        if let Some(desktop) = &self.desktop {
+            desktop.open();
+        }
+    }
+
     /// 执行控制器返回的一批副作用。
     fn apply_effects(&mut self, effects: Vec<Effect>) {
         for effect in effects {
@@ -152,6 +263,9 @@ impl PathWarpApp {
                             Event::NavigationFinished(report),
                         );
                         self.apply_effects(effects);
+                    }
+                    if let Some(desktop) = &self.desktop {
+                        desktop.set_cancellation(self.navigator.cancellation());
                     }
                 }
                 Effect::Activate {
@@ -180,6 +294,9 @@ impl PathWarpApp {
 }
 
 impl eframe::App for PathWarpApp {
+    fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        self.process_settings(ctx);
+    }
     fn clear_color(&self, _visuals: &egui::Visuals) -> [f32; 4] {
         // 透明背景，让悬浮卡片的圆角与阴影落在透明区域上。
         [0.0, 0.0, 0.0, 0.0]
@@ -187,6 +304,7 @@ impl eframe::App for PathWarpApp {
 
     fn ui(&mut self, root: &mut egui::Ui, frame: &mut eframe::Frame) {
         self.ensure_overlay_window(Some(frame));
+        self.process_settings(root.ctx());
         self.refresh_theme(root.ctx());
 
         let foreground_hwnd = monitor::foreground_hwnd();
@@ -239,11 +357,19 @@ impl eframe::App for PathWarpApp {
 
         // 4. 可见时渲染，并把鼠标交互回喂控制器。
         if self.controller.is_visible()
-            && let Some(ui_event) = crate::ui::window::render_with_theme(
+            && let Some(ui_event) = crate::ui::window::render_with_status(
                 root,
                 &mut self.controller,
                 self.theme_preference,
                 self.theme_mode,
+                if matches!(
+                    self.config_store.save_state(),
+                    crate::config::SaveState::Unsaved(_)
+                ) {
+                    Some("主题未保存，仅本次生效。可从设置重试保存。")
+                } else {
+                    self.settings_error.as_deref()
+                },
             )
         {
             let event = match ui_event {
@@ -257,6 +383,10 @@ impl eframe::App for PathWarpApp {
                         ThemeAction::Set(preference) => preference,
                     };
                     self.set_theme_preference(root.ctx(), preference);
+                    None
+                }
+                UiEvent::Settings => {
+                    self.open_settings(root.ctx());
                     None
                 }
             };
@@ -281,4 +411,10 @@ impl eframe::App for PathWarpApp {
                 .request_repaint_after(Duration::from_millis(UI_TICK_MS));
         }
     }
+}
+
+fn startup_target(store: &ConfigStore) -> Result<pathwarp::startup::Target, String> {
+    let executable = std::env::current_exe().map_err(|error| error.to_string())?;
+    let storage = store.storage_directory().ok_or("无法确认配置目录。")?;
+    pathwarp::startup::Target::current(&executable, storage)
 }
