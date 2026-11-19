@@ -4,5 +4,6 @@
 //! 执行 [`controller::Effect`]；[`crate::app`] 负责两者的接线。
 
 pub mod controller;
+pub mod geometry;
 pub mod navigation;
 pub mod types;

@@ -578,6 +578,12 @@ mod tests {
                 width: 600,
                 height: 400,
                 dpi: 96,
+                work_area: crate::core::types::WorkArea {
+                    left: 0,
+                    top: 0,
+                    right: 1920,
+                    bottom: 1080,
+                },
             })),
         );
         controller.set_paths(vec!["C:\\B".into()]);

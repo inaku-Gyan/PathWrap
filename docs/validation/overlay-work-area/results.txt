@@ -1,0 +1,20 @@
+﻿Source: f2204415f508499d1486e6bd3a6e14eb488c9174
+just check --ci: passed
+just build: passed
+just test: 85 passed, 0 failed (53 library + 31 app/config/UI + 1 worker integration); 9 ignored
+Authorized desktop command: just e2e
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 17.67s
+monitor=0 case=normal dpi=192 work=RECT { left: 0, top: 0, right: 3072, bottom: 1824 } overlay=RECT { left: 20, top: 420, right: 620, bottom: 700 }
+monitor=0 case=bottom dpi=192 work=RECT { left: 0, top: 0, right: 3072, bottom: 1824 } overlay=RECT { left: 2472, top: 1144, right: 3072, bottom: 1424 }
+monitor=0 case=wide dpi=192 work=RECT { left: 0, top: 0, right: 3072, bottom: 1824 } overlay=RECT { left: 0, top: 420, right: 3072, bottom: 700 }
+monitor=0 case=left dpi=192 work=RECT { left: 0, top: 0, right: 3072, bottom: 1824 } overlay=RECT { left: 0, top: 420, right: 600, bottom: 700 }
+monitor=0 case=tight dpi=192 work=RECT { left: 0, top: 0, right: 3072, bottom: 1824 } overlay=RECT { left: 20, top: 1812, right: 620, bottom: 1824 }
+monitor=0 case=cover dpi=192 work=RECT { left: 0, top: 0, right: 3072, bottom: 1824 } overlay=RECT { left: 20, top: 1544, right: 620, bottom: 1824 }
+monitor=1 case=normal dpi=144 work=RECT { left: -3840, top: -249, right: 0, bottom: 1839 } overlay=RECT { left: -3820, top: 171, right: -3220, bottom: 381 }
+monitor=1 case=bottom dpi=144 work=RECT { left: -3840, top: -249, right: 0, bottom: 1839 } overlay=RECT { left: -600, top: 1229, right: 0, bottom: 1439 }
+monitor=1 case=wide dpi=144 work=RECT { left: -3840, top: -249, right: 0, bottom: 1839 } overlay=RECT { left: -3840, top: 171, right: 0, bottom: 381 }
+monitor=1 case=left dpi=144 work=RECT { left: -3840, top: -249, right: 0, bottom: 1839 } overlay=RECT { left: -3840, top: 171, right: -3240, bottom: 381 }
+monitor=1 case=tight dpi=144 work=RECT { left: -3840, top: -249, right: 0, bottom: 1839 } overlay=RECT { left: -3820, top: 1827, right: -3220, bottom: 1839 }
+monitor=1 case=cover dpi=144 work=RECT { left: -3840, top: -249, right: 0, bottom: 1839 } overlay=RECT { left: -3820, top: 1629, right: -3220, bottom: 1839 }
+After run: 28 source hashes matched, 3 executable hashes matched, 0 new remaining test processes.
+Raw diagnostic window inventory and local paths omitted.

@@ -36,6 +36,12 @@ use windows::Win32::UI::WindowsAndMessaging::{
 use windows::core::{BOOL, PCWSTR, w};
 
 fn main() {
+    // Exercise real per-monitor dialog DPI when the desktop checks move this host.
+    unsafe {
+        let _ = windows::Win32::UI::HiDpi::SetProcessDpiAwarenessContext(
+            windows::Win32::UI::HiDpi::DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2,
+        );
+    }
     println!("READY");
 
     let stdin = std::io::stdin();

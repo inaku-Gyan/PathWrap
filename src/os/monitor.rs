@@ -4,6 +4,9 @@ use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, Instant};
 use windows::Win32::Foundation::{HWND, LPARAM, RECT};
 use windows::Win32::Graphics::Dwm::{DWMWA_EXTENDED_FRAME_BOUNDS, DwmGetWindowAttribute};
+use windows::Win32::Graphics::Gdi::{
+    GetMonitorInfoW, MONITOR_DEFAULTTONEAREST, MONITORINFO, MonitorFromWindow,
+};
 use windows::Win32::UI::Accessibility::{HWINEVENTHOOK, SetWinEventHook, UnhookWinEvent};
 use windows::Win32::UI::HiDpi::GetDpiForWindow;
 use windows::Win32::UI::WindowsAndMessaging::{
@@ -16,6 +19,7 @@ use windows::core::BOOL;
 use windows::core::w;
 
 pub use crate::core::types::DialogInfo;
+use crate::core::types::WorkArea;
 
 fn monitor_wakeup_sender() -> &'static Mutex<Option<Sender<()>>> {
     static WAKEUP_SENDER: OnceLock<Mutex<Option<Sender<()>>>> = OnceLock::new();
@@ -358,15 +362,17 @@ fn get_dialog_info(hwnd: HWND) -> Option<DialogInfo> {
     let identity = crate::os::dialog::identity(hwnd.0 as isize)?;
     if let Some(rect) = get_window_visual_rect(hwnd) {
         let dpi = get_window_dpi(hwnd);
+        let work_area = get_window_work_area(hwnd)?;
         Some(DialogInfo {
             hwnd: hwnd.0 as isize,
             pid: identity.pid,
             process_created: identity.process_created,
             x: rect.left,
             y: rect.top,
-            width: rect.right - rect.left,
-            height: rect.bottom - rect.top,
+            width: rect.right.checked_sub(rect.left)?,
+            height: rect.bottom.checked_sub(rect.top)?,
             dpi,
+            work_area,
         })
     } else {
         None
@@ -399,4 +405,21 @@ fn get_window_visual_rect(hwnd: HWND) -> Option<RECT> {
 fn get_window_dpi(hwnd: HWND) -> u32 {
     let dpi = unsafe { GetDpiForWindow(hwnd) };
     if dpi == 0 { 96 } else { dpi }
+}
+
+fn get_window_work_area(hwnd: HWND) -> Option<WorkArea> {
+    let monitor = unsafe { MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST) };
+    let mut info = MONITORINFO {
+        cbSize: u32::try_from(size_of::<MONITORINFO>()).ok()?,
+        ..Default::default()
+    };
+    if monitor.is_invalid() || !unsafe { GetMonitorInfoW(monitor, &raw mut info) }.as_bool() {
+        return None;
+    }
+    Some(WorkArea {
+        left: info.rcWork.left,
+        top: info.rcWork.top,
+        right: info.rcWork.right,
+        bottom: info.rcWork.bottom,
+    })
 }

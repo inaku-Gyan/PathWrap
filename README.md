@@ -24,7 +24,10 @@ If a download is incomplete, download the ZIP again from [GitHub Releases](https
 
 ## Features
 
-- Detects system Open/Save file dialogs and docks a lightweight overlay flush beneath them
+- Detects system Open/Save file dialogs and docks a lightweight overlay beneath them,
+  trying above when space below is insufficient. The overlay fits the target monitor's work area,
+  narrowing or shortening near screen edges and taskbars. When the dialog fills the
+  work area, the overlay stays on screen by overlapping it.
 - Reads active Explorer window paths and displays them as selectable items
 - Click the search control to type-to-filter, use up/down selection, and press Enter or double-click
   to jump the dialog to that folder; its rounded frame has a light hover accent and the editor
@@ -75,8 +78,10 @@ decoupled by channels. Key design decisions:
   dialog session while it is foreground, so the row stays visible. "Hiding" moves the window
   off-screen while keeping it `WS_VISIBLE` (never `SW_HIDE`) — a hidden window stops receiving
   paints and would starve eframe's event loop. Docking uses `SetWindowPos` in **physical pixels**
-  from the dialog's DWM frame bounds; the fixed overlay height is scaled from logical pixels
-  using the dialog DPI.
+  from the dialog's DWM frame bounds. The preferred height is scaled using the dialog DPI;
+  [pure geometry rules](src/core/geometry.rs) select below/above placement and clip the
+  rectangle to the target monitor's current work area, including negative coordinates.
+  See the [work-area validation record](docs/validation/overlay-work-area/README.md).
 - **glow renderer** ([src/main.rs](src/main.rs), `Cargo.toml`): eframe is pinned to the glow
   (OpenGL) backend instead of the default wgpu. wgpu's Windows HWND surface only advertises an
   opaque `CompositeAlphaMode`, so a transparent window renders its transparent pixels as black;
