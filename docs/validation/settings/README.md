@@ -33,12 +33,31 @@ without a file dialog, singleton reuse, minimize/restore, close/reopen, theme pe
 visible load/save failures and retry, preserved search text, Ctrl+G exclusion, denied
 activation, tray menu cancellation/selection and notification icon recovery.
 
-The first individually approved desktop run completed with 6 passing and 7 failing
-tests (41.94 seconds). This is preserved as a failed run, not desktop acceptance.
-The revised version corrects the pending-interaction transition after unconfirmed
-activation, reads cross-process Edit text with bounded `WM_GETTEXT`, uses physical
-coordinates consistently and supplies the foreground grant missing from synthetic
-Shell callbacks. A repeat of the 13 tests is awaiting fresh per-run permission.
+All 13 cases have passing coverage on the measured desktop, across a full run and
+one focused follow-up. Each invocation was separately approved:
+
+| Invocation | Result | Duration |
+| --- | --- | --- |
+| Initial `just e2e` | 6 passed, 7 failed | 41.94 s |
+| Revised `just e2e` | 12 passed, 1 failed | 28.71 s |
+| Focused search-preservation case | 1 passed, 12 filtered | 2.02 s |
+
+The initial run exposed a pending-interaction transition after unconfirmed
+activation. It also identified probe/fixture problems: cross-process Edit text now
+uses bounded `WM_GETTEXT`, coordinates are physical and synthetic Shell callbacks
+receive a foreground grant from an owned fixture window.
+
+The last failing case had not confirmed that its input had reached the search
+editor before opening settings. The focused case now reads back the initial text,
+opens settings, verifies Ctrl+G exclusion, returns to the original dialog and reads
+back the same text. Only this test changed between the last two invocations;
+the product binary was identical (SHA-256
+`BDF23B8F083040C032A8361B4DE9C29DADA3F9CFB688ADDE904F4C80CE207DE5`).
+This records combined case coverage, not a single 13/13 green invocation.
+
+The full revised run measured six overlay edge arrangements on each of two
+attached monitors at 192 DPI and 144 DPI. No new product runtime code changed
+after that run.
 
 The tray test delivers the documented mouse/keyboard callback to its owned native
 notification window, then uses actual input on the native menu. Recovery removes only

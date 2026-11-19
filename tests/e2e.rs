@@ -263,6 +263,17 @@ fn settings_park_search_preserve_query_and_do_not_claim_ctrl_g() {
     automation.element_from_handle(overlay.into()).unwrap();
     assert_shortcut_focus(&automation, pid, overlay);
     type_text("preserved-query");
+    let query_value = || {
+        focused_editor(&automation, pid)
+            .and_then(|edit| edit.get_pattern::<UIValuePattern>().ok())
+            .and_then(|pattern| pattern.get_value().ok())
+    };
+    assert!(
+        wait_until(Duration::from_secs(3), || query_value().as_deref()
+            == Some("preserved-query")),
+        "typed query was not committed before opening settings: {:?}",
+        query_value()
+    );
     let window = open_native_settings(pid);
     click_native_control(window, 102);
     assert!(wait_until(Duration::from_secs(3), || overlay_onscreen(pid).is_none()));
@@ -273,14 +284,12 @@ fn settings_park_search_preserve_query_and_do_not_claim_ctrl_g() {
     force_foreground(dialog); // A user return to the original owned fixture.
     wait_for(Duration::from_secs(3), || overlay_onscreen(pid)).unwrap();
     assert_shortcut_focus(&automation, pid, overlay);
-    assert!(wait_until(Duration::from_secs(3), || focused_editor(
-        &automation,
-        pid
-    )
-    .and_then(|edit| edit.get_pattern::<UIValuePattern>().ok())
-    .and_then(|pattern| pattern.get_value().ok())
-    .as_deref()
-        == Some("preserved-query")));
+    assert!(
+        wait_until(Duration::from_secs(3), || query_value().as_deref()
+            == Some("preserved-query")),
+        "query after settings return differs from the observed initial value: {:?}",
+        query_value()
+    );
 }
 
 #[test]
