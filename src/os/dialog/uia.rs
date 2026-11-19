@@ -20,8 +20,8 @@ use windows::Win32::UI::Accessibility::{
 };
 use windows::Win32::UI::Input::KeyboardAndMouse::IsWindowEnabled;
 use windows::Win32::UI::WindowsAndMessaging::{
-    EnumChildWindows, GetClassNameW, GetForegroundWindow, GetParent, GetWindowThreadProcessId,
-    IsChild, IsWindow, IsWindowVisible,
+    EnumChildWindows, GetClassNameW, GetParent, GetWindowThreadProcessId, IsChild, IsWindow,
+    IsWindowVisible,
 };
 use windows::core::{BOOL, BSTR};
 struct Com;
@@ -123,7 +123,7 @@ impl Adapter {
     }
     fn check(&self) -> ProviderResult<()> {
         let window = self.window();
-        let foreground = unsafe { GetForegroundWindow() }.0 as isize;
+        let foreground = crate::os::window_ext::foreground_hwnd();
         if identity(self.request.dialog.hwnd) != Some(self.request.dialog)
             || !unsafe { IsWindowVisible(window).as_bool() && IsWindowEnabled(window).as_bool() }
             || (foreground != self.request.dialog.hwnd && foreground != self.request.overlay_hwnd)

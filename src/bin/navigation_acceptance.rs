@@ -64,6 +64,15 @@ fn folder(dialog: &IFileDialog) -> windows::core::Result<String> {
 
 fn snapshot(dialog: &IFileDialog, root: &Path) -> windows::core::Result<Value> {
     let window = unsafe { dialog.cast::<IOleWindow>()?.GetWindow()? };
+    let foreground = unsafe { GetForegroundWindow() };
+    let mut foreground_pid = 0;
+    unsafe { GetWindowThreadProcessId(foreground, Some(&mut foreground_pid)) };
+    let foreground_root = unsafe {
+        windows::Win32::UI::WindowsAndMessaging::GetAncestor(
+            foreground,
+            windows::Win32::UI::WindowsAndMessaging::GA_ROOT,
+        )
+    };
     Ok(json!({
         "event": "folder_snapshot",
         "hwnd": window.0 as usize,
@@ -73,6 +82,10 @@ fn snapshot(dialog: &IFileDialog, root: &Path) -> windows::core::Result<Value> {
         "file_type": unsafe { dialog.GetFileTypeIndex()? },
         "dialog_visible": unsafe { IsWindowVisible(window).as_bool() },
         "dialog_alive": unsafe { IsWindow(Some(window)).as_bool() },
+        "foreground_is_dialog": foreground == window,
+        "foreground_root_is_dialog": foreground_root == window && foreground_pid == unsafe { GetCurrentProcessId() },
+        "foreground_hwnd": foreground.0 as usize,
+        "foreground_pid": foreground_pid,
         "observed_at_ms": now_ms(),
     }))
 }
