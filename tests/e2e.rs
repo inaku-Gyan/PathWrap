@@ -17,16 +17,18 @@ use std::io::{BufRead, BufReader, Write};
 use std::process::{Child, ChildStdin, Command, Stdio};
 use std::time::{Duration, Instant};
 
+use uiautomation::{UIAutomation, controls::ControlType, patterns::UIValuePattern};
 use windows::Win32::Foundation::{HWND, LPARAM, POINT, RECT};
 use windows::Win32::System::Threading::{AttachThreadInput, GetCurrentThreadId};
 use windows::Win32::UI::Input::KeyboardAndMouse::{
-    INPUT, INPUT_0, INPUT_MOUSE, MOUSEEVENTF_LEFTDOWN, MOUSEEVENTF_LEFTUP, MOUSEINPUT, SendInput,
-    SetFocus,
+    INPUT, INPUT_0, INPUT_KEYBOARD, INPUT_MOUSE, KEYBD_EVENT_FLAGS, KEYBDINPUT, KEYEVENTF_KEYUP,
+    KEYEVENTF_UNICODE, MOUSEEVENTF_LEFTDOWN, MOUSEEVENTF_LEFTUP, MOUSEINPUT, SendInput, SetFocus,
+    VIRTUAL_KEY, VK_CONTROL, VK_G,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
-    BringWindowToTop, GWL_EXSTYLE, GetForegroundWindow, GetWindowLongPtrW, GetWindowRect,
-    GetWindowTextW, GetWindowThreadProcessId, IsWindowVisible, SetCursorPos, SetForegroundWindow,
-    WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW, WS_EX_TOPMOST,
+    BringWindowToTop, GUITHREADINFO, GWL_EXSTYLE, GetForegroundWindow, GetGUIThreadInfo,
+    GetWindowLongPtrW, GetWindowRect, GetWindowTextW, GetWindowThreadProcessId, IsWindowVisible,
+    SetCursorPos, SetForegroundWindow, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW, WS_EX_TOPMOST,
 };
 use windows::Win32::UI::WindowsAndMessaging::{EnumWindows, GetClassNameW};
 use windows::core::BOOL;
@@ -195,6 +197,16 @@ fn is_foreground(raw: isize) -> bool {
     unsafe { GetForegroundWindow().0 as isize == raw }
 }
 
+fn native_focus(raw: isize) -> Option<isize> {
+    let thread = unsafe { GetWindowThreadProcessId(hwnd_of(raw), None) };
+    let mut info = GUITHREADINFO {
+        cbSize: size_of::<GUITHREADINFO>() as u32,
+        ..Default::default()
+    };
+    unsafe { GetGUIThreadInfo(thread, &mut info) }.ok()?;
+    Some(info.hwndFocus.0 as isize)
+}
+
 /// 判定窗口矩形是否落在“正常桌面区域”（排除 -32000 停靠点与零尺寸）。
 fn is_onscreen(rect: &RECT) -> bool {
     rect.right > rect.left && rect.bottom > rect.top && rect.left > -10000 && rect.top > -10000
@@ -282,6 +294,67 @@ fn center_of(rect: &RECT) -> POINT {
         x: (rect.left + rect.right) / 2,
         y: (rect.top + rect.bottom) / 2,
     }
+}
+
+fn keyboard_input(vk: VIRTUAL_KEY, scan: u16, flags: KEYBD_EVENT_FLAGS) -> INPUT {
+    INPUT {
+        r#type: INPUT_KEYBOARD,
+        Anonymous: INPUT_0 {
+            ki: KEYBDINPUT {
+                wVk: vk,
+                wScan: scan,
+                dwFlags: flags,
+                ..Default::default()
+            },
+        },
+    }
+}
+
+// Input simulation is confined to the interactive test driver, never the app.
+fn press_ctrl_g() {
+    let inputs = [
+        keyboard_input(VK_CONTROL, 0, KEYBD_EVENT_FLAGS::default()),
+        keyboard_input(VK_G, 0, KEYBD_EVENT_FLAGS::default()),
+        keyboard_input(VK_G, 0, KEYEVENTF_KEYUP),
+        keyboard_input(VK_CONTROL, 0, KEYEVENTF_KEYUP),
+    ];
+    assert_eq!(unsafe { SendInput(&inputs, size_of::<INPUT>() as i32) }, 4);
+}
+
+fn type_text(text: &str) {
+    let inputs: Vec<_> = text
+        .encode_utf16()
+        .flat_map(|scan| {
+            [
+                keyboard_input(VIRTUAL_KEY(0), scan, KEYEVENTF_UNICODE),
+                keyboard_input(VIRTUAL_KEY(0), scan, KEYEVENTF_UNICODE | KEYEVENTF_KEYUP),
+            ]
+        })
+        .collect();
+    assert_eq!(
+        unsafe { SendInput(&inputs, size_of::<INPUT>() as i32) } as usize,
+        inputs.len()
+    );
+}
+
+fn focused_editor(automation: &UIAutomation, app_pid: u32) -> Option<uiautomation::UIElement> {
+    let element = automation.get_focused_element().ok()?;
+    (element.get_process_id().ok()? == app_pid
+        && element.get_control_type().ok()? == ControlType::Edit
+        && element.has_keyboard_focus().ok()?)
+    .then_some(element)
+}
+
+fn assert_shortcut_focus(automation: &UIAutomation, app_pid: u32, overlay: isize) {
+    press_ctrl_g();
+    let ready = wait_until(Duration::from_secs(3), || {
+        is_foreground(overlay) && focused_editor(automation, app_pid).is_some()
+    });
+    assert!(
+        ready,
+        "Ctrl+G did not give the actual search editor keyboard focus; foreground={} expected_overlay={overlay}",
+        unsafe { GetForegroundWindow().0 as isize },
+    );
 }
 
 fn wait_until(timeout: Duration, mut cond: impl FnMut() -> bool) -> bool {
@@ -488,5 +561,114 @@ fn overlay_survives_dialog_reopen() {
         wait_until(Duration::from_secs(5), || overlay_onscreen(app_pid)
             .is_some()),
         "overlay never reappeared after dialog reopen (event loop starvation regression)"
+    );
+}
+
+#[test]
+#[ignore = "requires interactive keyboard/mouse input; run via `just e2e`"]
+fn ctrl_g_focuses_editor_repeats_and_leaves_unrelated_windows_alone() {
+    let (_app, app_pid) = spawn_pathwarp();
+    let mut host = DialogHost::spawn();
+    host.open_dialog();
+    let (overlay, before) = wait_for(Duration::from_secs(5), || overlay_onscreen(app_pid))
+        .expect("overlay did not dock");
+    let automation = UIAutomation::new().unwrap();
+    // Start the app's accesskit provider before checking actual editor focus.
+    automation.element_from_handle(overlay.into()).unwrap();
+    assert_shortcut_focus(&automation, app_pid, overlay);
+    type_text("ctrlg");
+    assert!(wait_until(Duration::from_secs(3), || focused_editor(
+        &automation,
+        app_pid
+    )
+    .and_then(|edit| edit.get_pattern::<UIValuePattern>().ok())
+    .and_then(|value| value.get_value().ok())
+    .as_deref()
+        == Some("ctrlg")));
+    assert_shortcut_focus(&automation, app_pid, overlay);
+    assert_shortcut_focus(&automation, app_pid, overlay);
+    let after = rect_of(overlay);
+    assert_eq!(
+        (before.left, before.top, before.right, before.bottom),
+        (after.left, after.top, after.right, after.bottom)
+    );
+
+    // An owned plain window supplies independent proof that G was delivered
+    // through the hook chain, not merely that PathWarp stayed in the background.
+    host.send("probe");
+    let probe = wait_for(Duration::from_secs(3), || {
+        windows_of_pid(host.pid)
+            .into_iter()
+            .find(|&window| class_of(window) == "PathWarpShortcutProbe")
+    })
+    .unwrap();
+    force_foreground(probe); // Fixture setup only; no assistance after the chord.
+    assert!(wait_until(Duration::from_secs(2), || is_foreground(probe)));
+    press_ctrl_g();
+    assert!(
+        wait_until(Duration::from_secs(3), || title_of(probe)
+            == "PathWarp shortcut probe: 1"),
+        "unrelated Ctrl+G was not delivered once; title={} foreground={} probe={probe} native_focus={:?}",
+        title_of(probe),
+        unsafe { GetForegroundWindow().0 as isize },
+        native_focus(probe),
+    );
+    assert!(is_foreground(probe));
+    host.close_dialog();
+    assert!(wait_until(Duration::from_secs(3), || overlay_onscreen(
+        app_pid
+    )
+    .is_none()));
+    press_ctrl_g();
+    assert!(wait_until(Duration::from_secs(3), || title_of(probe)
+        == "PathWarp shortcut probe: 2"));
+    assert!(is_foreground(probe));
+    assert!(overlay_onscreen(app_pid).is_none());
+
+    host.open_dialog();
+    wait_for(Duration::from_secs(5), || overlay_onscreen(app_pid)).unwrap();
+    assert_shortcut_focus(&automation, app_pid, overlay);
+}
+
+#[test]
+#[ignore = "requires interactive keyboard input; run via `just e2e`"]
+fn ctrl_g_reports_denied_activation_then_recovers_normally() {
+    let (_app, app_pid) = spawn_pathwarp();
+    let mut host = DialogHost::spawn();
+    let dialog = host.open_dialog();
+    let (overlay, _) = wait_for(Duration::from_secs(5), || overlay_onscreen(app_pid)).unwrap();
+    let automation = UIAutomation::new().unwrap();
+    let root = automation.element_from_handle(overlay.into()).unwrap();
+    host.send("lock");
+    assert!(wait_until(Duration::from_secs(2), || title_of(dialog)
+        == "PathWarp focus lock: locked"));
+    press_ctrl_g();
+    assert!(
+        wait_until(Duration::from_secs(3), || automation
+            .create_matcher()
+            .from_ref(&root)
+            .name("窗口未取得焦点，请点击目标窗口。")
+            .timeout(0)
+            .find_first()
+            .is_ok()),
+        "denied activation was not reported"
+    );
+    assert!(
+        is_foreground(dialog),
+        "the fixture's foreground lock must be respected"
+    );
+    host.send("unlock");
+    assert!(wait_until(Duration::from_secs(2), || title_of(dialog)
+        == "PathWarp focus lock: unlocked"));
+    assert_shortcut_focus(&automation, app_pid, overlay);
+    assert!(
+        wait_until(Duration::from_secs(2), || automation
+            .create_matcher()
+            .from_ref(&root)
+            .name("窗口未取得焦点，请点击目标窗口。")
+            .timeout(0)
+            .find_first()
+            .is_err()),
+        "a successful later activation kept the stale failure notice"
     );
 }

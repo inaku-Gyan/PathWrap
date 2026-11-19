@@ -1,0 +1,9 @@
+﻿[DEBUG-ctrlg] foreground=3540390 overlay=6751090 app_pid=32092 observed_focus=Some((Some(40716), Some(Edit), Some(true))) denied_notice=true
+thread 'ctrl_g_focuses_editor_repeats_and_leaves_unrelated_windows_alone' (27784) panicked at tests\e2e.rs:379:5:
+Ctrl+G did not give the actual search editor keyboard focus
+test ctrl_g_focuses_editor_repeats_and_leaves_unrelated_windows_alone ... FAILED
+[DEBUG-ctrlg] foreground=5767702 overlay=18417970 app_pid=21296 observed_focus=Some((Some(39044), Some(Edit), Some(true))) denied_notice=true
+thread 'ctrl_g_reports_denied_activation_then_recovers_normally' (7476) panicked at tests\e2e.rs:379:5:
+Ctrl+G did not give the actual search editor keyboard focus
+test ctrl_g_reports_denied_activation_then_recovers_normally ... FAILED
+test result: FAILED. 0 passed; 2 failed; 0 ignored; 0 measured; 5 filtered out; finished in 8.59s

@@ -27,8 +27,10 @@ pub fn activate(handle: isize) -> bool {
     if handle == 0 || !unsafe { IsWindow(Some(hwnd(handle))).as_bool() } {
         return false;
     }
-    let requested = unsafe { SetForegroundWindow(hwnd(handle)) }.as_bool();
-    requested && unsafe { GetForegroundWindow() } == hwnd(handle)
+    if unsafe { GetForegroundWindow() } != hwnd(handle) {
+        let _ = unsafe { SetForegroundWindow(hwnd(handle)) };
+    }
+    (unsafe { GetForegroundWindow() }) == hwnd(handle)
 }
 
 fn hwnd(handle: isize) -> HWND {

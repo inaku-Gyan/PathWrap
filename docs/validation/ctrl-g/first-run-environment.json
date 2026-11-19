@@ -1,0 +1,29 @@
+﻿{
+    "base_commit":  "eaae4e7f46a400de98bd16aba537dedaf64b1bec",
+    "branch":  "feat/session-ctrl-g",
+    "recorded_utc":  "2026-11-18T23:28:58.5410242Z",
+    "source_sha256":  {
+                          "src/app.rs":  "018bc5690781c948e5e014d006d2ce7debea611b4d51c5bee9d5446be9038e95",
+                          "src/core/controller.rs":  "f758c5f876200b6a99291bb27f9673c12a60280ae3d5f17c1f9bd11555ef2103",
+                          "src/os/mod.rs":  "cfce6d2e276e7495f8c982038d5fc16705692e5746237c6e856261fa3ebfae74",
+                          "src/os/shortcut.rs":  "6a81826020bdc6d0a18371092b0af76eeaccb8015fe87aabc37f6e09af6b75d0",
+                          "src/os/window_ext.rs":  "ca863e98c1dbb5a5df9a00561c411ce711d66e6d4646d29cba4339e6510ec2ea",
+                          "src/bin/dialog_host.rs":  "5e33061a01a1b9905d5732f3b5e841bece9aac4052fd398bc9f70220fe81ca60",
+                          "tests/e2e.rs":  "3879a09764008afeee513607c4e314ca3c328337772e70e67bb4bd428ae74065",
+                          "Cargo.toml":  "91c0bb3eb551145e30bedf60d492970989d3ee07a0bf60bd5a652a296092b4ad",
+                          "Cargo.lock":  "d20e64f3c7908cbf6dedbb05e1bff732167237b6dda8f8625f95ff152d40500f"
+                      },
+    "binary_sha256":  {
+                          "PathWarp.exe":  "fd5254749e5c8002d576a042e20a36c9db3fd497f60043d50f84f25cbb50adde",
+                          "dialog_host.exe":  "bb3f425c8ba3ff27095cd726100768011fed7f36cf2c578164810719b54e1ab7"
+                      },
+    "required_checks":  [
+                            "just check --ci",
+                            "just build",
+                            "just test"
+                        ],
+    "noninteractive_passed":  71,
+    "noninteractive_ignored":  8,
+    "interactive_status":  "first authorized run: 5 passed, 2 failed at actual editor focus",
+    "interactive_invocations":  1
+}

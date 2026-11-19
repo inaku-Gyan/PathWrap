@@ -1,0 +1,54 @@
+﻿{
+    "recorded_utc":  "2026-11-19T00:17:53.1939494Z",
+    "main_base_commit":  "17ea89b43d96f09499213f4745be476db885bc0e",
+    "navigation_commit":  "f15d0d972498720aaee6e19cef7be9072e153b7b",
+    "combined_source_commit":  "964efc0337fae288b3b3562c08cdff78066bf6bd",
+    "required_checks":  [
+                            "just check --ci",
+                            "just build",
+                            "just test"
+                        ],
+    "noninteractive_passed":  73,
+    "noninteractive_ignored":  8,
+    "source_sha256":  {
+                          "Cargo.lock":  "d20e64f3c7908cbf6dedbb05e1bff732167237b6dda8f8625f95ff152d40500f",
+                          "Cargo.toml":  "91c0bb3eb551145e30bedf60d492970989d3ee07a0bf60bd5a652a296092b4ad",
+                          "src/app.rs":  "1c0d85221637222ee309cdf7f2b5384bff7ce733dce0f8da30f80c1609c7aa09",
+                          "src/bin/dialog_host.rs":  "d8a33237c965649c9c15be5873e6e70e4904a3b12f0785ba14d24ddd9d71b890",
+                          "src/bin/navigation_acceptance.rs":  "b1e7c31971829d6c804133d0dd6e347de90ea36ec226b40a1e1d1143ee7541c0",
+                          "src/core/controller.rs":  "60342f713f5733dae962ba49a262079e39d2dc0658e0ff18c97d1f4ebd34d3c3",
+                          "src/core/mod.rs":  "ef05ec9a9fafedf94353c5d604ec1f3cbba6326088ef4217c306edeadf797de2",
+                          "src/core/navigation.rs":  "1977038d7f98b2bda281025d99c21dd7010887f20ff6fee6f45a66148b574358",
+                          "src/core/types.rs":  "fdee799ee043da36b2488457b944a989bafb1ec50dd819ed87105cd905e6ebdf",
+                          "src/lib.rs":  "cd155740f012316ff2a5e11d6b2a01506a5a2034db12e57132638f0f517af18b",
+                          "src/main.rs":  "b33a928cdfce531540b2e8d182ab9512c9f1592edd999d451565502af3e94b14",
+                          "src/os/dialog.rs":  "b55a5ede9ce036884223f575927e3cdbde4cb886dbce204b69805d879ebe0d7a",
+                          "src/os/dialog/uia.rs":  "3b6f53e3c49da206f0ba1949f3fd77a84c9431717ac17949b9fa6faee62b779b",
+                          "src/os/mod.rs":  "cfce6d2e276e7495f8c982038d5fc16705692e5746237c6e856261fa3ebfae74",
+                          "src/os/monitor.rs":  "13e5d0cd704d09d08dd84afafcebe95da08a4ee79834669047196136c734f315",
+                          "src/os/shortcut.rs":  "033b9237dd724d8fe24acadf8d1ef75c79a165ec9dc8e4db8502e62b821cac6c",
+                          "src/os/window_ext.rs":  "ca863e98c1dbb5a5df9a00561c411ce711d66e6d4646d29cba4339e6510ec2ea",
+                          "src/ui/window.rs":  "c7fb96ca11e91e8fbb9f8617c0ccd0a78e87cb50867cc635b17347456bb8a502",
+                          "tests/e2e.rs":  "500f5aef9b3c36dd9ea482efc4be94aa6dd05c1554ed17e872ac354bfbeec416",
+                          "tests/navigation_worker.rs":  "aa4153428cecff6dddf9dc94d40da2669bbc008b873bceb6fd6e60e4c7a6cc3e"
+                      },
+    "binary_sha256":  {
+                          "PathWarp.exe":  "949aebbfce6bd27d62d087dbe724892cf4fbdaaff1cba2ae00bd007d51a9d816",
+                          "dialog_host.exe":  "775a5bf07381ebae9dd99b2d62839b0cb958985ca60dc66d8608b67810a459ee",
+                          "e2e.exe":  "77dc2d51f2dc22d1d32f8a939a72627f6930c9c9171dc65680273473e4f358a4"
+                      },
+    "desktop_status":  "passed: 7 cases, 0 failed, 15.28 seconds",
+    "desktop_run":  {
+                        "started_utc":  "2026-11-19T00:24:44.0235744Z",
+                        "completed_utc":  "2026-11-19T00:25:00.0925506Z",
+                        "command":  "just e2e",
+                        "exit_code":  0,
+                        "approval":  "user explicitly authorized this single seven-case desktop run"
+                    },
+    "tested_source_and_binaries_unchanged":  true,
+    "named_test_processes_remaining":  0,
+    "verified_after_desktop_utc":  "2026-11-19T00:25:57.5031790Z",
+    "windows_build":  "26300",
+    "windows_ubr":  9974,
+    "windows_display_version":  "26H2"
+}

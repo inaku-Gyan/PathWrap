@@ -1,0 +1,13 @@
+Command: just e2e (one separately authorized seven-case invocation)
+
+test clicking_overlay_activates_it_and_keeps_it_docked ... ok
+test ctrl_g_focuses_editor_repeats_and_leaves_unrelated_windows_alone ... ok
+test ctrl_g_reports_denied_activation_then_recovers_normally ... ok
+test diagnose_overlay_activation ... ok
+test dump_windows ... ok
+test overlay_recovers_after_click_and_reopen ... ok
+test overlay_survives_dialog_reopen ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 15.28s
+
+Diagnostic window inventories, process identifiers and local absolute paths omitted.

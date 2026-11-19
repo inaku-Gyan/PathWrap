@@ -38,6 +38,7 @@ pub struct PathWarpApp {
     config_store: ConfigStore,
     controller: Controller,
     navigator: crate::os::dialog::Navigator,
+    shortcut: Option<crate::os::shortcut::Listener>,
 }
 
 impl PathWarpApp {
@@ -47,6 +48,11 @@ impl PathWarpApp {
         theme_preference: ThemePreference,
         config_store: ConfigStore,
     ) -> Self {
+        let shortcut = crate::os::shortcut::Listener::start()
+            .map_err(|error| log::warn!("Ctrl+G is unavailable: {error}"))
+            .ok();
+        let mut controller = Controller::new();
+        controller.set_shortcut_available(shortcut.is_some());
         let mut app = Self {
             overlay_hwnd: extract_hwnd(cc),
             parked_once: false,
@@ -58,8 +64,9 @@ impl PathWarpApp {
             },
             theme_preference,
             config_store,
-            controller: Controller::new(),
+            controller,
             navigator: crate::os::dialog::Navigator::default(),
+            shortcut,
         };
         // 尽早应用窗口样式并停靠到屏幕外，避免启动时窗口在默认位置可见。
         app.ensure_overlay_window(None);
@@ -162,9 +169,8 @@ impl PathWarpApp {
                         } else {
                             dialog.hwnd
                         };
-                        if !window_ext::activate(target) {
-                            self.controller.activation_failed();
-                        }
+                        self.controller
+                            .activation_finished(window_ext::activate(target));
                     }
                 }
                 Effect::RefreshPaths => self.controller.set_paths(explorer::get_open_windows()),
@@ -211,6 +217,24 @@ impl eframe::App for PathWarpApp {
             }
             effects.extend(self.controller.step(env, Event::NavigationFinished(report)));
         }
+        if let Some(shortcut) = &self.shortcut {
+            shortcut.set_scope(self.controller.focus_request(), self.overlay_hwnd);
+            if let Some(available) = shortcut.take_availability() {
+                self.controller.set_shortcut_available(available);
+            }
+            if let Some(result) = shortcut.take_result() {
+                let foreground_hwnd = monitor::foreground_hwnd();
+                self.controller
+                    .set_overlay_focused(foreground_hwnd == self.overlay_hwnd);
+                effects.extend(self.controller.step(
+                    Env {
+                        now: Instant::now(),
+                        foreground_hwnd,
+                    },
+                    Event::FocusFinished(result),
+                ));
+            }
+        }
         self.apply_effects(effects);
 
         // 4. 可见时渲染，并把鼠标交互回喂控制器。
@@ -244,6 +268,11 @@ impl eframe::App for PathWarpApp {
                     .fence(self.controller.active_session(), monitor::foreground_hwnd());
                 self.apply_effects(fx);
             }
+        }
+
+        // Escape or a UI action may have ended the session during this frame.
+        if let Some(shortcut) = &self.shortcut {
+            shortcut.set_scope(self.controller.focus_request(), self.overlay_hwnd);
         }
 
         // 会话进行期间持续心跳；空闲时停止重绘以省电（新对话框由 monitor 唤醒）。

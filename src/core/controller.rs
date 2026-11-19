@@ -25,6 +25,20 @@ pub struct Env {
     pub foreground_hwnd: isize,
 }
 
+/// A shortcut belongs to the session in which it was pressed, even if the UI
+/// receives it after the target has closed or been replaced.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct FocusRequest {
+    pub session: u64,
+    pub dialog: DialogIdentity,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct FocusResult {
+    pub request: FocusRequest,
+    pub activated: bool,
+}
+
 /// 喂给控制器的一次外部事件。
 #[derive(Debug, Clone)]
 pub enum Event {
@@ -39,6 +53,7 @@ pub enum Event {
     /// 无外部事件的心跳帧，用于推进去抖/宽限计时。
     Tick,
     NavigationFinished(Report),
+    FocusFinished(FocusResult),
 }
 
 /// 控制器要求宿主执行的一个副作用。
@@ -74,6 +89,8 @@ pub struct Controller {
     in_flight: Option<Request>,
     navigation_message: Option<String>,
     busy_rejected: bool,
+    activation_error: bool,
+    shortcut_error: bool,
     pending_none_since: Option<Instant>,
     fg_lost_since: Option<Instant>,
     /// 用户按 ESC 后被抑制的对话框，避免同一会话立即被重新拉起。
@@ -135,6 +152,13 @@ impl Controller {
             .then_some(self.session_id)
     }
 
+    pub fn focus_request(&self) -> Option<FocusRequest> {
+        Some(FocusRequest {
+            session: self.active_session()?,
+            dialog: self.target_dialog?.identity(),
+        })
+    }
+
     pub fn is_navigating(&self) -> bool {
         self.in_flight.is_some()
     }
@@ -143,10 +167,22 @@ impl Controller {
         self.navigation_message
             .as_deref()
             .or_else(|| self.busy_rejected.then_some("正在处理上一次跳转，请稍候。"))
+            .or_else(|| {
+                self.activation_error
+                    .then_some("窗口未取得焦点，请点击目标窗口。")
+            })
+            .or_else(|| {
+                self.shortcut_error
+                    .then_some("Ctrl+G 暂不可用，请点击搜索框。")
+            })
     }
 
-    pub fn activation_failed(&mut self) {
-        self.navigation_message = Some("窗口未取得焦点，请点击目标窗口。".into());
+    pub fn activation_finished(&mut self, success: bool) {
+        self.activation_error = !success;
+    }
+
+    pub fn set_shortcut_available(&mut self, available: bool) {
+        self.shortcut_error = !available;
     }
 
     /// 会话进行中（有目标对话框或正在去抖），宿主应继续心跳重绘以推进计时。
@@ -186,6 +222,13 @@ impl Controller {
             }
             Event::Tick => {}
             Event::NavigationFinished(report) => self.on_navigation_finished(report, &env, &mut fx),
+            Event::FocusFinished(result) => {
+                if self.focus_request() == Some(result.request)
+                    && (env.foreground_hwnd == result.request.dialog.hwnd || self.overlay_focused)
+                {
+                    self.activation_finished(result.activated);
+                }
+            }
         }
         self.reconcile(&env, &mut fx);
         fx
@@ -213,6 +256,7 @@ impl Controller {
                     self.session_identity = Some(info.identity());
                     self.session_id = self.session_id.wrapping_add(1);
                     self.navigation_message = None;
+                    self.activation_error = false;
                     self.query.clear();
                     self.selected = 0;
                     self.pending_refresh = true;
@@ -310,6 +354,7 @@ impl Controller {
         self.session_identity = None;
         self.navigation_message = None;
         self.pending_none_since = None;
+        self.activation_error = false;
         self.fg_lost_since = None;
         self.query.clear();
         self.selected = 0;
@@ -321,6 +366,7 @@ impl Controller {
         self.session_identity = None;
         self.navigation_message = None;
         self.pending_none_since = None;
+        self.activation_error = false;
         self.fg_lost_since = None;
         self.user_hidden_identity = None;
         self.query.clear();
@@ -480,6 +526,102 @@ mod tests {
         );
         assert!(has_dock(&fx), "expected initial dock");
         t
+    }
+
+    #[test]
+    fn ctrl_g_outcomes_keep_the_session_docked_without_an_activation_retry() {
+        let mut c = Controller::new();
+        let t = dock_at(&mut c, 1);
+        let Some(request) = c.focus_request() else {
+            panic!("missing live focus request")
+        };
+        let env = Env {
+            now: t,
+            foreground_hwnd: 1,
+        };
+        let result = |activated| Event::FocusFinished(FocusResult { request, activated });
+        assert!(c.step(env, result(false)).is_empty());
+        assert!(c.navigation_message().is_some());
+        assert!(c.step(env, result(true)).is_empty());
+        assert!(c.navigation_message().is_none());
+        c.set_overlay_focused(true);
+        let env = Env {
+            foreground_hwnd: 9,
+            ..env
+        };
+        assert!(c.step(env, result(true)).is_empty());
+        assert!(c.is_visible());
+        assert_eq!(c.focus_request(), Some(request));
+    }
+
+    #[test]
+    fn late_ctrl_g_results_cannot_change_an_unrelated_or_stale_session() {
+        let mut c = Controller::new();
+        let t = dock_at(&mut c, 1);
+        let Some(request) = c.focus_request() else {
+            panic!("missing live focus request")
+        };
+        let env = Env {
+            now: t,
+            foreground_hwnd: 1,
+        };
+        let result = |request| {
+            Event::FocusFinished(FocusResult {
+                request,
+                activated: false,
+            })
+        };
+        c.step(
+            Env {
+                foreground_hwnd: 99,
+                ..env
+            },
+            result(request),
+        );
+        assert!(c.navigation_message().is_none());
+        c.step(env, Event::DialogUpdate(None));
+        c.step(env, result(request));
+        assert!(c.navigation_message().is_none());
+        let mut replacement = dialog(1);
+        replacement.process_created += 1;
+        c.step(env, Event::DialogUpdate(Some(replacement)));
+        c.step(env, result(request));
+        assert!(c.navigation_message().is_none());
+        let Some(current) = c.focus_request() else {
+            panic!("missing replacement focus request")
+        };
+        c.step(env, Event::Key(KeyAction::Escape));
+        assert!(c.focus_request().is_none());
+        c.step(env, result(current));
+        assert!(c.navigation_message().is_none());
+    }
+
+    #[test]
+    fn unavailable_shortcut_has_a_distinct_notice_and_recovers() {
+        let mut c = Controller::new();
+        c.set_shortcut_available(false);
+        assert_eq!(
+            c.navigation_message(),
+            Some("Ctrl+G 暂不可用，请点击搜索框。")
+        );
+        c.set_shortcut_available(true);
+        assert!(c.navigation_message().is_none());
+    }
+
+    #[test]
+    fn denied_activation_is_visible_and_a_later_success_clears_it() {
+        let mut c = Controller::new();
+        c.activation_finished(false);
+        assert!(
+            c.navigation_message()
+                .is_some_and(|message| message.contains("未取得焦点"))
+        );
+        c.activation_finished(true);
+        assert!(c.navigation_message().is_none());
+        // Focus results must not replace a navigation recovery message.
+        c.navigation_message = Some("原文件名：pending.csv".into());
+        c.activation_finished(false);
+        assert_eq!(c.navigation_message(), Some("原文件名：pending.csv"));
     }
 
     #[test]

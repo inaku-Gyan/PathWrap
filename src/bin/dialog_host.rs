@@ -3,6 +3,8 @@
 //! 通过 stdin 行协议控制（由 `tests/e2e.rs` 驱动）：
 //! - `open`  打开一个真实的 `IFileOpenDialog`（在后台 STA 线程阻塞显示）
 //! - `close` 关闭当前对话框（向本进程的 `#32770` 发 `WM_CLOSE`）
+//! - `probe` 打开一个非文件对话框窗口，标题计数收到的 G 按键
+//! - `lock` / `unlock` 测试前台进程拒绝/恢复普通激活
 //! - `exit`  退出进程
 //!
 //! stdout 仅输出 `READY` 一行用于启动同步；对话框的出现/消失由测试进程
@@ -15,17 +17,23 @@
 )]
 
 use std::io::BufRead;
-use windows::Win32::Foundation::{HWND, LPARAM, WPARAM};
+use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, WPARAM};
 use windows::Win32::System::Com::{
     CLSCTX_INPROC_SERVER, COINIT_APARTMENTTHREADED, CoCreateInstance, CoInitializeEx,
     CoUninitialize,
 };
+use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::System::Threading::GetCurrentProcessId;
+use windows::Win32::UI::Input::KeyboardAndMouse::VK_G;
 use windows::Win32::UI::Shell::{FileOpenDialog, IFileOpenDialog};
 use windows::Win32::UI::WindowsAndMessaging::{
-    EnumWindows, GetClassNameW, GetWindowThreadProcessId, PostMessageW, WM_CLOSE,
+    CW_USEDEFAULT, CreateWindowExW, DefWindowProcW, DestroyWindow, DispatchMessageW, EnumWindows,
+    GWLP_USERDATA, GetClassNameW, GetForegroundWindow, GetMessageW, GetWindowLongPtrW,
+    GetWindowThreadProcessId, LSFW_LOCK, LSFW_UNLOCK, LockSetForegroundWindow, MSG, PostMessageW,
+    PostQuitMessage, RegisterClassW, SetWindowLongPtrW, SetWindowTextW, TranslateMessage,
+    WINDOW_EX_STYLE, WM_CLOSE, WM_DESTROY, WM_KEYDOWN, WNDCLASSW, WS_OVERLAPPEDWINDOW, WS_VISIBLE,
 };
-use windows::core::BOOL;
+use windows::core::{BOOL, PCWSTR, w};
 
 fn main() {
     println!("READY");
@@ -54,8 +62,98 @@ fn main() {
                 });
             }
             "close" => close_own_dialogs(),
+            "probe" => {
+                std::thread::spawn(shortcut_probe);
+            }
+            "lock" => set_focus_lock(true),
+            "unlock" => set_focus_lock(false),
             "exit" => break,
             _ => {}
+        }
+    }
+}
+
+fn set_focus_lock(locked: bool) {
+    unsafe {
+        let foreground = GetForegroundWindow();
+        let mut pid = 0;
+        GetWindowThreadProcessId(foreground, Some(&mut pid));
+        if pid != GetCurrentProcessId() {
+            return;
+        }
+        if LockSetForegroundWindow(if locked { LSFW_LOCK } else { LSFW_UNLOCK }).is_ok() {
+            let title = if locked {
+                w!("PathWarp focus lock: locked")
+            } else {
+                w!("PathWarp focus lock: unlocked")
+            };
+            let _ = SetWindowTextW(foreground, title);
+        }
+    }
+}
+
+fn shortcut_probe() {
+    unsafe extern "system" fn window_proc(
+        hwnd: HWND,
+        message: u32,
+        wparam: WPARAM,
+        lparam: LPARAM,
+    ) -> LRESULT {
+        unsafe {
+            match message {
+                WM_KEYDOWN if wparam.0 == usize::from(VK_G.0) => {
+                    let count = GetWindowLongPtrW(hwnd, GWLP_USERDATA) + 1;
+                    SetWindowLongPtrW(hwnd, GWLP_USERDATA, count);
+                    let title: Vec<u16> = format!("PathWarp shortcut probe: {count}\0")
+                        .encode_utf16()
+                        .collect();
+                    let _ = SetWindowTextW(hwnd, PCWSTR(title.as_ptr()));
+                    LRESULT(0)
+                }
+                WM_CLOSE => {
+                    let _ = DestroyWindow(hwnd);
+                    LRESULT(0)
+                }
+                WM_DESTROY => {
+                    PostQuitMessage(0);
+                    LRESULT(0)
+                }
+                _ => DefWindowProcW(hwnd, message, wparam, lparam),
+            }
+        }
+    }
+    unsafe {
+        let Ok(module) = GetModuleHandleW(None) else {
+            return;
+        };
+        let class = w!("PathWarpShortcutProbe");
+        let instance = module.into();
+        let _ = RegisterClassW(&WNDCLASSW {
+            lpfnWndProc: Some(window_proc),
+            hInstance: instance,
+            lpszClassName: class,
+            ..Default::default()
+        });
+        let Ok(_window) = CreateWindowExW(
+            WINDOW_EX_STYLE::default(),
+            class,
+            w!("PathWarp shortcut probe: 0"),
+            WS_OVERLAPPEDWINDOW | WS_VISIBLE,
+            CW_USEDEFAULT,
+            CW_USEDEFAULT,
+            400,
+            200,
+            None,
+            None,
+            Some(instance),
+            None,
+        ) else {
+            return;
+        };
+        let mut message = MSG::default();
+        while GetMessageW(&mut message, None, 0, 0).0 > 0 {
+            let _ = TranslateMessage(&message);
+            DispatchMessageW(&message);
         }
     }
 }
