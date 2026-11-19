@@ -123,9 +123,9 @@ impl Shared {
 
     fn finish_settings_open(&self, focused: bool) {
         self.window_active.store(focused, Ordering::Release);
-        if focused {
-            self.open_pending.store(false, Ordering::Release);
-        }
+        // The final foreground readback wins over activation notifications that
+        // may have arrived during the request. An unconfirmed open stays pending.
+        self.open_pending.store(!focused, Ordering::Release);
         self.interact();
     }
     fn settings_focus_changed(&self, active: bool) {
@@ -1064,26 +1064,34 @@ mod tests {
             can_remove: false,
             revision: 0,
         });
-        let shared = &desktop.shared;
-        let receiver = &desktop.receiver;
-        shared.begin_settings_open();
-        shared.finish_settings_open(false);
-        assert!(
-            matches!(receiver.try_iter().last(), Some(Command::Interaction(true))),
-            "an unfocused open must stay pending until click/close, without resuming search"
-        );
-        shared.settings_focus_changed(true);
-        shared.settings_focus_changed(false);
-        assert!(matches!(
-            receiver.try_iter().last(),
-            Some(Command::Interaction(false))
-        ));
-        shared.begin_settings_open();
-        shared.finish_settings_open(false);
-        shared.settings_closed();
-        assert!(matches!(
-            receiver.try_iter().last(),
-            Some(Command::Interaction(false))
-        ));
+        for transient_activation in [false, true] {
+            let shared = &desktop.shared;
+            let receiver = &desktop.receiver;
+            shared.begin_settings_open();
+            // Observed WM_ACTIVATE during a request whose final foreground
+            // readback fails must not end the pending interaction.
+            if transient_activation {
+                shared.settings_focus_changed(true);
+            }
+            shared.finish_settings_open(false);
+            shared.settings_focus_changed(false);
+            assert!(
+                matches!(receiver.try_iter().last(), Some(Command::Interaction(true))),
+                "an unfocused open must stay pending until click/close, without resuming search"
+            );
+            shared.settings_focus_changed(true);
+            shared.settings_focus_changed(false);
+            assert!(matches!(
+                receiver.try_iter().last(),
+                Some(Command::Interaction(false))
+            ));
+            shared.begin_settings_open();
+            shared.finish_settings_open(false);
+            shared.settings_closed();
+            assert!(matches!(
+                receiver.try_iter().last(),
+                Some(Command::Interaction(false))
+            ));
+        }
     }
 }
