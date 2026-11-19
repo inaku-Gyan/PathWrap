@@ -16,14 +16,28 @@ Windows argv parser with Chinese, spaces, UNC paths and final backslashes. The r
 adapter test writes only a uniquely named non-Run HKCU test key and verifies an unrelated
 value survives deletion of the owned value. It does not change real login startup.
 
-On 2026-11-19, `just check --ci`, `just build` and `just test` passed.
-The noninteractive run passed 101 tests: 85 library/model/adapter tests, 14 egui UI
+After the review fix on 2026-11-19, `just check --ci`, `just build` and `just test` passed.
+The noninteractive run passed 103 tests: 87 library/model/adapter tests, 14 egui UI
 tests and two process integration tests. One owned blocking-child fixture and the
 13 interactive desktop tests remain ignored in this command.
 
 The focused regression `unfocused_settings_open_does_not_end_the_pending_interaction`
 was observed failing before the pending-open fix and passing afterwards. It replays
 the actual native command queue without creating any window or injecting input.
+
+The review regression `startup_clicks_before_native_sync_preserve_the_other_registration`
+was observed failing before the displayed-revision fix: a click on the old Add
+controls wrote another copy's registration once instead of leaving it unchanged.
+The passing test covers both Add and Remove, using the actual native view-publication
+and button-command methods with the registration model and an in-memory backend.
+Neither operation changes the other copy until refreshed controls are presented and
+the action is explicitly selected again.
+
+`startup_actions_wait_for_a_complete_native_presentation` also covers the first
+presentation, actions during control synchronization, a newer view published while
+the previous view is rendering, and settings closure. Commands carry the revision
+of the completed presentation, rather than the newest shared view. These tests
+create no windows, inject no input and do not access the registry.
 
 ## Interactive desktop verification
 
@@ -59,7 +73,10 @@ The full revised run measured six overlay edge arrangements on each of two
 attached monitors at 192 DPI and 144 DPI. Subsequent presentation-only wording labels
 unconfirmed registration observations as the last known state and explicitly states
 that the entry is shared by this user's copies; this is covered by the view test.
-Window, focus, docking and navigation code is unchanged from that desktop run.
+Window lifecycle, focus, docking and navigation behavior is unchanged from that
+desktop run. The later review fix changes registration-button snapshot binding
+and has the automated native-command coverage described above; no new interactive
+desktop run is claimed for that fix.
 The final tray tooltip flag also explicitly requests the standard tooltip with
 `NOTIFYICON_VERSION_4`, as required by
 [NOTIFYICONDATAW](https://learn.microsoft.com/en-us/windows/win32/api/shellapi/ns-shellapi-notifyicondataw).

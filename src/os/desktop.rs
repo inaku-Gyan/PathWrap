@@ -86,11 +86,35 @@ struct Shared {
     window_active: AtomicBool,
     open_pending: AtomicBool,
     view: Mutex<View>,
+    /// Only a completed native presentation can authorize its button actions.
+    rendered_revision: Mutex<Option<u64>>,
     cancellation: Mutex<Option<Arc<AtomicBool>>>,
     shell_message: u32,
 }
 
 impl Shared {
+    fn startup_command(&self, action: Action) -> Option<Command> {
+        let revision = (*self.rendered_revision.lock().ok()?)?;
+        Some(Command::Startup(action, revision))
+    }
+
+    fn present(&self, render: impl FnOnce(&View)) {
+        let Ok(view) = self.view.lock().map(|view| view.clone()) else {
+            return;
+        };
+        let Ok(mut revision) = self.rendered_revision.lock() else {
+            return;
+        };
+        *revision = None;
+        drop(revision);
+        render(&view);
+        if let Ok(mut revision) = self.rendered_revision.lock() {
+            // ROOT may publish a newer view during rendering. Bind the click
+            // to these controls, so the registration model rejects it as stale.
+            *revision = Some(view.revision);
+        }
+    }
+
     fn begin_settings_open(&self) {
         self.open_pending.store(true, Ordering::Release);
         self.interact();
@@ -112,6 +136,9 @@ impl Shared {
         self.interact();
     }
     fn settings_closed(&self) {
+        if let Ok(mut revision) = self.rendered_revision.lock() {
+            *revision = None;
+        }
         self.open_pending.store(false, Ordering::Release);
         self.window_active.store(false, Ordering::Release);
         self.interact();
@@ -171,6 +198,7 @@ impl Desktop {
                     window_active: AtomicBool::new(false),
                     open_pending: AtomicBool::new(false),
                     view: Mutex::new(view),
+                    rendered_revision: Mutex::new(None),
                     cancellation: Mutex::new(None),
                     shell_message: unsafe { RegisterWindowMessageW(w!("TaskbarCreated")) },
                 });
@@ -351,18 +379,13 @@ unsafe extern "system" fn window_proc(
             }
             WM_COMMAND if settings => {
                 let id = i32::try_from(wp.0 & 0xffff).unwrap_or_default();
-                let revision = shared
-                    .view
-                    .lock()
-                    .map(|view| view.revision)
-                    .unwrap_or_default();
                 let command = match id {
                     AUTO => Some(Command::Theme(ThemePreference::Auto)),
                     LIGHT => Some(Command::Theme(ThemePreference::Light)),
                     DARK => Some(Command::Theme(ThemePreference::Dark)),
                     RETRY => Some(Command::RetrySave),
-                    USE_CURRENT => Some(Command::Startup(Action::UseCurrent, revision)),
-                    REMOVE => Some(Command::Startup(Action::Remove, revision)),
+                    USE_CURRENT => shared.startup_command(Action::UseCurrent),
+                    REMOVE => shared.startup_command(Action::Remove),
                     REFRESH => Some(Command::Refresh),
                     2 => {
                         unsafe {
@@ -561,9 +584,10 @@ fn set_text(window: HWND, id: i32, text: &str) {
 }
 
 fn sync_view(shared: &Shared, window: HWND) {
-    let Ok(view) = shared.view.lock().map(|view| view.clone()) else {
-        return;
-    };
+    shared.present(|view| render_view(window, view));
+}
+
+fn render_view(window: HWND, view: &View) {
     set_text(window, THEME_STATUS, &view.theme_status);
     set_text(window, STARTUP_STATUS, &view.startup_status);
     set_text(window, USE_CURRENT, &view.use_label);
@@ -864,14 +888,40 @@ fn run(shared: Arc<Shared>, owner: HWND, events: mpsc::Receiver<NativeEvent>) {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
+    use crate::config::ConfigStore;
+    use crate::startup::{Backend, RawRegistration, Registration, Target};
+    use std::cell::{Cell, RefCell};
+    use std::rc::Rc;
 
-    #[test]
-    fn unfocused_settings_open_does_not_end_the_pending_interaction() {
+    struct RegistrationBackend {
+        raw: Rc<RefCell<RawRegistration>>,
+        writes: Rc<Cell<usize>>,
+    }
+
+    impl Backend for RegistrationBackend {
+        fn lock(&self) -> Result<Box<dyn std::any::Any>, String> {
+            Ok(Box::new(()))
+        }
+        fn read(&self) -> Result<RawRegistration, String> {
+            Ok(self.raw.borrow().clone())
+        }
+        fn write(&self, value: &RawRegistration) -> Result<(), String> {
+            self.writes.set(self.writes.get() + 1);
+            *self.raw.borrow_mut() = value.clone();
+            Ok(())
+        }
+        fn validate_target(&self, _: &Target) -> Result<(), String> {
+            Ok(())
+        }
+    }
+
+    fn desktop(view: View) -> Desktop {
         let (commands, receiver) = mpsc::channel();
         let (native, _) = mpsc::channel();
-        let shared = Shared {
+        let shared = Arc::new(Shared {
             ctx: egui::Context::default(),
             commands,
             native,
@@ -884,17 +934,138 @@ mod tests {
             open_pending: AtomicBool::new(false),
             cancellation: Mutex::new(None),
             shell_message: 0,
-            view: Mutex::new(View {
-                theme: ThemePreference::Auto,
-                theme_status: String::new(),
-                retry_save: false,
-                startup_status: String::new(),
-                use_label: String::new(),
-                can_use: false,
-                can_remove: false,
-                revision: 0,
-            }),
-        };
+            view: Mutex::new(view),
+            rendered_revision: Mutex::new(None),
+        });
+        Desktop {
+            shared,
+            receiver,
+            thread: None,
+        }
+    }
+
+    #[test]
+    fn startup_clicks_before_native_sync_preserve_the_other_registration() {
+        for action in [Action::UseCurrent, Action::Remove] {
+            let current = Target {
+                executable: r"C:\current\PathWarp.exe".into(),
+                storage: r"C:\current\store".into(),
+            };
+            let current_raw = RawRegistration::command(&current.command().unwrap());
+            let raw = Rc::new(RefCell::new(if action == Action::UseCurrent {
+                RawRegistration::Absent
+            } else {
+                current_raw.clone()
+            }));
+            let writes = Rc::new(Cell::new(0));
+            let mut registration = Registration::new(
+                RegistrationBackend {
+                    raw: Rc::clone(&raw),
+                    writes: Rc::clone(&writes),
+                },
+                Ok(current),
+            );
+            let (config, _) = ConfigStore::open(None);
+            let desktop = desktop(View::new(ThemePreference::Auto, &config, &registration));
+            desktop.shared.present(|view| {
+                if action == Action::UseCurrent {
+                    assert_eq!(view.use_label, "添加此副本的登录启动项");
+                    assert!(view.can_use);
+                } else {
+                    assert!(view.can_remove);
+                }
+            });
+            let other = Target {
+                executable: r"C:\other\PathWarp.exe".into(),
+                storage: r"C:\other\store".into(),
+            };
+            let other_raw = RawRegistration::command(&other.command().unwrap());
+            *raw.borrow_mut() = other_raw.clone();
+            registration.refresh();
+            // Publish the refreshed state without processing the native SYNC.
+            desktop.update(View::new(ThemePreference::Auto, &config, &registration));
+            let Some(Command::Startup(action, revision)) = desktop.shared.startup_command(action)
+            else {
+                panic!("the previously displayed action should retain its revision");
+            };
+            registration.execute(action, revision);
+            assert_eq!(
+                writes.get(),
+                0,
+                "a click on the old controls must not change another copy's registration"
+            );
+            assert_eq!(*raw.borrow(), other_raw);
+
+            desktop.shared.present(|view| {
+                assert_eq!(view.use_label, "改用当前副本（共享登记）");
+                assert!(view.can_use && view.can_remove);
+            });
+            let Some(Command::Startup(action, revision)) = desktop.shared.startup_command(action)
+            else {
+                panic!("the refreshed controls should allow an explicit action");
+            };
+            registration.execute(action, revision);
+            assert_eq!(writes.get(), 1);
+            assert_eq!(
+                *raw.borrow(),
+                if action == Action::UseCurrent {
+                    current_raw
+                } else {
+                    RawRegistration::Absent
+                }
+            );
+        }
+    }
+
+    #[test]
+    fn startup_actions_wait_for_a_complete_native_presentation() {
+        let desktop = desktop(View {
+            theme: ThemePreference::Auto,
+            theme_status: String::new(),
+            retry_save: false,
+            startup_status: String::new(),
+            use_label: String::new(),
+            can_use: true,
+            can_remove: true,
+            revision: 1,
+        });
+        assert!(desktop.shared.startup_command(Action::UseCurrent).is_none());
+        desktop.shared.present(|view| {
+            assert!(desktop.shared.startup_command(Action::UseCurrent).is_none());
+            let mut pending = view.clone();
+            pending.revision = 2;
+            desktop.update(pending);
+        });
+        assert!(matches!(
+            desktop.shared.startup_command(Action::UseCurrent),
+            Some(Command::Startup(Action::UseCurrent, 1))
+        ));
+        desktop.shared.present(|view| {
+            assert_eq!(view.revision, 2);
+            assert!(desktop.shared.startup_command(Action::Remove).is_none());
+        });
+        assert!(matches!(
+            desktop.shared.startup_command(Action::Remove),
+            Some(Command::Startup(Action::Remove, 2))
+        ));
+        desktop.shared.settings_closed();
+        assert!(desktop.shared.startup_command(Action::Remove).is_none());
+    }
+
+    #[test]
+    fn unfocused_settings_open_does_not_end_the_pending_interaction() {
+        let desktop = desktop(View {
+            theme: ThemePreference::Auto,
+            theme_status: String::new(),
+            retry_save: false,
+            startup_status: String::new(),
+            use_label: String::new(),
+            can_use: false,
+            can_remove: false,
+            revision: 0,
+        });
+        let shared = &desktop.shared;
+        let receiver = &desktop.receiver;
         shared.begin_settings_open();
         shared.finish_settings_open(false);
         assert!(
