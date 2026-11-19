@@ -5,14 +5,11 @@
 //! 单测。[`crate::app`] 只负责把外部事件喂进来、并执行返回的 [`Effect`]，
 //! 自身不做任何显隐/停靠/注入判断。
 
+use crate::core::geometry::{Placement, dock_geometry};
 use crate::core::navigation::{DialogIdentity, Report, Request};
 use crate::core::types::{DialogInfo, KeyAction};
 use std::time::{Duration, Instant};
 
-/// 悬浮条逻辑高度（像素，按对话框 DPI 缩放为物理像素）。
-const OVERLAY_HEIGHT_LOGICAL: u32 = 140;
-/// 悬浮条与对话框下边缘的物理像素间距（0 = 紧贴）。
-const OVERLAY_GAP: i32 = 0;
 /// `DialogUpdate(None)` 到达后延迟隐藏的去抖窗口，吸收打开/保存态切换的瞬时丢失。
 const HIDE_GRACE: Duration = Duration::from_millis(120);
 /// 目标对话框失去前台后延迟隐藏的宽限，吸收前台瞬时抖动（含点击悬浮条的边缘情形）。
@@ -98,7 +95,7 @@ pub struct Controller {
 
     // ---- 已下发效果的去重基线 ----
     visible: bool,
-    last_dock: Option<(i32, i32, i32, i32)>,
+    last_dock: Option<Placement>,
     /// 新会话请求刷新路径，在下一次 reconcile 里发一次 `RefreshPaths`。
     pending_refresh: bool,
     /// 悬浮层是否是当前 Windows 前台窗口。真实激活后，它仍属于当前对话框会话，
@@ -401,20 +398,21 @@ impl Controller {
             }
         };
 
-        if desired_visible {
-            if let Some(dialog) = self.target_dialog {
-                let geom = dock_geometry(&dialog);
-                if !self.visible || self.last_dock != Some(geom) {
-                    fx.push(Effect::Dock {
-                        x: geom.0,
-                        y: geom.1,
-                        width: geom.2,
-                        height: geom.3,
-                    });
-                    self.last_dock = Some(geom);
-                }
-                self.visible = true;
+        let geometry = self
+            .target_dialog
+            .filter(|_| desired_visible)
+            .and_then(|dialog| dock_geometry(&dialog));
+        if let Some(geom) = geometry {
+            if !self.visible || self.last_dock != Some(geom) {
+                fx.push(Effect::Dock {
+                    x: geom.x,
+                    y: geom.y,
+                    width: geom.width,
+                    height: geom.height,
+                });
+                self.last_dock = Some(geom);
             }
+            self.visible = true;
         } else if self.visible {
             fx.push(Effect::Park);
             self.visible = false;
@@ -466,18 +464,6 @@ impl Controller {
     }
 }
 
-/// 计算悬浮条停靠矩形：对话框正下方，宽度对齐，高度按 DPI 缩放。
-fn dock_geometry(dialog: &DialogInfo) -> (i32, i32, i32, i32) {
-    let scaled = OVERLAY_HEIGHT_LOGICAL.saturating_mul(dialog.dpi) / 96;
-    let height = i32::try_from(scaled).unwrap_or(OVERLAY_HEIGHT_LOGICAL as i32);
-    (
-        dialog.x,
-        dialog.y + dialog.height + OVERLAY_GAP,
-        dialog.width,
-        height,
-    )
-}
-
 #[cfg(test)]
 #[allow(clippy::expect_used)]
 mod tests {
@@ -493,6 +479,12 @@ mod tests {
             width: 600,
             height: 400,
             dpi: 96,
+            work_area: crate::core::types::WorkArea {
+                left: 0,
+                top: 0,
+                right: 1920,
+                bottom: 1080,
+            },
         }
     }
 
@@ -965,6 +957,72 @@ mod tests {
             width: 600,
             height: 140,
         }));
+    }
+
+    #[test]
+    fn work_area_changes_redock_without_restarting_the_session() {
+        let mut c = Controller::new();
+        let t = dock_at(&mut c, 1);
+        let session = c.active_session();
+        c.query = "kept".into();
+        let mut changed = dialog(1);
+        changed.work_area.bottom = 650;
+        let env = Env {
+            now: t,
+            foreground_hwnd: 1,
+        };
+        let fx = c.step(env, Event::DialogUpdate(Some(changed)));
+        assert!(fx.contains(&Effect::Dock {
+            x: 100,
+            y: 60,
+            width: 600,
+            height: 140
+        }));
+        assert!(!fx.contains(&Effect::RefreshPaths));
+        assert_eq!(c.active_session(), session);
+        assert_eq!(c.query, "kept");
+        assert!(!has_dock(&c.step(env, Event::DialogUpdate(Some(changed)))));
+    }
+
+    #[test]
+    fn dpi_changes_redock_at_the_new_physical_height() {
+        let mut c = Controller::new();
+        let t = dock_at(&mut c, 1);
+        let mut changed = dialog(1);
+        changed.dpi = 144;
+        let fx = c.step(
+            Env {
+                now: t,
+                foreground_hwnd: 1,
+            },
+            Event::DialogUpdate(Some(changed)),
+        );
+        assert!(fx.contains(&Effect::Dock {
+            x: 100,
+            y: 600,
+            width: 600,
+            height: 210
+        }));
+    }
+
+    #[test]
+    fn invalid_work_area_parks_and_valid_observation_recovers() {
+        let mut c = Controller::new();
+        let t = dock_at(&mut c, 1);
+        let session = c.active_session();
+        let env = Env {
+            now: t,
+            foreground_hwnd: 1,
+        };
+        let mut invalid = dialog(1);
+        invalid.work_area.bottom = invalid.work_area.top;
+        assert!(has_park(&c.step(env, Event::DialogUpdate(Some(invalid)))));
+        assert!(!c.is_visible());
+        assert_eq!(c.active_session(), session);
+        let fx = c.step(env, Event::DialogUpdate(Some(dialog(1))));
+        assert!(has_dock(&fx));
+        assert!(!fx.contains(&Effect::RefreshPaths));
+        assert!(c.is_visible());
     }
 
     /// 回归：注入选中路径后，悬浮条必须**保持停靠**（不得 Park），且会话未被抑制，

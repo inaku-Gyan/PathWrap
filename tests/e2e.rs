@@ -19,7 +19,16 @@ use std::time::{Duration, Instant};
 
 use uiautomation::{UIAutomation, controls::ControlType, patterns::UIValuePattern};
 use windows::Win32::Foundation::{HWND, LPARAM, POINT, RECT};
+use windows::Win32::Graphics::Dwm::{DWMWA_EXTENDED_FRAME_BOUNDS, DwmGetWindowAttribute};
+use windows::Win32::Graphics::Gdi::{
+    EnumDisplayMonitors, GetMonitorInfoW, HDC, HMONITOR, MONITOR_DEFAULTTONEAREST, MONITORINFO,
+    MonitorFromWindow,
+};
 use windows::Win32::System::Threading::{AttachThreadInput, GetCurrentThreadId};
+use windows::Win32::UI::HiDpi::{
+    DPI_AWARENESS_CONTEXT, DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2, GetDpiForWindow,
+    SetThreadDpiAwarenessContext,
+};
 use windows::Win32::UI::Input::KeyboardAndMouse::{
     INPUT, INPUT_0, INPUT_KEYBOARD, INPUT_MOUSE, KEYBD_EVENT_FLAGS, KEYBDINPUT, KEYEVENTF_KEYUP,
     KEYEVENTF_UNICODE, MOUSEEVENTF_LEFTDOWN, MOUSEEVENTF_LEFTUP, MOUSEINPUT, SendInput, SetFocus,
@@ -28,7 +37,8 @@ use windows::Win32::UI::Input::KeyboardAndMouse::{
 use windows::Win32::UI::WindowsAndMessaging::{
     BringWindowToTop, GUITHREADINFO, GWL_EXSTYLE, GetForegroundWindow, GetGUIThreadInfo,
     GetWindowLongPtrW, GetWindowRect, GetWindowTextW, GetWindowThreadProcessId, IsWindowVisible,
-    SetCursorPos, SetForegroundWindow, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW, WS_EX_TOPMOST,
+    SWP_NOACTIVATE, SWP_NOSENDCHANGING, SWP_NOZORDER, SetCursorPos, SetForegroundWindow,
+    SetWindowPos, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW, WS_EX_TOPMOST,
 };
 use windows::Win32::UI::WindowsAndMessaging::{EnumWindows, GetClassNameW};
 use windows::core::BOOL;
@@ -179,6 +189,127 @@ fn rect_of(raw: isize) -> RECT {
         let _ = GetWindowRect(hwnd_of(raw), &mut rect);
     }
     rect
+}
+
+struct DpiContext(DPI_AWARENESS_CONTEXT);
+
+impl DpiContext {
+    fn physical_pixels() -> Self {
+        let previous =
+            unsafe { SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2) };
+        assert!(
+            !previous.is_invalid(),
+            "could not use physical desktop coordinates"
+        );
+        Self(previous)
+    }
+}
+
+impl Drop for DpiContext {
+    fn drop(&mut self) {
+        unsafe {
+            let _ = SetThreadDpiAwarenessContext(self.0);
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+struct Monitor {
+    handle: HMONITOR,
+    work: RECT,
+}
+
+fn desktop_monitors() -> Vec<Monitor> {
+    unsafe extern "system" fn collect(
+        monitor: HMONITOR,
+        _: HDC,
+        _: *mut RECT,
+        data: LPARAM,
+    ) -> BOOL {
+        let mut info = MONITORINFO {
+            cbSize: size_of::<MONITORINFO>() as u32,
+            ..Default::default()
+        };
+        if unsafe { GetMonitorInfoW(monitor, &raw mut info) }.as_bool() {
+            let monitors = unsafe { &mut *(data.0 as *mut Vec<Monitor>) };
+            monitors.push(Monitor {
+                handle: monitor,
+                work: info.rcWork,
+            });
+        }
+        BOOL(1)
+    }
+    let mut monitors = Vec::<Monitor>::new();
+    assert!(
+        unsafe {
+            EnumDisplayMonitors(
+                None,
+                None,
+                Some(collect),
+                LPARAM((&raw mut monitors) as isize),
+            )
+        }
+        .as_bool()
+    );
+    assert!(!monitors.is_empty(), "no desktop monitors available");
+    monitors
+}
+
+fn visual_rect_of(raw: isize) -> RECT {
+    let mut rect = RECT::default();
+    let result = unsafe {
+        DwmGetWindowAttribute(
+            hwnd_of(raw),
+            DWMWA_EXTENDED_FRAME_BOUNDS,
+            (&raw mut rect).cast(),
+            size_of::<RECT>() as u32,
+        )
+    };
+    if result.is_ok() { rect } else { rect_of(raw) }
+}
+
+/// Arrange only the owned fixture. Re-measure DWM frame margins after a DPI transition.
+fn move_dialog(raw: isize, x: i32, y: i32, width: i32, height: i32) {
+    for _ in 0..3 {
+        let outer = rect_of(raw);
+        let visual = visual_rect_of(raw);
+        unsafe {
+            SetWindowPos(
+                hwnd_of(raw),
+                None,
+                x - (visual.left - outer.left),
+                y - (visual.top - outer.top),
+                width + (outer.right - outer.left) - (visual.right - visual.left),
+                height + (outer.bottom - outer.top) - (visual.bottom - visual.top),
+                SWP_NOACTIVATE | SWP_NOZORDER | SWP_NOSENDCHANGING,
+            )
+            .unwrap();
+        }
+        if wait_until(Duration::from_millis(500), || {
+            let actual = visual_rect_of(raw);
+            (
+                actual.left,
+                actual.top,
+                actual.right - actual.left,
+                actual.bottom - actual.top,
+            ) == (x, y, width, height)
+        }) {
+            return;
+        }
+    }
+    panic!(
+        "owned dialog did not reach requested physical rectangle: {:?}",
+        visual_rect_of(raw)
+    );
+}
+
+fn inside(rect: &RECT, area: &RECT) -> bool {
+    rect.right > rect.left
+        && rect.bottom > rect.top
+        && rect.left >= area.left
+        && rect.top >= area.top
+        && rect.right <= area.right
+        && rect.bottom <= area.bottom
 }
 
 fn title_of(raw: isize) -> String {
@@ -562,6 +693,102 @@ fn overlay_survives_dialog_reopen() {
             .is_some()),
         "overlay never reappeared after dialog reopen (event loop starvation regression)"
     );
+}
+
+#[test]
+#[ignore = "moves owned windows across all attached monitors; run via `just e2e`"]
+fn overlay_stays_in_each_monitor_work_area_at_dialog_edges() {
+    let _dpi = DpiContext::physical_pixels();
+    let monitors = desktop_monitors();
+    let (_app, app_pid) = spawn_pathwarp();
+    let mut host = DialogHost::spawn();
+    let dialog = host.open_dialog();
+    wait_for(Duration::from_secs(5), || overlay_onscreen(app_pid)).unwrap();
+
+    for (index, monitor) in monitors.iter().enumerate() {
+        let work = monitor.work;
+        let work_width = work.right - work.left;
+        let work_height = work.bottom - work.top;
+        assert!(
+            work_width > 100 && work_height > 100,
+            "fixture needs a usable work area"
+        );
+        let width = 600.min(work_width - 40);
+        let height = 400.min(work_height / 2);
+        let cases = [
+            ("normal", work.left + 20, work.top + 20, width, height),
+            (
+                "bottom",
+                work.right - width,
+                work.bottom - height,
+                width,
+                height,
+            ),
+            (
+                "wide",
+                work.left - 40,
+                work.top + 20,
+                work_width + 80,
+                height,
+            ),
+            ("left", work.left - 40, work.top + 20, width, height),
+            (
+                "tight",
+                work.left + 20,
+                work.top + 12,
+                width,
+                work_height - 24,
+            ),
+            ("cover", work.left + 20, work.top, width, work_height),
+        ];
+        for (label, x, y, width, height) in cases {
+            move_dialog(dialog, x, y, width, height);
+            assert_eq!(
+                unsafe { MonitorFromWindow(hwnd_of(dialog), MONITOR_DEFAULTTONEAREST) },
+                monitor.handle,
+                "fixture moved to a different monitor"
+            );
+            let visual = visual_rect_of(dialog);
+            let dpi = unsafe { GetDpiForWindow(hwnd_of(dialog)) };
+            assert!(dpi > 0);
+            let full_height = i32::try_from(140 * u64::from(dpi) / 96).unwrap();
+            let expected_width = width.min(work_width);
+            let expected_x = x.clamp(work.left, work.right - expected_width);
+            let sample = wait_for(Duration::from_secs(5), || {
+                let (_, overlay) = overlay_onscreen(app_pid)?;
+                let actual_height = overlay.bottom - overlay.top;
+                let placement_matches = match label {
+                    "normal" if visual.bottom + full_height <= work.bottom => {
+                        overlay.top == visual.bottom && actual_height == full_height
+                    }
+                    "bottom" => {
+                        overlay.bottom == visual.top
+                            && actual_height == full_height.min(visual.top - work.top)
+                    }
+                    "tight" => {
+                        actual_height == 12
+                            && (overlay.top == visual.bottom || overlay.bottom == visual.top)
+                    }
+                    "cover" => actual_height == full_height.min(work_height),
+                    _ => true,
+                };
+                (inside(&overlay, &work)
+                    && overlay.left == expected_x
+                    && overlay.right - overlay.left == expected_width
+                    && placement_matches)
+                    .then_some(overlay)
+            });
+            assert!(
+                sample.is_some(),
+                "monitor {index} {label}: work={work:?} dialog={visual:?} overlay={:?}",
+                overlay_onscreen(app_pid).map(|(_, rect)| rect)
+            );
+            eprintln!(
+                "monitor={index} case={label} dpi={dpi} work={work:?} overlay={:?}",
+                sample.unwrap()
+            );
+        }
+    }
 }
 
 #[test]
