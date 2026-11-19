@@ -1,10 +1,9 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // 移除 release 时的黑框
 mod app;
 mod config;
-mod core;
 mod logging;
-mod os;
 mod ui;
+use pathwarp::{core, os};
 
 fn enable_per_monitor_v2_dpi_awareness() {
     use windows::Win32::UI::HiDpi::{
@@ -22,6 +21,9 @@ fn enable_per_monitor_v2_dpi_awareness() {
 }
 
 fn main() -> eframe::Result<()> {
+    if os::dialog::run_worker_if_requested() {
+        return Ok(());
+    }
     logging::init_logging();
     enable_per_monitor_v2_dpi_awareness();
 

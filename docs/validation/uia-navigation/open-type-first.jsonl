@@ -1,0 +1,2 @@
+{"case":"open","phase":"selected_type_preflight_noop","report":{"file_type":null,"filename":null,"folder":null,"invokes":0,"original":null,"outcome":"Unsupported","reason":"selected file type control is missing or ambiguous","request":{"dialog":{"hwnd":4066264,"pid":39824,"process_created":134395144221108186},"id":1,"overlay_hwnd":0,"session":1,"target":"FIXTURE_ROOT\\A"},"stage":"Preflight","writes":0}}
+{"case":"open","cleanup":true,"error":"type/no-op gate failed: Unsupported: selected file type control is missing or ambiguous"}

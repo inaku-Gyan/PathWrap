@@ -18,6 +18,19 @@ use windows::Win32::UI::WindowsAndMessaging::{
 
 /// 隐藏时把窗口挪到的屏幕外坐标（与系统最小化窗口所用坐标一致，安全越界）。
 const OFFSCREEN: i32 = -32000;
+
+/// Request normal activation once and report the observed result. No focus fallback.
+pub fn activate(handle: isize) -> bool {
+    use windows::Win32::UI::WindowsAndMessaging::{
+        GetForegroundWindow, IsWindow, SetForegroundWindow,
+    };
+    if handle == 0 || !unsafe { IsWindow(Some(hwnd(handle))).as_bool() } {
+        return false;
+    }
+    let requested = unsafe { SetForegroundWindow(hwnd(handle)) }.as_bool();
+    requested && unsafe { GetForegroundWindow() } == hwnd(handle)
+}
+
 fn hwnd(handle: isize) -> HWND {
     HWND(handle as *mut core::ffi::c_void)
 }

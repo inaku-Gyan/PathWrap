@@ -1,177 +1,473 @@
-//! 路径注入：通过 UI Automation 直接驱动文件对话框跳转目录。
-//!
-//! 相比旧实现（CDM 消息 / WM_SETTEXT / 逐字符键盘模拟 + 硬 sleep），UIA 方案：
-//! - 直接定位文件名输入框并 `ValuePattern::SetValue` 写入完整路径；
-//! - 再 `InvokePattern::Invoke` 点击默认「打开/保存」按钮；找不到合适按钮时，回退为向
-//!   文件名编辑框发送 Enter；
-//! - 主路径是同步的跨进程 COM 调用且无 sleep，目标是不抢焦点；具体兼容性仍需在
-//!   Windows 实机验证。
-
-use log::{error, info, warn};
-use std::cell::RefCell;
-use windows::Win32::Foundation::{E_FAIL, HWND, LPARAM, WPARAM};
-use windows::Win32::System::Com::{CLSCTX_INPROC_SERVER, CoCreateInstance};
-use windows::Win32::UI::Accessibility::{
-    CUIAutomation, IUIAutomation, IUIAutomationElement, IUIAutomationInvokePattern,
-    IUIAutomationValuePattern, TreeScope_Descendants, UIA_ButtonControlTypeId,
-    UIA_EditControlTypeId, UIA_InvokePatternId, UIA_ValuePatternId,
+//! Own-worker supervision. Target dialogs are never closed or rolled back.
+mod uia;
+use crate::core::navigation::{Outcome, Report, Request, SUPERVISOR_BUDGET};
+use serde::{Deserialize, Serialize};
+use std::io::{BufRead, Write};
+use std::os::windows::process::CommandExt;
+use std::process::{Command, Stdio};
+use std::sync::{
+    Arc,
+    atomic::{AtomicBool, Ordering},
+    mpsc,
 };
-use windows::Win32::UI::WindowsAndMessaging::{SendMessageW, WM_KEYDOWN, WM_KEYUP};
-use windows::core::{BSTR, Error, Result};
+use std::time::{Duration, Instant};
+use windows::Win32::System::Threading::CREATE_NO_WINDOW;
 
-const VK_RETURN: usize = 0x0D;
-
-/// 注入主入口：把 `target_path` 写入对话框并触发确认。失败仅记录日志。
-pub fn inject_folder_path(dialog_hwnd: isize, target_path: &str) {
-    if dialog_hwnd == 0 {
-        error!("invalid dialog hwnd: 0");
-        return;
-    }
-    if target_path.trim().is_empty() {
-        error!("target path is empty");
-        return;
-    }
-
-    info!("Injection starts: hwnd={dialog_hwnd} target='{target_path}'");
-    match inject_via_uia(dialog_hwnd, target_path) {
-        Ok(()) => info!("Injection succeeded via UI Automation."),
-        Err(err) => warn!("Injection failed via UI Automation: {err}"),
-    }
+#[derive(Serialize, Deserialize)]
+#[serde(tag = "event", content = "report")]
+pub enum WorkerMessage {
+    Progress(Report),
+    Complete(Report),
 }
-
-/// 复用主线程上的 `IUIAutomation` 实例（COM 接口 `!Send`，thread-local 恰好合适）。
-fn automation() -> Option<IUIAutomation> {
-    thread_local! {
-        static INSTANCE: RefCell<Option<IUIAutomation>> = const { RefCell::new(None) };
-    }
-
-    INSTANCE.with(|cell| {
-        if let Some(existing) = cell.borrow().as_ref() {
-            return Some(existing.clone());
+struct Running {
+    request: Request,
+    cancel: Arc<AtomicBool>,
+    receiver: mpsc::Receiver<Report>,
+    supervisor: std::thread::JoinHandle<()>,
+}
+#[derive(Default)]
+pub struct Navigator {
+    running: Option<Running>,
+    blocked: bool,
+    executable: Option<std::path::PathBuf>,
+}
+impl Navigator {
+    /// Use the product executable from an owned acceptance runner.
+    pub fn with_worker(executable: std::path::PathBuf) -> Self {
+        Self {
+            executable: Some(executable),
+            running: None,
+            blocked: false,
         }
-        // 依赖 winit 已把主线程初始化为 STA（OleInitialize）。
-        let created = unsafe {
-            CoCreateInstance::<_, IUIAutomation>(&CUIAutomation, None, CLSCTX_INPROC_SERVER)
+    }
+    pub fn start(&mut self, request: Request) -> bool {
+        if self.running.is_some() || self.blocked {
+            return false;
+        }
+        let (sender, receiver) = mpsc::channel();
+        let cancel = Arc::new(AtomicBool::new(false));
+        let worker_cancel = Arc::clone(&cancel);
+        let worker_request = request.clone();
+        let executable = self.executable.clone();
+        let supervisor = std::thread::spawn(move || {
+            let report = supervise(worker_request, &worker_cancel, executable);
+            let _ = sender.send(report);
+        });
+        self.running = Some(Running {
+            request,
+            cancel,
+            receiver,
+            supervisor,
+        });
+        true
+    }
+    pub fn fence(&self, session: Option<u64>, foreground: isize) {
+        if let Some(running) = &self.running
+            && (session != Some(running.request.session)
+                || (foreground != running.request.dialog.hwnd
+                    && foreground != running.request.overlay_hwnd))
+        {
+            running.cancel.store(true, Ordering::Release);
+        }
+    }
+    pub fn poll(&mut self) -> Option<Report> {
+        let running = self.running.as_ref()?;
+        let report = match running.receiver.try_recv() {
+            Ok(report) => report,
+            Err(mpsc::TryRecvError::Empty) => return None,
+            Err(mpsc::TryRecvError::Disconnected) => {
+                let mut report = Report::new(running.request.clone());
+                report.outcome = Outcome::Unverified;
+                report.reason = "navigation supervisor disconnected; effect is unknown".into();
+                report
+            }
         };
-        match created {
-            Ok(uia) => {
-                *cell.borrow_mut() = Some(uia.clone());
-                Some(uia)
-            }
-            Err(err) => {
-                error!("failed to create IUIAutomation: {err}");
-                None
-            }
-        }
-    })
+        self.blocked = !report.worker_retired;
+        self.running = None;
+        Some(report)
+    }
 }
-
-fn inject_via_uia(dialog_hwnd: isize, target_path: &str) -> Result<()> {
-    let uia = automation().ok_or_else(|| Error::from(E_FAIL))?;
-    let dialog = HWND(dialog_hwnd as _);
-
-    let root = unsafe { uia.ElementFromHandle(dialog)? };
-    let condition = unsafe { uia.CreateTrueCondition()? };
-    let elements = unsafe { root.FindAll(TreeScope_Descendants, &condition)? };
-    let count = unsafe { elements.Length()? };
-
-    let mut best_edit: Option<IUIAutomationElement> = None;
-    let mut best_edit_score = i32::MIN;
-    let mut best_button: Option<IUIAutomationElement> = None;
-    let mut best_button_score = i32::MIN;
-
-    for i in 0..count {
-        let element = unsafe { elements.GetElement(i)? };
-        let control_type = unsafe { element.CurrentControlType()? };
-
-        if control_type == UIA_EditControlTypeId {
-            let score = filename_edit_score(&element);
-            if score > best_edit_score {
-                best_edit_score = score;
-                best_edit = Some(element);
-            }
-        } else if control_type == UIA_ButtonControlTypeId {
-            let score = confirm_button_score(&element);
-            if score > best_button_score {
-                best_button_score = score;
-                best_button = Some(element);
-            }
+impl Drop for Navigator {
+    fn drop(&mut self) {
+        if let Some(running) = self.running.take() {
+            running.cancel.store(true, Ordering::Release);
+            // Closing the app must not abandon a worker which can still mutate.
+            let _ = running.supervisor.join();
         }
     }
-
-    let edit = best_edit.ok_or_else(|| Error::from(E_FAIL))?;
-    let value: IUIAutomationValuePattern = unsafe { edit.GetCurrentPatternAs(UIA_ValuePatternId)? };
-    unsafe { value.SetValue(&BSTR::from(target_path))? };
-
-    // 优先点击默认按钮；找不到就回退向文件名框发一次回车。
-    match best_button {
-        Some(button) if best_button_score > 0 => {
-            let invoke: IUIAutomationInvokePattern =
-                unsafe { button.GetCurrentPatternAs(UIA_InvokePatternId)? };
-            unsafe { invoke.Invoke()? };
+}
+fn supervise(
+    request: Request,
+    cancel: &AtomicBool,
+    selected: Option<std::path::PathBuf>,
+) -> Report {
+    let executable = match selected.map_or_else(std::env::current_exe, Ok) {
+        Ok(path) => path,
+        Err(error) => {
+            let mut report = Report::new(request);
+            report.reason = format!("worker executable unavailable: {error}");
+            report.worker_retired = true;
+            return report;
         }
-        _ => fallback_confirm(&edit),
-    }
-
-    Ok(())
+    };
+    let mut command = Command::new(executable);
+    command.arg("--navigation-worker");
+    supervise_command(request, cancel, command, SUPERVISOR_BUDGET)
 }
 
-/// 为候选文件名/地址输入框打分：AutomationId 命中最高，其次按名称。
-fn filename_edit_score(element: &IUIAutomationElement) -> i32 {
-    let automation_id = current_automation_id(element);
-    if automation_id == "1148" {
-        return 100; // 现代 IFileDialog 文件名组合框
+fn retire(child: &mut std::process::Child) -> bool {
+    if child.try_wait().ok().flatten().is_some() {
+        return true;
     }
-    if automation_id == "1001" {
-        return 90; // 经典对话框文件名 Edit
+    if child.kill().is_ok() {
+        child.wait().is_ok()
+    } else {
+        child.try_wait().ok().flatten().is_some()
     }
-
-    let name = current_name(element).to_lowercase();
-    if name.contains("文件名") || name.contains("file name") {
-        return 80;
-    }
-    // 仍作为候选，但优先级最低（可能是地址栏/搜索框）。
-    1
 }
 
-/// 为候选确认按钮打分：IDOK 最高，其次按「打开/保存/Open/Save」名称匹配。
-fn confirm_button_score(element: &IUIAutomationElement) -> i32 {
-    if current_automation_id(element) == "1" {
-        return 100; // IDOK
+fn supervise_command(
+    request: Request,
+    cancel: &AtomicBool,
+    mut command: Command,
+    budget: Duration,
+) -> Report {
+    let mut latest = Report::new(request.clone());
+    latest.worker_retired = true;
+    if cancel.load(Ordering::Acquire) {
+        latest.outcome = Outcome::Interrupted;
+        latest.reason = "request canceled before worker launch".into();
+        return latest;
     }
-
-    let name = current_name(element).to_lowercase();
-    if name.contains("打开")
-        || name.contains("保存")
-        || name.contains("open")
-        || name.contains("save")
+    let started = Instant::now();
+    let spawn = (|| -> std::io::Result<_> {
+        let mut child = command
+            .creation_flags(CREATE_NO_WINDOW.0)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .spawn()?;
+        latest.worker_retired = false;
+        let write = child
+            .stdin
+            .take()
+            .ok_or_else(|| std::io::Error::other("missing worker stdin"))
+            .and_then(|mut input| {
+                serde_json::to_writer(&mut input, &request)?;
+                writeln!(input)
+            });
+        if let Err(error) = write {
+            latest.worker_retired = retire(&mut child);
+            return Err(error);
+        }
+        Ok(child)
+    })();
+    let mut child = match spawn {
+        Ok(child) => child,
+        Err(error) => {
+            latest.reason = format!("worker could not start: {error}");
+            return latest;
+        }
+    };
+    let (sender, receiver) = mpsc::channel();
+    let mut reader = child.stdout.take().map(|stdout| {
+        std::thread::spawn(move || {
+            for line in std::io::BufReader::new(stdout).lines() {
+                let Ok(line) = line else { break };
+                if line.len() > 65_536 {
+                    break;
+                }
+                if let Ok(message) = serde_json::from_str::<WorkerMessage>(&line)
+                    && sender.send(message).is_err()
+                {
+                    break;
+                }
+            }
+        })
+    });
+    let mut completed = None;
+    loop {
+        let mut invalid_message = false;
+        for message in receiver.try_iter() {
+            let report = match message {
+                WorkerMessage::Progress(report) => report,
+                WorkerMessage::Complete(report) => {
+                    completed = Some(report.clone());
+                    report
+                }
+            };
+            if report.request != request {
+                invalid_message = true;
+                completed = None;
+                break;
+            }
+            latest = report;
+        }
+        let canceled = cancel.load(Ordering::Acquire);
+        if invalid_message || canceled || started.elapsed() >= budget {
+            latest.worker_retired = retire(&mut child);
+            latest.outcome = if canceled {
+                Outcome::Interrupted
+            } else {
+                Outcome::Unverified
+            };
+            latest.reason = if canceled {
+                "interaction invalidated; pending provider effect is unknown"
+            } else {
+                "worker timed out or protocol failed; pending provider effect is unknown"
+            }
+            .into();
+            break;
+        }
+        match child.try_wait() {
+            Ok(Some(status)) => {
+                if let Some(reader) = reader.take() {
+                    let _ = reader.join();
+                }
+                for message in receiver.try_iter() {
+                    match message {
+                        WorkerMessage::Complete(report) if report.request == request => {
+                            completed = Some(report)
+                        }
+                        WorkerMessage::Progress(report) if report.request == request => {
+                            latest = report
+                        }
+                        _ => {}
+                    }
+                }
+                if status.success()
+                    && let Some(mut report) = completed
+                {
+                    report.worker_retired = true;
+                    return report;
+                }
+                latest.outcome = Outcome::Unverified;
+                latest.worker_retired = true;
+                latest.reason =
+                    "worker exited without a matching completion; effect is unknown".into();
+                return latest;
+            }
+            Err(error) => {
+                latest.worker_retired = retire(&mut child);
+                latest.outcome = Outcome::Unverified;
+                latest.reason = format!("worker status failed: {error}");
+                break;
+            }
+            Ok(None) => std::thread::sleep(Duration::from_millis(10)),
+        }
+    }
+    if latest.worker_retired
+        && let Some(reader) = reader
     {
-        return 80;
+        let _ = reader.join();
     }
-    i32::MIN + 1 // 名称不匹配的按钮不作为默认确认目标
+    latest
 }
-
-fn current_automation_id(element: &IUIAutomationElement) -> String {
-    unsafe { element.CurrentAutomationId() }
-        .unwrap_or_default()
-        .to_string()
-}
-
-fn current_name(element: &IUIAutomationElement) -> String {
-    unsafe { element.CurrentName() }
-        .unwrap_or_default()
-        .to_string()
-}
-
-/// 回退确认：向文件名框对应的原生窗口发一次回车（无 sleep、无 SendInput）。
-fn fallback_confirm(edit: &IUIAutomationElement) {
-    let native = unsafe { edit.CurrentNativeWindowHandle() }.unwrap_or_default();
-    if native.is_invalid() {
-        warn!("fallback confirm skipped: filename edit has no native window handle");
-        return;
+/// Called before logging/eframe initialization so a worker never creates an overlay.
+#[allow(clippy::print_stdout)]
+pub fn run_worker_if_requested() -> bool {
+    if std::env::args_os().nth(1).as_deref() != Some(std::ffi::OsStr::new("--navigation-worker")) {
+        return false;
     }
-    unsafe {
-        let _ = SendMessageW(native, WM_KEYDOWN, Some(WPARAM(VK_RETURN)), Some(LPARAM(0)));
-        let _ = SendMessageW(native, WM_KEYUP, Some(WPARAM(VK_RETURN)), Some(LPARAM(0)));
+    let input = std::io::stdin().lock().lines().next();
+    let report = match input
+        .and_then(Result::ok)
+        .filter(|line| line.len() <= 65_536)
+        .and_then(|line| serde_json::from_str::<Request>(&line).ok())
+    {
+        Some(request) => uia::run(request, |report| {
+            if let Ok(line) = serde_json::to_string(&WorkerMessage::Progress(report.clone())) {
+                println!("{line}");
+            }
+        }),
+        None => return true,
+    };
+    if let Ok(line) = serde_json::to_string(&WorkerMessage::Complete(report)) {
+        println!("{line}");
+    }
+    true
+}
+pub fn identity(handle: isize) -> Option<crate::core::navigation::DialogIdentity> {
+    uia::identity(handle)
+}
+
+#[cfg(test)]
+#[allow(clippy::expect_used, clippy::unwrap_used, clippy::print_stdout)]
+mod tests {
+    use super::*;
+    use crate::core::navigation::{DialogIdentity, Snapshot, Stage};
+    fn request() -> Request {
+        Request {
+            id: 1,
+            session: 2,
+            dialog: DialogIdentity {
+                hwnd: 3,
+                pid: 4,
+                process_created: 5,
+            },
+            overlay_hwnd: 0,
+            target: "C:\\B".into(),
+        }
+    }
+    #[test]
+    #[ignore = "owned blocking child used only by the supervisor timeout test"]
+    fn blocking_worker_fixture() {
+        if std::env::var("PATHWARP_SUPERVISOR_FIXTURE").as_deref() != Ok("1") {
+            return;
+        }
+        let line = std::io::stdin().lock().lines().next().unwrap().unwrap();
+        let request: Request = serde_json::from_str(&line).unwrap();
+        if let Ok(path) = std::env::var("PATHWARP_SUPERVISOR_MARKER") {
+            let mut marker = std::fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(path)
+                .unwrap();
+            write!(marker, "{}", std::process::id()).unwrap();
+        }
+        let mut report = Report::new(request);
+        report.original = Some(Snapshot {
+            folder: "C:\\A".into(),
+            filename: "pending.csv".into(),
+            file_type: "CSV".into(),
+        });
+        report.stage = Stage::Assign;
+        report.writes = 1;
+        println!(
+            "\n{}",
+            serde_json::to_string(&WorkerMessage::Progress(report)).unwrap()
+        );
+        std::io::stdout().flush().unwrap();
+        loop {
+            std::thread::park();
+        }
+    }
+    fn blocking_fixture() -> (std::path::PathBuf, Command) {
+        let marker = std::env::temp_dir().join(format!(
+            "pathwarp-supervisor-{}-{}.pid",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let mut command = Command::new(std::env::current_exe().unwrap());
+        command
+            .args([
+                "--exact",
+                "os::dialog::tests::blocking_worker_fixture",
+                "--ignored",
+                "--nocapture",
+            ])
+            .env("PATHWARP_SUPERVISOR_FIXTURE", "1")
+            .env("PATHWARP_SUPERVISOR_MARKER", &marker);
+        (marker, command)
+    }
+    fn assert_owned_worker_retired(marker: &std::path::Path) {
+        let pid: u32 = std::fs::read_to_string(marker).unwrap().parse().unwrap();
+        std::fs::remove_file(marker).unwrap();
+        if let Ok(handle) = unsafe {
+            windows::Win32::System::Threading::OpenProcess(
+                windows::Win32::System::Threading::PROCESS_QUERY_LIMITED_INFORMATION,
+                false,
+                pid,
+            )
+        } {
+            let mut code = 0;
+            let result =
+                unsafe { windows::Win32::System::Threading::GetExitCodeProcess(handle, &mut code) };
+            unsafe {
+                let _ = windows::Win32::Foundation::CloseHandle(handle);
+            }
+            result.unwrap();
+            assert_ne!(code, 259, "owned worker must no longer be running");
+        }
+    }
+    #[test]
+    fn timeout_retires_only_owned_worker_and_keeps_original_snapshot() {
+        let (marker, command) = blocking_fixture();
+        let started = Instant::now();
+        let report = supervise_command(
+            request(),
+            &AtomicBool::new(false),
+            command,
+            Duration::from_secs(2),
+        );
+        assert!(started.elapsed() < Duration::from_secs(8));
+        assert_eq!(report.outcome, Outcome::Unverified);
+        assert!(report.worker_retired);
+        assert_eq!(report.stage, Stage::Assign);
+        assert_eq!(report.writes, 1);
+        assert_eq!(report.original.unwrap().filename, "pending.csv");
+        assert_owned_worker_retired(&marker);
+    }
+    #[test]
+    fn session_fence_retires_owned_worker_with_unchanged_foreground() {
+        let (marker, command) = blocking_fixture();
+        let request = request();
+        let cancel = Arc::new(AtomicBool::new(false));
+        let worker_cancel = Arc::clone(&cancel);
+        let worker_request = request.clone();
+        let (sender, receiver) = mpsc::channel();
+        let supervisor = std::thread::spawn(move || {
+            let report = supervise_command(
+                worker_request,
+                &worker_cancel,
+                command,
+                Duration::from_secs(15),
+            );
+            let _ = sender.send(report);
+        });
+        let mut navigator = Navigator {
+            running: Some(Running {
+                request: request.clone(),
+                cancel: Arc::clone(&cancel),
+                receiver,
+                supervisor,
+            }),
+            blocked: false,
+            executable: None,
+        };
+        let started = Instant::now();
+        while !marker.exists() {
+            assert!(
+                started.elapsed() < Duration::from_secs(4),
+                "fixture startup"
+            );
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        navigator.fence(Some(request.session), request.dialog.hwnd);
+        assert!(!cancel.load(Ordering::Acquire));
+        // Escape ends the controller session while the parked overlay can
+        // remain foreground. Session invalidation alone must retire the child.
+        navigator.fence(None, request.dialog.hwnd);
+        assert!(cancel.load(Ordering::Acquire));
+        let canceled = Instant::now();
+        let report = loop {
+            if let Some(report) = navigator.poll() {
+                break report;
+            }
+            assert!(
+                canceled.elapsed() < Duration::from_secs(4),
+                "worker retirement"
+            );
+            std::thread::sleep(Duration::from_millis(10));
+        };
+        assert_eq!(report.outcome, Outcome::Interrupted);
+        assert!(report.worker_retired);
+        assert_owned_worker_retired(&marker);
+    }
+    #[test]
+    fn canceled_request_never_launches_a_worker() {
+        let command = Command::new("missing-worker-must-not-be-launched.exe");
+        let report = supervise_command(
+            request(),
+            &AtomicBool::new(true),
+            command,
+            Duration::from_secs(1),
+        );
+        assert_eq!(report.outcome, Outcome::Interrupted);
+        assert!(report.worker_retired);
+        assert!(!report.may_have_changed());
     }
 }
