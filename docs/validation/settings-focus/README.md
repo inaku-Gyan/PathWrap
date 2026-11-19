@@ -35,6 +35,11 @@ evidence, not a guaranteed Windows sequence.
 `just check --ci`, `just build`, and `just test` pass on Windows. The latter has
 103 passing automated tests; 13 interactive tests are ignored there.
 
-Desktop acceptance of this fix is pending. Temporary diagnostic logging has
-been removed. No successful Open/Save UI acceptance, Windows 10, physical
-single-display, or complete clean-desktop acceptance is claimed.
+The full desktop suite passed **13/13** in **26.54 s** on Windows 11 build 26300.
+It includes the previously failing case and two diagnostic helpers. The run
+used product commit `efffa20d1cbd54be9fbde5564cc47ce2a46957bd`, approval
+`call_3551fadc06e147419054e2a053a0b8bb`. CI also passed for that commit.
+
+Temporary diagnostic logging has been removed. Open/Save UI entry acceptance
+encountered a tool permission block and is pending. Windows 10, physical
+single-display, and complete clean-desktop acceptance are not claimed.
