@@ -56,8 +56,15 @@ the product binary was identical (SHA-256
 This records combined case coverage, not a single 13/13 green invocation.
 
 The full revised run measured six overlay edge arrangements on each of two
-attached monitors at 192 DPI and 144 DPI. No new product runtime code changed
-after that run.
+attached monitors at 192 DPI and 144 DPI. Subsequent presentation-only wording labels
+unconfirmed registration observations as the last known state and explicitly states
+that the entry is shared by this user's copies; this is covered by the view test.
+Window, focus, docking and navigation code is unchanged from that desktop run.
+The final tray tooltip flag also explicitly requests the standard tooltip with
+`NOTIFYICON_VERSION_4`, as required by
+[NOTIFYICONDATAW](https://learn.microsoft.com/en-us/windows/win32/api/shellapi/ns-shellapi-notifyicondataw).
+These presentation-only changes passed the final automatic checks; no physical
+tooltip-hover acceptance is claimed.
 
 The tray test delivers the documented mouse/keyboard callback to its owned native
 notification window, then uses actual input on the native menu. Recovery removes only

@@ -56,8 +56,13 @@ impl View {
             Observation::Conflict(reason) => format!("登记冲突：{reason}"),
             Observation::Unreadable(reason) => format!("无法读取登记：{reason}"),
         };
+        let startup_status = if registration.unconfirmed {
+            format!("最后已知状态（本次结果未确认）：\r\n{startup_status}")
+        } else {
+            startup_status
+        };
         let mut startup_status = format!(
-            "{startup_status}\r\nWindows 实际允许状态：无法验证。可在 Windows 设置／任务管理器确认。\r\n{}",
+            "{startup_status}\r\n此登录启动登记由当前用户的所有 PathWarp 副本共享。\r\nWindows 实际允许状态：无法验证。可在 Windows 设置／任务管理器确认。\r\n{}",
             registration.message
         );
         if registration.unconfirmed
@@ -135,7 +140,7 @@ mod tests {
             storage: r"C:\其他配置".into(),
             ..current.clone()
         };
-        let registration = Registration::new(
+        let mut registration = Registration::new(
             ReadOnly(RawRegistration::command(&other.command().unwrap())),
             Ok(current.clone()),
         );
@@ -148,6 +153,15 @@ mod tests {
                 .contains("Windows 实际允许状态：无法验证")
         );
         assert!(view.can_use && view.can_remove);
+        registration.unconfirmed = true;
+        let unknown = View::new(ThemePreference::Dark, &config, &registration);
+        assert!(
+            unknown
+                .startup_status
+                .starts_with("最后已知状态（本次结果未确认）")
+        );
+        assert!(unknown.startup_status.contains("所有 PathWarp 副本共享"));
+        assert!(!unknown.can_use && !unknown.can_remove);
         let conflict = Registration::new(
             ReadOnly(RawRegistration::command("unknown.exe")),
             Ok(current),

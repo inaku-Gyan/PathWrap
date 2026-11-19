@@ -16,6 +16,7 @@ use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::System::Threading::GetCurrentThreadId;
 use windows::Win32::UI::HiDpi::GetDpiForWindow;
 use windows::Win32::UI::Input::KeyboardAndMouse::{EnableWindow, SetFocus};
+use windows::Win32::UI::Shell::NIF_SHOWTIP;
 use windows::Win32::UI::Shell::{
     NIF_ICON, NIF_MESSAGE, NIF_TIP, NIM_ADD, NIM_DELETE, NIM_SETFOCUS, NIM_SETVERSION, NIN_SELECT,
     NINF_KEY, NOTIFYICON_VERSION_4, NOTIFYICONDATAW, Shell_NotifyIconW,
@@ -422,7 +423,8 @@ fn notify(owner: HWND, operation: windows::Win32::UI::Shell::NOTIFY_ICON_MESSAGE
         cbSize: u32::try_from(size_of::<NOTIFYICONDATAW>()).unwrap_or_default(),
         hWnd: owner,
         uID: 1,
-        uFlags: NIF_MESSAGE | NIF_ICON | NIF_TIP,
+        // VERSION_4 suppresses standard tooltips unless SHOWTIP is explicit.
+        uFlags: NIF_MESSAGE | NIF_ICON | NIF_TIP | NIF_SHOWTIP,
         uCallbackMessage: TRAY,
         hIcon: unsafe { LoadIconW(None, IDI_APPLICATION) }.unwrap_or_default(),
         ..Default::default()
